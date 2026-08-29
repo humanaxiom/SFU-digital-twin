@@ -1,0 +1,44 @@
+[project]
+name = "wayfinding"
+version = "0.1.0"
+description = "SFU indoor wayfinding digital twin — routing, search, and accessibility engine"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+    "pyright>=1.1.350",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --cov=wayfinding --cov-report=term --cov-fail-under=85"
+
+[tool.coverage.run]
+source = ["wayfinding"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT"]
+exclude = [".git", "__pycache__", "build", "dist", ".venv"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D"]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/__pycache__", "build", "dist"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+pythonVersion = "3.12"
