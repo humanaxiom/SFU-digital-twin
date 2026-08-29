@@ -1,0 +1,25 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# Python (containerized per .github/instructions/container-only-execution.instructions.md;
+# this repo has no host venv, but tool output/caches can still land here)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build artifacts (Phase 1+)
+build/
+dist/
+*.egg-info/
+
+# Local secrets / env
+.env
+.env.local

@@ -1,0 +1,56 @@
+#!/bin/sh
+# Profiles the SFU IndoorWayfinding file geodatabase (Esri Indoors information model).
+set -e
+GDB=/data/IndoorWayfinding.gdb
+LAYERS="Facilities_AQ_SH_ECC Levels_AQ_SH_ECC Units_AQ_SH_ECC Details_AQ_SH_ECC Pathways_AQ_SH_ECC Transitions_AQ_SH_ECC Landmarks_AQ_SH_ECC"
+q() { ogrinfo -q -dialect SQLITE -sql "$1" "$GDB"; }
+
+echo "=== LAYER SCHEMAS (authoritative) ==="
+for l in $LAYERS; do ogrinfo -so "$GDB" "$l"; done
+
+echo "=== FACILITIES ==="
+q "SELECT FACILITY_ID, NAME, NAME_LONG, LEVELS_ABOVE_GROUND FROM Facilities_AQ_SH_ECC"
+
+echo "=== LEVELS ==="
+q "SELECT LEVEL_ID, NAME, NAME_SHORT, LEVEL_NUMBER, VERTICAL_ORDER, FACILITY_ID FROM Levels_AQ_SH_ECC ORDER BY FACILITY_ID, VERTICAL_ORDER"
+
+echo "=== UNIT USE_TYPE ==="
+q "SELECT USE_TYPE, COUNT(*) AS n FROM Units_AQ_SH_ECC GROUP BY USE_TYPE ORDER BY n DESC"
+
+echo "=== UNIT SEARCHABLE ==="
+q "SELECT SEARCHABLE, COUNT(*) AS n FROM Units_AQ_SH_ECC GROUP BY SEARCHABLE"
+
+echo "=== SAMPLE UNITS ==="
+q "SELECT UNIT_ID, NAME, NAME_LONG, USE_TYPE, LEVEL_ID, ROOM_ID, REF_LVL FROM Units_AQ_SH_ECC WHERE NAME IS NOT NULL LIMIT 15"
+
+echo "=== PATHWAY TYPE/RANK/DIRECTION ==="
+q "SELECT PATHWAY_TYPE, PATHWAY_RANK, TRAVEL_DIRECTION, COUNT(*) AS n FROM Pathways_AQ_SH_ECC GROUP BY PATHWAY_TYPE, PATHWAY_RANK, TRAVEL_DIRECTION"
+
+echo "=== PATHWAY LEVELS ==="
+q "SELECT LEVEL_ID, LEVEL_NAME_FROM, LEVEL_NAME_TO, VERTICAL_ORDER, COUNT(*) AS n FROM Pathways_AQ_SH_ECC GROUP BY LEVEL_ID, LEVEL_NAME_FROM, LEVEL_NAME_TO, VERTICAL_ORDER"
+
+echo "=== TRANSITION TYPE/RANK/DIRECTION ==="
+q "SELECT TRANSITION_TYPE, TRANSITION_RANK, TRAVEL_DIRECTION, VERTICAL_ORDER_FROM, VERTICAL_ORDER_TO, COUNT(*) AS n FROM Transitions_AQ_SH_ECC GROUP BY TRANSITION_TYPE, TRANSITION_RANK, TRAVEL_DIRECTION, VERTICAL_ORDER_FROM, VERTICAL_ORDER_TO"
+
+echo "=== DETAILS USE_TYPE ==="
+q "SELECT USE_TYPE, COUNT(*) AS n FROM Details_AQ_SH_ECC GROUP BY USE_TYPE ORDER BY n DESC"
+
+echo "=== LANDMARKS ==="
+q "SELECT DESCRIPTION, LEVEL_ID, VERTICAL_ORDER FROM Landmarks_AQ_SH_ECC"
+
+echo "=== PATHWAY SEGMENT LENGTH STATS ==="
+q "SELECT MIN(Shape_Length) AS min_len, MAX(Shape_Length) AS max_len, AVG(Shape_Length) AS avg_len, SUM(Shape_Length) AS total_len FROM Pathways_AQ_SH_ECC"
+
+echo "=== NULL / POPULATION CHECKS ==="
+q "SELECT COUNT(*) AS n, SUM(CASE WHEN LENGTH_3D IS NULL THEN 1 ELSE 0 END) AS null_length3d, SUM(CASE WHEN DELAY IS NULL THEN 1 ELSE 0 END) AS null_delay, SUM(CASE WHEN LEVEL_ID IS NULL THEN 1 ELSE 0 END) AS null_level FROM Pathways_AQ_SH_ECC"
+# OGR SQL (not the SQLITE dialect) is used here; the SQLITE dialect intermittently fails to
+# register this layer against the read-only mount.
+echo "Transitions with LENGTH_3D IS NULL:"
+ogrinfo -so "$GDB" Transitions_AQ_SH_ECC -where "LENGTH_3D IS NULL" 2>/dev/null | grep -i "Feature Count" || true
+echo "Transitions with HEIGHT_FROM IS NULL:"
+ogrinfo -so "$GDB" Transitions_AQ_SH_ECC -where "HEIGHT_FROM IS NULL" 2>/dev/null | grep -i "Feature Count" || true
+q "SELECT COUNT(*) AS n, SUM(CASE WHEN NAME IS NULL THEN 1 ELSE 0 END) AS null_name, SUM(CASE WHEN NAME_LONG IS NULL THEN 1 ELSE 0 END) AS null_name_long, SUM(CASE WHEN ROOM_ID IS NULL THEN 1 ELSE 0 END) AS null_room_id FROM Units_AQ_SH_ECC"
+
+echo "=== UNITS PER LEVEL ==="
+q "SELECT LEVEL_ID, COUNT(*) AS n, SUM(CASE WHEN SEARCHABLE='Y' THEN 1 ELSE 0 END) AS searchable FROM Units_AQ_SH_ECC GROUP BY LEVEL_ID ORDER BY LEVEL_ID"
+

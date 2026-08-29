@@ -1,0 +1,128 @@
+=== Levels_AQ_SH_ECC  [esriGeometryPolygon]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    LEVEL_ID                 String
+    NAME                     String
+    NAME_SHORT               String
+    LEVEL_NUMBER             Integer
+    FACILITY_ID              String
+    AREA_GROSS               Double
+    HEIGHT_RELATIVE          Double
+    VERTICAL_ORDER           Integer
+    Shape_Length             Double
+    Shape_Area               Double
+
+=== Details_AQ_SH_ECC  [esriGeometryPolyline]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    DETAIL_ID                String
+    USE_TYPE                 String
+    LEVEL_ID                 String
+    HEIGHT_RELATIVE          Double
+    Shape_Length             Double
+
+=== Facilities_AQ_SH_ECC  [esriGeometryPolygon]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    FACILITY_ID              String
+    NAME                     String
+    NAME_LONG                String
+    SITE_ID                  String
+    HEIGHT_RELATIVE          Double
+    LEVELS_ABOVE_GROUND      Integer
+    Shape_Length             Double
+    Shape_Area               Double
+
+=== Landmarks_AQ_SH_ECC__ATTACH  []  wkid=26910 hasZ=
+    ATTACHMENTID             OID
+    REL_OBJECTID             Integer
+    CONTENT_TYPE             String
+    ATT_NAME                 String
+    DATA_SIZE                Integer
+
+=== Units_AQ_SH_ECC  [esriGeometryPolygon]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    UNIT_ID                  String
+    USE_TYPE                 String
+    NAME                     String
+    NAME_LONG                String
+    LEVEL_ID                 String
+    SCHEDULE_EMAIL           String
+    CAPACITY                 Integer domain=DOM_ASSIGNMENT_TYPE
+    AREA_ID                  String domain=DOM_ASSIGNMENT_TYPE
+    AREA_GROSS               Double domain=DOM_RESERVATION_METHOD
+    HEIGHT_RELATIVE          Double domain=DOM_RESERVATION_METHOD
+    ROOM_ID                  String
+    SEARCHABLE               String
+    REF_LVL                  String
+    VERTICAL_ORDER           Integer
+    Shape_Length             Double
+    Shape_Area               Double
+    Shape                    Geometry
+    DELAY                    Integer
+    FACILITY_ID              String
+    FACILITY_NAME            String
+    LENGTH_3D                Double
+    LEVEL_NAME_FROM          String
+    LEVEL_NAME_TO            String
+    PATHWAY_RANK             Integer
+    PATHWAY_TYPE             Integer
+    TRAVEL_DIRECTION         Integer
+    VERTICAL_ORDER           Integer
+    LEVEL_ID                 String
+    Shape_Length             Double
+
+=== Transitions_AQ_SH_ECC  [esriGeometryPolyline]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    FACILITY_ID              String
+    FACILITY_NAME            String
+    HEIGHT_FROM              Double
+    HEIGHT_TO                Double
+    LENGTH_3D                Double
+    LEVEL_NAME_FROM          String
+    LEVEL_NAME_TO            String
+    TRANSITION_RANK          Integer
+    TRANSITION_TYPE          Integer
+    TRAVEL_DIRECTION         Integer
+    VERTICAL_ORDER_FROM      Integer
+    VERTICAL_ORDER_TO        Integer
+    Shape_Length             Double
+
+=== Landmarks_AQ_SH_ECC__ATTACHREL  []  wkid= hasZ=
+
+=== Landmarks_AQ_SH_ECC  [esriGeometryPoint]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    DESCRIPTION              String
+    LEVEL_ID                 String
+    VERTICAL_ORDER           Integer
+
+=== Pathways_AQ_SH_ECC  [esriGeometryPolyline]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    DELAY                    Integer
+    FACILITY_ID              String
+    FACILITY_NAME            String
+    LENGTH_3D                Double
+    LEVEL_NAME_FROM          String domain=DOM_NETWORK_RANK
+    LEVEL_NAME_TO            String domain=DOM_NETWORK_RANK
+    VERTICAL_ORDER           Integer
+    LEVEL_ID                 String
+    Shape_Length             Double
+
+=== Transitions_AQ_SH_ECC  [esriGeometryPolyline]  wkid=26910 hasZ=true
+    OBJECTID                 OID
+    Shape                    Geometry
+    FACILITY_ID              String
+    FACILITY_NAME            String
+    HEIGHT_FROM              Double
+    HEIGHT_TO                Double
+    LENGTH_3D                Double
+    LEVEL_NAME_FROM          String domain=DOM_NETWORK_RANK
+    LEVEL_NAME_TO            String domain=DOM_NETWORK_RANK
+    VERTICAL_ORDER_FROM      Integer
+    VERTICAL_ORDER_TO        Integer
+    Shape_Length             Double
+

@@ -1,0 +1,1539 @@
+=== LAYER SCHEMAS (authoritative) ===
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Facilities_AQ_SH_ECC
+Geometry: 3D Multi Polygon
+Feature Count: 3
+Extent: (505981.108700, 5458380.179300) - (506253.247300, 5458559.138700)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+FACILITY_ID: String (255.0), alternative name="Facility ID"
+NAME: String (100.0)
+NAME_LONG: String (255.0), alternative name="Long Name"
+SITE_ID: String (255.0), alternative name="Site ID"
+HEIGHT_RELATIVE: Real (0.0), alternative name="Relative Height"
+LEVELS_ABOVE_GROUND: Integer (0.0), alternative name="Levels Above Ground"
+Shape_Length: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_LENGTH
+Shape_Area: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_AREA
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Levels_AQ_SH_ECC
+Geometry: 3D Multi Polygon
+Feature Count: 11
+Extent: (505981.108700, 5458380.179300) - (506253.247300, 5458559.138700)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+LEVEL_ID: String (255.0), alternative name="Level ID"
+NAME: String (255.0)
+NAME_SHORT: String (4.0), alternative name="Short Name"
+LEVEL_NUMBER: Integer (0.0), alternative name="Level Number"
+FACILITY_ID: String (255.0), alternative name="Facility ID"
+AREA_GROSS: Real (0.0), alternative name="Gross Area"
+HEIGHT_RELATIVE: Real (0.0), alternative name="Relative Height"
+VERTICAL_ORDER: Integer (0.0), alternative name="Vertical Order"
+Shape_Length: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_LENGTH
+Shape_Area: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_AREA
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Units_AQ_SH_ECC
+Geometry: 3D Multi Polygon
+Feature Count: 1210
+Extent: (505981.168700, 5458380.179700) - (506252.450000, 5458556.437900)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+UNIT_ID: String (255.0), alternative name="Unit ID"
+USE_TYPE: String (50.0), alternative name="Use Type"
+NAME: String (100.0)
+NAME_LONG: String (255.0), alternative name="Long Name"
+LEVEL_ID: String (255.0), alternative name="Level ID"
+SCHEDULE_EMAIL: String (255.0), alternative name="Schedule Email"
+CAPACITY: Integer (0.0)
+AREA_ID: String (255.0), alternative name="Area ID"
+ASSIGNMENT_TYPE: String (255.0) DEFAULT 'none', alternative name="Assignment Type", domain name=DOM_ASSIGNMENT_TYPE
+AREA_GROSS: Real (0.0), alternative name="Gross Area"
+HEIGHT_RELATIVE: Real (0.0), alternative name="Relative Height"
+RESERVATION_METHOD: Integer (0.0), alternative name="Reservation Method", domain name=DOM_RESERVATION_METHOD
+ROOM_ID: String (255.0)
+SEARCHABLE: String (255.0)
+REF_LVL: String (255.0)
+VERTICAL_ORDER: Integer (0.0)
+Shape_Length: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_LENGTH
+Shape_Area: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_AREA
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Details_AQ_SH_ECC
+Geometry: 3D Multi Line String
+Feature Count: 55593
+Extent: (505975.842900, 5458378.092100) - (506252.793500, 5458559.570500)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+DETAIL_ID: String (255.0), alternative name="Detail ID"
+USE_TYPE: String (50.0), alternative name="Use Type"
+LEVEL_ID: String (255.0), alternative name="Level ID"
+HEIGHT_RELATIVE: Real (0.0), alternative name="Relative Height"
+Shape_Length: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_LENGTH
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Pathways_AQ_SH_ECC
+Geometry: 3D Multi Line String
+Feature Count: 22426
+Extent: (505969.596300, 5458387.656300) - (506254.830700, 5458554.898100)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+DELAY: Integer (0.0)
+FACILITY_ID: String (255.0), alternative name="Facility ID"
+FACILITY_NAME: String (100.0), alternative name="Facility Name"
+LENGTH_3D: Real (0.0), alternative name="Length in 3D"
+LEVEL_NAME_FROM: String (100.0), alternative name="From Level Name"
+LEVEL_NAME_TO: String (100.0), alternative name="To Level Name"
+PATHWAY_RANK: Integer (0.0), alternative name="Pathway Rank", domain name=DOM_NETWORK_RANK
+PATHWAY_TYPE: Integer (0.0), alternative name="Pathway Type", domain name=DOM_NETWORK_TYPE
+TRAVEL_DIRECTION: Integer (0.0), alternative name="Travel Direction", domain name=DOM_TRAVEL_DIRECTION
+VERTICAL_ORDER: Integer (0.0), alternative name="Vertical Order"
+LEVEL_ID: String (255.0), alternative name="Level ID"
+Shape_Length: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_LENGTH
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Transitions_AQ_SH_ECC
+Geometry: 3D Multi Line String
+Feature Count: 63
+Extent: (505999.570900, 5458402.629000) - (506239.875500, 5458538.445700)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+FACILITY_ID: String (255.0), alternative name="Facility ID"
+FACILITY_NAME: String (100.0), alternative name="Facility Name"
+HEIGHT_FROM: Real (0.0), alternative name="From Height"
+HEIGHT_TO: Real (0.0), alternative name="To Height"
+LENGTH_3D: Real (0.0), alternative name="Length in 3D"
+LEVEL_NAME_FROM: String (100.0), alternative name="From Level Name"
+LEVEL_NAME_TO: String (100.0), alternative name="To Level Name"
+TRANSITION_RANK: Integer (0.0), alternative name="Transition Rank", domain name=DOM_NETWORK_RANK
+TRANSITION_TYPE: Integer (0.0), alternative name="Transition Type", domain name=DOM_NETWORK_TYPE
+TRAVEL_DIRECTION: Integer (0.0), alternative name="Travel Direction", domain name=DOM_TRAVEL_DIRECTION
+VERTICAL_ORDER_FROM: Integer (0.0), alternative name="From Vertical Order"
+VERTICAL_ORDER_TO: Integer (0.0), alternative name="To Vertical Order"
+Shape_Length: Real (0.0) DEFAULT FILEGEODATABASE_SHAPE_LENGTH
+INFO: Open of `/data/IndoorWayfinding.gdb'
+      using driver `OpenFileGDB' successful.
+
+Layer name: Landmarks_AQ_SH_ECC
+Geometry: 3D Point
+Feature Count: 41
+Extent: (506005.418600, 5458393.042400) - (506239.137100, 5458552.989500)
+Layer SRS WKT:
+COMPOUNDCRS["NAD83 / UTM zone 10N + CGVD28 height",
+    PROJCRS["NAD83 / UTM zone 10N",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4269]],
+        CONVERSION["UTM zone 10N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-123,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,
+                ORDER[1],
+                LENGTHUNIT["metre",1]],
+            AXIS["(N)",north,
+                ORDER[2],
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Engineering survey, topographic mapping."],
+            AREA["North America - between 126┬░W and 120┬░W - onshore and offshore. Canada - British Columbia; Northwest Territories; Yukon. United States (USA) - California; Oregon; Washington."],
+            BBOX[30.54,-126,81.8,-119.99]],
+        ID["EPSG",26910]],
+    VERTCRS["CGVD28 height",
+        VDATUM["Canadian Geodetic Vertical Datum of 1928"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["metre",1]],
+        USAGE[
+            SCOPE["Geodesy, engineering survey."],
+            AREA["Canada - onshore - Alberta; British Columbia; Manitoba south of 59┬░N; New Brunswick; Newfoundland, Labrador between 52┬░50ΓÇÖN and 54┬░30ΓÇÖN; Northwest Territories south west of a line between 60┬░40ΓÇÖN, 110┬░W and the coast at 132┬░W; Nova Scotia; Ontario south of 52┬░20'N; Prince Edward Island; Quebec - mainland south of 55┬░N and west of 64┬░W, north of 55┬░N between 70┬░W and 66┬░W, coastal area between 66┬░W and 64┬░W, and Anticosta island; Saskatchewan south of 58┬░30ΓÇÖN; Yukon."],
+            BBOX[41.67,-141.01,69.81,-52.54]],
+        ID["EPSG",5713]]]
+Data axis to CRS axis mapping: 1,2,3
+FID Column = OBJECTID
+Geometry Column = Shape
+DESCRIPTION: String (255.0)
+LEVEL_ID: String (255.0), alternative name="Level ID"
+VERTICAL_ORDER: Integer (0.0), alternative name="Vertical Order"
+=== FACILITIES ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+  NAME (String) = AQ
+  NAME_LONG (String) = Academic Quadrangle
+  LEVELS_ABOVE_GROUND (Integer) = (null)
+
+OGRFeature(SELECT):1
+  FACILITY_ID (String) = SFU_BURNABY_ECC
+  NAME (String) = ECC
+  NAME_LONG (String) = East Concourse Cafeteria
+  LEVELS_ABOVE_GROUND (Integer) = (null)
+
+OGRFeature(SELECT):2
+  FACILITY_ID (String) = SFU_BURNABY_STRAND
+  NAME (String) = SH
+  NAME_LONG (String) = Strand Hall
+  LEVELS_ABOVE_GROUND (Integer) = (null)
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== LEVELS ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  LEVEL_ID (String) = SFU_BURNABY_ECC_3000
+  NAME (String) = 3000 Level
+  NAME_SHORT (String) = 3000
+  LEVEL_NUMBER (Integer) = 0
+  VERTICAL_ORDER (Integer) = 0
+  FACILITY_ID (String) = SFU_BURNABY_ECC
+
+OGRFeature(SELECT):1
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  NAME (String) = 1000 Level
+  NAME_SHORT (String) = 1000
+  LEVEL_NUMBER (Integer) = 0
+  VERTICAL_ORDER (Integer) = -2
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+
+OGRFeature(SELECT):2
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  NAME (String) = 2000 Level
+  NAME_SHORT (String) = 2000
+  LEVEL_NUMBER (Integer) = 1
+  VERTICAL_ORDER (Integer) = -1
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+
+OGRFeature(SELECT):3
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  NAME (String) = 3000 Level
+  NAME_SHORT (String) = 3000
+  LEVEL_NUMBER (Integer) = 2
+  VERTICAL_ORDER (Integer) = 0
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+
+OGRFeature(SELECT):4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_4000
+  NAME (String) = 4000 Level
+  NAME_SHORT (String) = 4000
+  LEVEL_NUMBER (Integer) = 3
+  VERTICAL_ORDER (Integer) = 1
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+
+OGRFeature(SELECT):5
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  NAME (String) = 5000 Level
+  NAME_SHORT (String) = 5000
+  LEVEL_NUMBER (Integer) = 4
+  VERTICAL_ORDER (Integer) = 2
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+
+OGRFeature(SELECT):6
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  NAME (String) = 6000 Level
+  NAME_SHORT (String) = 6000
+  LEVEL_NUMBER (Integer) = 5
+  VERTICAL_ORDER (Integer) = 3
+  FACILITY_ID (String) = SFU_BURNABY_QUAD
+
+OGRFeature(SELECT):7
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_100
+  NAME (String) = 100 Level
+  NAME_SHORT (String) = 100
+  LEVEL_NUMBER (Integer) = 0
+  VERTICAL_ORDER (Integer) = -1
+  FACILITY_ID (String) = SFU_BURNABY_STRAND
+
+OGRFeature(SELECT):8
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_1000
+  NAME (String) = 1000 Level
+  NAME_SHORT (String) = 1000
+  LEVEL_NUMBER (Integer) = 1
+  VERTICAL_ORDER (Integer) = 0
+  FACILITY_ID (String) = SFU_BURNABY_STRAND
+
+OGRFeature(SELECT):9
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_2000
+  NAME (String) = 2000 Level
+  NAME_SHORT (String) = 2000
+  LEVEL_NUMBER (Integer) = 2
+  VERTICAL_ORDER (Integer) = 1
+  FACILITY_ID (String) = SFU_BURNABY_STRAND
+
+OGRFeature(SELECT):10
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_3000
+  NAME (String) = 3000 Level
+  NAME_SHORT (String) = 3000
+  LEVEL_NUMBER (Integer) = 3
+  VERTICAL_ORDER (Integer) = 2
+  FACILITY_ID (String) = SFU_BURNABY_STRAND
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== UNIT USE_TYPE ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  USE_TYPE (String) = Office
+  n (Integer) = 539
+
+OGRFeature(SELECT):1
+  USE_TYPE (String) = Corridor
+  n (Integer) = 104
+
+OGRFeature(SELECT):2
+  USE_TYPE (String) = Research Laboratory
+  n (Integer) = 55
+
+OGRFeature(SELECT):3
+  USE_TYPE (String) = Stairs
+  n (Integer) = 54
+
+OGRFeature(SELECT):4
+  USE_TYPE (String) = Classroom
+  n (Integer) = 39
+
+OGRFeature(SELECT):5
+  USE_TYPE (String) = Meeting Room
+  n (Integer) = 30
+
+OGRFeature(SELECT):6
+  USE_TYPE (String) = Elevator Shaft
+  n (Integer) = 30
+
+OGRFeature(SELECT):7
+  USE_TYPE (String) = General Storage
+  n (Integer) = 28
+
+OGRFeature(SELECT):8
+  USE_TYPE (String) = Mechanical Room
+  n (Integer) = 20
+
+OGRFeature(SELECT):9
+  USE_TYPE (String) = Electrical Room
+  n (Integer) = 17
+
+OGRFeature(SELECT):10
+  USE_TYPE (String) = Washroom, single-stall, accessible
+  n (Integer) = 15
+
+OGRFeature(SELECT):11
+  USE_TYPE (String) = Comm.-Rm-Clos/Server Rm
+  n (Integer) = 15
+
+OGRFeature(SELECT):12
+  USE_TYPE (String) = Janitorial Room
+  n (Integer) = 14
+
+OGRFeature(SELECT):13
+  USE_TYPE (String) = Computer Laboratory
+  n (Integer) = 14
+
+OGRFeature(SELECT):14
+  USE_TYPE (String) = Kitchenette
+  n (Integer) = 13
+
+OGRFeature(SELECT):15
+  USE_TYPE (String) = Washroom, men's, accessible
+  n (Integer) = 12
+
+OGRFeature(SELECT):16
+  USE_TYPE (String) = Public Lounge
+  n (Integer) = 12
+
+OGRFeature(SELECT):17
+  USE_TYPE (String) = Food Dry Storage
+  n (Integer) = 12
+
+OGRFeature(SELECT):18
+  USE_TYPE (String) = Copy/Duplicating Room
+  n (Integer) = 12
+
+OGRFeature(SELECT):19
+  USE_TYPE (String) = Washroom, women's, accessible
+  n (Integer) = 11
+
+OGRFeature(SELECT):20
+  USE_TYPE (String) = Washroom, women's
+  n (Integer) = 11
+
+OGRFeature(SELECT):21
+  USE_TYPE (String) = Reception
+  n (Integer) = 11
+
+OGRFeature(SELECT):22
+  USE_TYPE (String) = Staff Lounge/Lunch Room
+  n (Integer) = 9
+
+OGRFeature(SELECT):23
+  USE_TYPE (String) = Public Study Area
+  n (Integer) = 9
+
+OGRFeature(SELECT):24
+  USE_TYPE (String) = Washroom, men's
+  n (Integer) = 8
+
+OGRFeature(SELECT):25
+  USE_TYPE (String) = Plant Maint Storage
+  n (Integer) = 8
+
+OGRFeature(SELECT):26
+  USE_TYPE (String) = Vending Machine Area
+  n (Integer) = 7
+
+OGRFeature(SELECT):27
+  USE_TYPE (String) = Lecture Theatre
+  n (Integer) = 7
+
+OGRFeature(SELECT):28
+  USE_TYPE (String) = Interview Room
+  n (Integer) = 7
+
+OGRFeature(SELECT):29
+  USE_TYPE (String) = File Storage
+  n (Integer) = 7
+
+OGRFeature(SELECT):30
+  USE_TYPE (String) = Cafeteria
+  n (Integer) = 7
+
+OGRFeature(SELECT):31
+  USE_TYPE (String) = Workshop
+  n (Integer) = 6
+
+OGRFeature(SELECT):32
+  USE_TYPE (String) = Washroom, single-stall
+  n (Integer) = 6
+
+OGRFeature(SELECT):33
+  USE_TYPE (String) = Place of Worship
+  n (Integer) = 5
+
+OGRFeature(SELECT):34
+  USE_TYPE (String) = Dining
+  n (Integer) = 5
+
+OGRFeature(SELECT):35
+  USE_TYPE (String) = Conference Room
+  n (Integer) = 5
+
+OGRFeature(SELECT):36
+  USE_TYPE (String) = Student Lounge/Lunch Room
+  n (Integer) = 4
+
+OGRFeature(SELECT):37
+  USE_TYPE (String) = Food Cold Storage
+  n (Integer) = 4
+
+OGRFeature(SELECT):38
+  USE_TYPE (String) = Vault
+  n (Integer) = 3
+
+OGRFeature(SELECT):39
+  USE_TYPE (String) = Seminar
+  n (Integer) = 3
+
+OGRFeature(SELECT):40
+  USE_TYPE (String) = Dry Laboratory
+  n (Integer) = 3
+
+OGRFeature(SELECT):41
+  USE_TYPE (String) = Washroom, multi-stall, accessible
+  n (Integer) = 2
+
+OGRFeature(SELECT):42
+  USE_TYPE (String) = Shower Unidentified
+  n (Integer) = 2
+
+OGRFeature(SELECT):43
+  USE_TYPE (String) = Mail Room
+  n (Integer) = 2
+
+OGRFeature(SELECT):44
+  USE_TYPE (String) = Garbage Room
+  n (Integer) = 2
+
+OGRFeature(SELECT):45
+  USE_TYPE (String) = Gallery, Display Room
+  n (Integer) = 2
+
+OGRFeature(SELECT):46
+  USE_TYPE (String) = Equipment Room
+  n (Integer) = 2
+
+OGRFeature(SELECT):47
+  USE_TYPE (String) = Dishwashing Area
+  n (Integer) = 2
+
+OGRFeature(SELECT):48
+  USE_TYPE (String) = Board Room
+  n (Integer) = 2
+
+OGRFeature(SELECT):49
+  USE_TYPE (String) = Unfinished Space
+  n (Integer) = 1
+
+OGRFeature(SELECT):50
+  USE_TYPE (String) = Teaching Laboratory
+  n (Integer) = 1
+
+OGRFeature(SELECT):51
+  USE_TYPE (String) = Retail Store
+  n (Integer) = 1
+
+OGRFeature(SELECT):52
+  USE_TYPE (String) = Resource Lib, Reading Rm
+  n (Integer) = 1
+
+OGRFeature(SELECT):53
+  USE_TYPE (String) = Locker Unindentified
+  n (Integer) = 1
+
+OGRFeature(SELECT):54
+  USE_TYPE (String) = Locker Male
+  n (Integer) = 1
+
+OGRFeature(SELECT):55
+  USE_TYPE (String) = Locker Female
+  n (Integer) = 1
+
+OGRFeature(SELECT):56
+  USE_TYPE (String) = Loading Dock
+  n (Integer) = 1
+
+OGRFeature(SELECT):57
+  USE_TYPE (String) = Food Preparation
+  n (Integer) = 1
+
+OGRFeature(SELECT):58
+  USE_TYPE (String) = Elevator Room
+  n (Integer) = 1
+
+OGRFeature(SELECT):59
+  USE_TYPE (String) = Corridor with Ramp
+  n (Integer) = 1
+
+OGRFeature(SELECT):60
+  USE_TYPE (String) = Commercial Kitchen
+  n (Integer) = 1
+
+OGRFeature(SELECT):61
+  USE_TYPE (String) = Boiler Room
+  n (Integer) = 1
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== UNIT SEARCHABLE ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  SEARCHABLE (String) = N
+  n (Integer) = 193
+
+OGRFeature(SELECT):1
+  SEARCHABLE (String) = Y
+  n (Integer) = 1017
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== SAMPLE UNITS ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1004
+  NAME (String) = 1004
+  NAME_LONG (String) = 1004, 1000
+  USE_TYPE (String) = Plant Maint Storage
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1004
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):1
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1002
+  NAME (String) = 1002
+  NAME_LONG (String) = 1002, 1000
+  USE_TYPE (String) = Loading Dock
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1002
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):2
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1029
+  NAME (String) = 1029
+  NAME_LONG (String) = 1029, 1000
+  USE_TYPE (String) = Plant Maint Storage
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1029
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):3
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1006
+  NAME (String) = 1006
+  NAME_LONG (String) = 1006, 1000
+  USE_TYPE (String) = Workshop
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1006
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):4
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1025
+  NAME (String) = 1025
+  NAME_LONG (String) = 1025, 1000
+  USE_TYPE (String) = Mechanical Room
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1025
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):5
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1008
+  NAME (String) = 1008
+  NAME_LONG (String) = 1008, 1000
+  USE_TYPE (String) = Plant Maint Storage
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1008
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):6
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_D.1
+  NAME (String) = D.1
+  NAME_LONG (String) = D.1, 1000
+  USE_TYPE (String) = Stairs
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQD.1
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):7
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1010.1
+  NAME (String) = 1010.1
+  NAME_LONG (String) = 1010.1, 1000
+  USE_TYPE (String) = Washroom, men's, accessible
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1010.1
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):8
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1010
+  NAME (String) = 1010
+  NAME_LONG (String) = 1010, 1000
+  USE_TYPE (String) = Locker Male
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1010
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):9
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1011.1
+  NAME (String) = 1011.1
+  NAME_LONG (String) = 1011.1, 1000
+  USE_TYPE (String) = Washroom, women's, accessible
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1011.1
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):10
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1011
+  NAME (String) = 1011
+  NAME_LONG (String) = 1011, 1000
+  USE_TYPE (String) = Locker Female
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1011
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):11
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1026
+  NAME (String) = 1026
+  NAME_LONG (String) = 1026, 1000
+  USE_TYPE (String) = General Storage
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1026
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):12
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1009
+  NAME (String) = 1009
+  NAME_LONG (String) = 1009, 1000
+  USE_TYPE (String) = Food Dry Storage
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1009
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):13
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1012
+  NAME (String) = 1012
+  NAME_LONG (String) = 1012, 1000
+  USE_TYPE (String) = Staff Lounge/Lunch Room
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1012
+  REF_LVL (String) = 09
+
+OGRFeature(SELECT):14
+  UNIT_ID (String) = SFU_BURNABY_QUAD_1000_1007
+  NAME (String) = 1007
+  NAME_LONG (String) = 1007, 1000
+  USE_TYPE (String) = Corridor
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  ROOM_ID (String) = AQ1007
+  REF_LVL (String) = 09
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== PATHWAY TYPE/RANK/DIRECTION ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  PATHWAY_TYPE (Integer) = 1
+  PATHWAY_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  n (Integer) = 13108
+
+OGRFeature(SELECT):1
+  PATHWAY_TYPE (Integer) = 1
+  PATHWAY_RANK (Integer) = 2
+  TRAVEL_DIRECTION (Integer) = 1
+  n (Integer) = 9318
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== PATHWAY LEVELS ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  LEVEL_ID (String) = SFU_BURNABY_ECC_3000
+  LEVEL_NAME_FROM (String) = 3000
+  LEVEL_NAME_TO (String) = 3000
+  VERTICAL_ORDER (Integer) = 0
+  n (Integer) = 419
+
+OGRFeature(SELECT):1
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  LEVEL_NAME_FROM (String) = 1000
+  LEVEL_NAME_TO (String) = 1000
+  VERTICAL_ORDER (Integer) = -2
+  n (Integer) = 297
+
+OGRFeature(SELECT):2
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  LEVEL_NAME_FROM (String) = 2000
+  LEVEL_NAME_TO (String) = 2000
+  VERTICAL_ORDER (Integer) = -1
+  n (Integer) = 2730
+
+OGRFeature(SELECT):3
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  LEVEL_NAME_FROM (String) = 3000
+  LEVEL_NAME_TO (String) = 3000
+  VERTICAL_ORDER (Integer) = 0
+  n (Integer) = 6225
+
+OGRFeature(SELECT):4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_4000
+  LEVEL_NAME_FROM (String) = 4000
+  LEVEL_NAME_TO (String) = 4000
+  VERTICAL_ORDER (Integer) = 1
+  n (Integer) = 206
+
+OGRFeature(SELECT):5
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  LEVEL_NAME_FROM (String) = 5000
+  LEVEL_NAME_TO (String) = 5000
+  VERTICAL_ORDER (Integer) = 2
+  n (Integer) = 5098
+
+OGRFeature(SELECT):6
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  LEVEL_NAME_FROM (String) = 6000
+  LEVEL_NAME_TO (String) = 6000
+  VERTICAL_ORDER (Integer) = 3
+  n (Integer) = 2119
+
+OGRFeature(SELECT):7
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_100
+  LEVEL_NAME_FROM (String) = 100
+  LEVEL_NAME_TO (String) = 100
+  VERTICAL_ORDER (Integer) = -1
+  n (Integer) = 11
+
+OGRFeature(SELECT):8
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_1000
+  LEVEL_NAME_FROM (String) = 1000
+  LEVEL_NAME_TO (String) = 1000
+  VERTICAL_ORDER (Integer) = 0
+  n (Integer) = 788
+
+OGRFeature(SELECT):9
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_2000
+  LEVEL_NAME_FROM (String) = 2000
+  LEVEL_NAME_TO (String) = 2000
+  VERTICAL_ORDER (Integer) = 1
+  n (Integer) = 3121
+
+OGRFeature(SELECT):10
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_3000
+  LEVEL_NAME_FROM (String) = 3000
+  LEVEL_NAME_TO (String) = 3000
+  VERTICAL_ORDER (Integer) = 2
+  n (Integer) = 1412
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== TRANSITION TYPE/RANK/DIRECTION ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  TRANSITION_TYPE (Integer) = 2
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = -2
+  VERTICAL_ORDER_TO (Integer) = -1
+  n (Integer) = 2
+
+OGRFeature(SELECT):1
+  TRANSITION_TYPE (Integer) = 2
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = -1
+  VERTICAL_ORDER_TO (Integer) = 0
+  n (Integer) = 8
+
+OGRFeature(SELECT):2
+  TRANSITION_TYPE (Integer) = 2
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 0
+  VERTICAL_ORDER_TO (Integer) = 1
+  n (Integer) = 11
+
+OGRFeature(SELECT):3
+  TRANSITION_TYPE (Integer) = 2
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 1
+  VERTICAL_ORDER_TO (Integer) = 2
+  n (Integer) = 12
+
+OGRFeature(SELECT):4
+  TRANSITION_TYPE (Integer) = 2
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 2
+  VERTICAL_ORDER_TO (Integer) = 3
+  n (Integer) = 9
+
+OGRFeature(SELECT):5
+  TRANSITION_TYPE (Integer) = 4
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = -2
+  VERTICAL_ORDER_TO (Integer) = -1
+  n (Integer) = 2
+
+OGRFeature(SELECT):6
+  TRANSITION_TYPE (Integer) = 4
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = -1
+  VERTICAL_ORDER_TO (Integer) = 0
+  n (Integer) = 3
+
+OGRFeature(SELECT):7
+  TRANSITION_TYPE (Integer) = 4
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 0
+  VERTICAL_ORDER_TO (Integer) = 1
+  n (Integer) = 4
+
+OGRFeature(SELECT):8
+  TRANSITION_TYPE (Integer) = 4
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 0
+  VERTICAL_ORDER_TO (Integer) = 2
+  n (Integer) = 2
+
+OGRFeature(SELECT):9
+  TRANSITION_TYPE (Integer) = 4
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 1
+  VERTICAL_ORDER_TO (Integer) = 2
+  n (Integer) = 4
+
+OGRFeature(SELECT):10
+  TRANSITION_TYPE (Integer) = 4
+  TRANSITION_RANK (Integer) = 1
+  TRAVEL_DIRECTION (Integer) = 1
+  VERTICAL_ORDER_FROM (Integer) = 2
+  VERTICAL_ORDER_TO (Integer) = 3
+  n (Integer) = 6
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== DETAILS USE_TYPE ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  USE_TYPE (String) = AGL
+  n (Integer) = 32974
+
+OGRFeature(SELECT):1
+  USE_TYPE (String) = AWA
+  n (Integer) = 11002
+
+OGRFeature(SELECT):2
+  USE_TYPE (String) = ADO
+  n (Integer) = 6865
+
+OGRFeature(SELECT):3
+  USE_TYPE (String) = AWAFU
+  n (Integer) = 4547
+
+OGRFeature(SELECT):4
+  USE_TYPE (String) = AWAMO
+  n (Integer) = 196
+
+OGRFeature(SELECT):5
+  USE_TYPE (String) = AWACO
+  n (Integer) = 9
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== LANDMARKS ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  DESCRIPTION (String) = Vending Machine close to Room 2013.4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):1
+  DESCRIPTION (String) = Vending Machine close to Room 2013.4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):2
+  DESCRIPTION (String) = Vending Machine close to Room 2013.4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):3
+  DESCRIPTION (String) = Vending Machine close to Room 2013.4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):4
+  DESCRIPTION (String) = Vending Machine close to Room 2013.4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):5
+  DESCRIPTION (String) = Vending Machine close to Room 2026
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):6
+  DESCRIPTION (String) = Vending Machine close to Room 2026
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):7
+  DESCRIPTION (String) = Vending Machine close to Room 2130.1
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):8
+  DESCRIPTION (String) = Vending Machine close to Room 2130.1
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):9
+  DESCRIPTION (String) = Vending Machine near Multifaith Centre
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):10
+  DESCRIPTION (String) = Vending Machine near Multifaith Centre
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):11
+  DESCRIPTION (String) = Vending Machine near East Cafeteria
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):12
+  DESCRIPTION (String) = Vending Machine near East Cafeteria
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):13
+  DESCRIPTION (String) = Vending Machine close to B9201
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):14
+  DESCRIPTION (String) = Vending Machine close to B9201
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):15
+  DESCRIPTION (String) = Vending Machine close to B9201
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):16
+  DESCRIPTION (String) = Vending Machine close to B9201
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):17
+  DESCRIPTION (String) = Vending Machine close to B9201
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):18
+  DESCRIPTION (String) = Water Fountain near SH 227
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_2000
+  VERTICAL_ORDER (Integer) = 1
+
+OGRFeature(SELECT):19
+  DESCRIPTION (String) = Water Fountain near SH 327
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_3000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):20
+  DESCRIPTION (String) = Water Fountain near AQ 6028C
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  VERTICAL_ORDER (Integer) = 3
+
+OGRFeature(SELECT):21
+  DESCRIPTION (String) = Water Fountain near AQ 6065C
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  VERTICAL_ORDER (Integer) = 3
+
+OGRFeature(SELECT):22
+  DESCRIPTION (String) = Water Fountain near AQ 6089
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  VERTICAL_ORDER (Integer) = 3
+
+OGRFeature(SELECT):23
+  DESCRIPTION (String) = Water Fountain near AQ 6126C
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  VERTICAL_ORDER (Integer) = 3
+
+OGRFeature(SELECT):24
+  DESCRIPTION (String) = Water Fountain near AQ 6187C
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  VERTICAL_ORDER (Integer) = 3
+
+OGRFeature(SELECT):25
+  DESCRIPTION (String) = Water Fountain near AQ 6214C
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  VERTICAL_ORDER (Integer) = 3
+
+OGRFeature(SELECT):26
+  DESCRIPTION (String) = Water Fountain near AQ 2015
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):27
+  DESCRIPTION (String) = Water Fountain near AQ 3158
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):28
+  DESCRIPTION (String) = Water Fountain near AQ 3007
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):29
+  DESCRIPTION (String) = Water Fountain near AQ 3146
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):30
+  DESCRIPTION (String) = Water Fountain near AQ 3152
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):31
+  DESCRIPTION (String) = Water Fountain near AQ 5032
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):32
+  DESCRIPTION (String) = Water Fountain near AQ 5023
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):33
+  DESCRIPTION (String) = Water Fountain near AQ 5043
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):34
+  DESCRIPTION (String) = Water Fountain near AQ 5086
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):35
+  DESCRIPTION (String) = Water Fountain near AQ 5109
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):36
+  DESCRIPTION (String) = Water Fountain near AQ 5011
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  VERTICAL_ORDER (Integer) = 2
+
+OGRFeature(SELECT):37
+  DESCRIPTION (String) = Water Fountain near AQ 3141A
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):38
+  DESCRIPTION (String) = Water Fountain near AQ 2105
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  VERTICAL_ORDER (Integer) = -1
+
+OGRFeature(SELECT):39
+  DESCRIPTION (String) = Water Fountain near AQ 3134
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+OGRFeature(SELECT):40
+  DESCRIPTION (String) = Water Fountain near AQ 3157
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  VERTICAL_ORDER (Integer) = 0
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== PATHWAY SEGMENT LENGTH STATS ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  min_len (Real) = 0.00224722004490636
+  max_len (Real) = 150.942610445748
+  avg_len (Real) = 0.940339683731377
+  total_len (Real) = 21088.0577473599
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== NULL / POPULATION CHECKS ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  n (Integer) = 22426
+  null_length3d (Integer) = 0
+  null_delay (Integer) = 22314
+  null_level (Integer) = 0
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+Transitions with LENGTH_3D IS NULL:
+Feature Count: 0
+Transitions with HEIGHT_FROM IS NULL:
+Feature Count: 0
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  n (Integer) = 1210
+  null_name (Integer) = 0
+  null_name_long (Integer) = 0
+  null_room_id (Integer) = 0
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)
+=== UNITS PER LEVEL ===
+ERROR 4: Cannot open /data/IndoorWayfinding.gdb/a00000001.gdbtable: Read-only file system
+
+Layer name: SELECT
+OGRFeature(SELECT):0
+  LEVEL_ID (String) = SFU_BURNABY_ECC_3000
+  n (Integer) = 33
+  searchable (Integer) = 18
+
+OGRFeature(SELECT):1
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_1000
+  n (Integer) = 37
+  searchable (Integer) = 18
+
+OGRFeature(SELECT):2
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_2000
+  n (Integer) = 113
+  searchable (Integer) = 73
+
+OGRFeature(SELECT):3
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_3000
+  n (Integer) = 197
+  searchable (Integer) = 161
+
+OGRFeature(SELECT):4
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_4000
+  n (Integer) = 30
+  searchable (Integer) = 20
+
+OGRFeature(SELECT):5
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_5000
+  n (Integer) = 172
+  searchable (Integer) = 151
+
+OGRFeature(SELECT):6
+  LEVEL_ID (String) = SFU_BURNABY_QUAD_6000
+  n (Integer) = 279
+  searchable (Integer) = 263
+
+OGRFeature(SELECT):7
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_100
+  n (Integer) = 8
+  searchable (Integer) = 3
+
+OGRFeature(SELECT):8
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_1000
+  n (Integer) = 79
+  searchable (Integer) = 65
+
+OGRFeature(SELECT):9
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_2000
+  n (Integer) = 116
+  searchable (Integer) = 109
+
+OGRFeature(SELECT):10
+  LEVEL_ID (String) = SFU_BURNABY_STRAND_3000
+  n (Integer) = 146
+  searchable (Integer) = 136
+
+Relationship: Landmarks_AQ_SH_ECC__ATTACHREL (Composite, Landmarks_AQ_SH_ECC, Landmarks_AQ_SH_ECC__ATTACH)

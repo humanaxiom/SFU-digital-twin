@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "pwsh -NoProfile -File tools/hooks/check-read-only-boundary.ps1",
+        "timeout": 15
+      }
+    ]
+  }
+}

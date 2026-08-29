@@ -1,0 +1,29 @@
+=== DOM_RESERVATION_METHOD === 
+    0      Not reservable
+    1      Reservable
+
+=== DOM_NETWORK_RANK === 
+    1      Primary
+    2      Secondary
+    3      Tertiary
+
+=== DOM_NETWORK_TYPE === 
+    1      Hallway / Sidewalk
+    2      Stairs / Curb
+    3      Ramp / Curb Ramp
+    4      Elevator / Wheelchair Lift
+    5      Escalator
+    6      Moving Walkway
+
+=== DOM_ASSIGNMENT_TYPE === 
+    hotdesk Hot Desk
+    hotel  Hotel
+    none   None
+    not assignable Not Assignable
+    office Office
+
+=== DOM_TRAVEL_DIRECTION === 
+    1      Both Directions Allowed
+    2      From-To Allowed
+    3      To-From Allowed
+
