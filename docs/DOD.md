@@ -25,6 +25,9 @@ A ticket is Done when ALL of the following hold:
 
 ## Coverage floors
 
-Not yet fixed — this repo has no `packages/` yet. The ADR that introduces the first package
-(Phase 1 ETL) must set per-package coverage floors here, following the pattern of per-package floors
-(not one blended number) used by the reference `dtwin-harness` implementation.
+Per-package coverage floors (line coverage), not blended across the workspace. Set by ADR-0002.
+
+- **packages/wayfinding**: 85% line coverage
+
+This floor is enforced in the package's `pyproject.toml` via `pytest --cov-fail-under=85` and in
+the `make test` gate. Coverage is measured over `packages/wayfinding/src` only (excludes tests).
