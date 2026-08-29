@@ -12,15 +12,20 @@ fresh session can resume cold from it alone.
 ([docs/03-harness-design.md](03-harness-design.md)): `.github/agents/`, `.github/prompts/`,
 `.github/instructions/`, `.github/copilot-instructions.md`, `docs/DOD.md`, this file.
 
-**Nothing under `packages/` or `infra/` exists yet.** Phase 1 (ETL) is the next deliverable — start
-it with `/sprint-plan` to decompose the phase, then `/tdd-feature` per ticket.
+**Phase 1 foundation — complete.** The container execution model and package skeleton are in place:
+`packages/wayfinding/`, `infra/docker-compose.yml`, `Makefile` gates (`test`/`lint`/`type`). All
+gates pass. ADR-0002 documents the package layout and container-only execution rule.
+
+Phase 1 ETL work can now start. Use `/sprint-plan` to decompose the ETL deliverable into tickets,
+then `/tdd-feature` per ticket.
 
 ## What changed most recently
 
-- Harness scaffolding added: subagent roles mirroring the reference implementations
-  (`.claude/` in `C:\repos\sfudt\claude\dtwin-harness`, `humanaxiom/jd-assistant`), adapted to
-  GitHub Copilot's `.agent.md` / `.prompt.md` / `.instructions.md` primitives. See
-  [docs/03-harness-design.md](03-harness-design.md) for the full mapping and rationale.
+- DT-001 (harness bootstrap) closed: `packages/wayfinding/` skeleton created,
+  `infra/docker-compose.yml` test service added, `Makefile` with `test`/`lint`/`type` gates
+  implemented (all green, verified via Docker). ADR-0002 written. Coverage floor (85% line) set in
+  `docs/DOD.md`. The gate is now real — all future work must pass `make test lint type` before
+  merge.
 
 ## Open questions blocking Phase 1
 
@@ -32,7 +37,7 @@ accessible-routing UI copy is finalized.
 
 ## Next steps
 
-1. `/sprint-plan` Phase 1 (ETL → GeoPackage + contracted graph + build report).
-2. First ADR once `packages/` is introduced: package layout, coverage floors, container/test
-   execution model (mirrors `dtwin-harness` ADR-0003, adapted to this repo's tooling).
-3. `/tdd-feature` per ticket thereafter.
+1. `/sprint-plan` Phase 1 ETL deliverable (GeoPackage + contracted graph + build report) into
+   tickets.
+2. `/tdd-feature` per ticket thereafter — all tests and implementation now run via the Docker-based
+   gate established in DT-001.
