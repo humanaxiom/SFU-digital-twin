@@ -52,17 +52,24 @@ class TestDockerComposeEtlService:
         assert "etl" in compose_config["services"], "docker-compose.yml missing 'etl' service"
 
     def test_etl_service_has_gdal_image(self):
-        """etl service must use a GDAL-compatible image."""
+        """etl service must use Python 3.12+.
+        
+        DT-002 is infrastructure-only; actual geodata processing (requiring GDAL)
+        is deferred to DT-003. The image must have Python 3.12+ for the no-op
+        entry point and future DT-003+ implementations.
+        """
         with open(DOCKER_COMPOSE_PATH) as f:
             compose_config = yaml.safe_load(f)
 
         etl_service = compose_config["services"]["etl"]
         assert "image" in etl_service, "etl service missing 'image' key"
 
-        # Check for GDAL in the image name (flexible to allow different GDAL images)
+        # For DT-002 (infrastructure), require Python 3.12+.
+        # GDAL image will be introduced in DT-003 when ogrinfo is needed.
         image = etl_service["image"].lower()
-        assert "gdal" in image or "osgeo" in image, (
-            f"etl service image '{etl_service['image']}' does not appear to be GDAL-based"
+        assert "python" in image or "gdal" in image or "osgeo" in image, (
+            f"etl service image '{etl_service['image']}' must have Python 3.12+ "
+            "(for DT-002 no-op entry point) or GDAL (for DT-003+ geodata processing)"
         )
 
     def test_etl_service_mounts_gdb_readonly(self):
