@@ -2,7 +2,19 @@ services:
   test:
     image: python:3.12-slim
     working_dir: /workspace
+    environment:
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
-      - ../packages/wayfinding:/workspace/packages/wayfinding:rw
+      - ..:/workspace:rw
+      - C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
+      - //var/run/docker.sock:/var/run/docker.sock
+    command: /bin/sh
+
+  etl:
+    image: python:3.12-slim
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace:rw
+      - ../build:/workspace/build:rw
       - C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
     command: /bin/sh
