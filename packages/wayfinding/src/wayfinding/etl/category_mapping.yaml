@@ -1,0 +1,216 @@
+# Category mapping for all 62 USE_TYPE values from the IndoorWayfinding.gdb Units layer
+# Maps free-text USE_TYPE to controlled vocabulary categories with optional metadata flags
+#
+# Controlled categories:
+# - office, classroom, laboratory, washroom, corridor, vertical_circulation,
+#   bookable_space, food_service, storage, infrastructure, amenity, retail, workshop, other
+#
+# Optional metadata flags:
+# - accessible: bool — explicitly accessible (e.g., accessible washroom)
+# - gender: str — male, female, neutral, unspecified
+# - capacity: int — for bookable spaces (future use)
+
+Office:
+  category: office
+
+Corridor:
+  category: corridor
+
+Research Laboratory:
+  category: laboratory
+
+Stairs:
+  category: vertical_circulation
+  accessible: false
+
+Classroom:
+  category: classroom
+
+Meeting Room:
+  category: bookable_space
+
+Elevator Shaft:
+  category: vertical_circulation
+  accessible: true
+
+General Storage:
+  category: storage
+
+Mechanical Room:
+  category: infrastructure
+
+Electrical Room:
+  category: infrastructure
+
+Washroom, single-stall, accessible:
+  category: washroom
+  accessible: true
+  gender: neutral
+
+Comm.-Rm-Clos/Server Rm:
+  category: infrastructure
+
+Janitorial Room:
+  category: infrastructure
+
+Computer Laboratory:
+  category: laboratory
+
+Kitchenette:
+  category: food_service
+
+Washroom, men's, accessible:
+  category: washroom
+  accessible: true
+  gender: male
+
+Public Lounge:
+  category: amenity
+
+Food Dry Storage:
+  category: storage
+
+Copy/Duplicating Room:
+  category: office
+
+Washroom, women's, accessible:
+  category: washroom
+  accessible: true
+  gender: female
+
+Washroom, women's:
+  category: washroom
+  accessible: false
+  gender: female
+
+Reception:
+  category: office
+
+Staff Lounge/Lunch Room:
+  category: amenity
+
+Public Study Area:
+  category: amenity
+
+Washroom, men's:
+  category: washroom
+  accessible: false
+  gender: male
+
+Plant Maint Storage:
+  category: storage
+
+Vending Machine Area:
+  category: amenity
+
+Lecture Theatre:
+  category: classroom
+
+Interview Room:
+  category: bookable_space
+
+File Storage:
+  category: storage
+
+Cafeteria:
+  category: food_service
+
+Workshop:
+  category: workshop
+
+Washroom, single-stall:
+  category: washroom
+  accessible: false
+  gender: neutral
+
+Place of Worship:
+  category: retail
+
+Dining:
+  category: food_service
+
+Conference Room:
+  category: bookable_space
+
+Student Lounge/Lunch Room:
+  category: amenity
+
+Food Cold Storage:
+  category: storage
+
+Vault:
+  category: storage
+
+Seminar:
+  category: bookable_space
+
+Dry Laboratory:
+  category: laboratory
+
+Washroom, multi-stall, accessible:
+  category: washroom
+  accessible: true
+  gender: unspecified
+
+Shower Unidentified:
+  category: amenity
+
+Mail Room:
+  category: amenity
+
+Garbage Room:
+  category: infrastructure
+
+Gallery, Display Room:
+  category: retail
+
+Equipment Room:
+  category: infrastructure
+
+Dishwashing Area:
+  category: food_service
+
+Board Room:
+  category: bookable_space
+
+Unfinished Space:
+  category: other
+
+Teaching Laboratory:
+  category: laboratory
+
+Retail Store:
+  category: retail
+
+Resource Lib, Reading Rm:
+  category: amenity
+
+Locker Unindentified:
+  category: amenity
+
+Locker Male:
+  category: amenity
+  gender: male
+
+Locker Female:
+  category: amenity
+  gender: female
+
+Loading Dock:
+  category: workshop
+
+Food Preparation:
+  category: food_service
+
+Elevator Room:
+  category: infrastructure
+
+Corridor with Ramp:
+  category: corridor
+  accessible: true
+
+Commercial Kitchen:
+  category: food_service
+
+Boiler Room:
+  category: infrastructure
