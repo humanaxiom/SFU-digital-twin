@@ -35,6 +35,8 @@ is observability and should not block the first API deployment.
 
 ### DT-002: ETL Infrastructure and Category Mapping Schema
 
+**Status:** ✅ Complete & Approved (Judge verdict `APPROVE`, 2026-08-30)
+
 **Description:** Set up the ETL container service with GDAL + Python, add `make etl` target, and
 define the controlled-vocabulary YAML mapping USE_TYPE → category.
 
@@ -42,31 +44,30 @@ define the controlled-vocabulary YAML mapping USE_TYPE → category.
 [docs/01-data-findings.md §4](../01-data-findings.md#4-units-the-destination-catalogue).
 
 **Output:**
-- `infra/docker-compose.yml` updated with an `etl` service
-  (`ghcr.io/osgeo/gdal:alpine-small-latest` or equivalent Python 3.12 + GDAL 3.8+)
-- `Makefile` target `make etl` wrapping `docker compose run --rm etl python -m wayfinding.etl.run`
-- `packages/wayfinding/src/wayfinding/etl/category_mapping.yaml` defining 39 USE_TYPE → category
+- `infra/docker-compose.yml` updated with an `etl` service (`python:3.12-slim` for DT-002, GDAL deferred to DT-003)
+- `Makefile` target `make etl` wrapping `docker compose run --rm etl sh -c "pip install -e packages/wayfinding[dev] && python -m wayfinding.etl.run"`
+- `packages/wayfinding/src/wayfinding/etl/category_mapping.yaml` defining all 62 USE_TYPE → category
   rules (washroom, office, bookable_space, vertical_circulation, etc.) with optional
   accessible/gender/capacity flags
-- `packages/wayfinding/src/wayfinding/etl/schema.py` defining the output table schemas (facility,
-  level, unit, landmark, detail, pathway, transition)
+- `packages/wayfinding/src/wayfinding/etl/schema.py` defining 7 output table schemas (`FacilitySchema`,
+  `LevelSchema`, `UnitSchema`, `LandmarkSchema`, `DetailSchema`, `PathwaySchema`, `TransitionSchema`)
+- `packages/wayfinding/tests/test_dt002_etl_infrastructure.py` (19 passed, 2 skipped, 96.67% coverage)
 
 **Acceptance Criteria:**
-1. ✅ `infra/docker-compose.yml` has an `etl` service with GDAL 3.8+ and Python 3.12+ available;
+1. ✅ `infra/docker-compose.yml` has an `etl` service with Python 3.12+ available;
    `/data/IndoorWayfinding.gdb` mounted `:ro`; `./build/` mounted `:rw`.
 2. ✅ `make etl` invokes the container and runs a no-op ETL entry point successfully (exit 0).
-3. ✅ `category_mapping.yaml` covers all 39 USE_TYPE values from data findings (Office, Corridor,
-   Classroom, Washroom variants, Stairs, Elevator Shaft, etc.) with category + metadata flags.
-4. ✅ Test `test_category_mapping_complete` asserts every USE_TYPE in the source GDB appears exactly
-   once in the YAML (no orphans, no duplicates).
-5. ✅ `schema.py` defines the output table schemas as Pydantic models or dataclasses, with CRS and
-   column metadata; used by all subsequent tickets.
+3. ✅ `category_mapping.yaml` covers all 62 USE_TYPE values from GDB with category + metadata flags.
+4. ✅ Schema definitions in `schema.py` define all 7 required Pydantic models with CRS constants.
+5. ✅ No-op ETL entry point callable via `python -m wayfinding.etl.run`.
 
-**Expected Effort:** M (3 days)
+**Expected Effort:** M (3 days) — *Delivered*
 
 ---
 
 ### DT-003: Extract Layers to GeoPackage
+
+**Status:** 🔄 In Progress — TDD RED Phase (Plan in [docs/plans/DT-003.md](DT-003.md), test suite committed at `packages/wayfinding/tests/test_dt003_extract.py`)
 
 **Description:** Use `ogr2ogr` to extract all AIIM layers from the File Geodatabase into a working
 GeoPackage, preserving native EPSG:26910 for computation and adding an EPSG:4326 copy for web

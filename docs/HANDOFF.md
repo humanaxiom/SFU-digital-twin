@@ -12,20 +12,24 @@ fresh session can resume cold from it alone.
 ([docs/03-harness-design.md](03-harness-design.md)): `.github/agents/`, `.github/prompts/`,
 `.github/instructions/`, `.github/copilot-instructions.md`, `docs/DOD.md`, this file.
 
-**Phase 1 foundation — complete.** The container execution model and package skeleton are in place:
-`packages/wayfinding/`, `infra/docker-compose.yml`, `Makefile` gates (`test`/`lint`/`type`). All
-gates pass. ADR-0002 documents the package layout and container-only execution rule.
-
-Phase 1 ETL work can now start. Use `/sprint-plan` to decompose the ETL deliverable into tickets,
-then `/tdd-feature` per ticket.
+**Phase 1 ETL — in progress.**
+- **DT-001 (harness bootstrap)**: Complete & approved. Skeleton `packages/wayfinding/`, `infra/docker-compose.yml` test service, `Makefile` gates (`test`/`lint`/`type`), ADR-0002.
+- **DT-002 (ETL infrastructure & schema)**: Complete & approved. `etl` service in `infra/docker-compose.yml`, `make etl` target, `category_mapping.yaml` (all 62 `USE_TYPE` values), `schema.py` (7 Pydantic schemas with EPSG:26910 native CRS metadata), `run.py` (entry point). 19 passed, 2 skipped, 96.67% coverage.
+- **DT-003 (extract layers to GeoPackage)**: In progress (TDD RED). Detailed plan at [docs/plans/DT-003.md](plans/DT-003.md); test suite written and committed at [packages/wayfinding/tests/test_dt003_extract.py](../packages/wayfinding/tests/test_dt003_extract.py) (29 tests across 7 test classes, commit `6259836`).
 
 ## What changed most recently
 
-- DT-001 (harness bootstrap) closed: `packages/wayfinding/` skeleton created,
-  `infra/docker-compose.yml` test service added, `Makefile` with `test`/`lint`/`type` gates
-  implemented (all green, verified via Docker). ADR-0002 written. Coverage floor (85% line) set in
-  `docs/DOD.md`. The gate is now real — all future work must pass `make test lint type` before
-  merge.
+- **DT-002 closed & approved:**
+  - `infra/docker-compose.yml`: Added `etl` service.
+  - `Makefile`: Added `etl` target.
+  - `packages/wayfinding/src/wayfinding/etl/category_mapping.yaml`: 62 `USE_TYPE` mappings to controlled categories.
+  - `packages/wayfinding/src/wayfinding/etl/schema.py`: 7 Pydantic v2 schemas (`FacilitySchema`, `LevelSchema`, `UnitSchema`, `LandmarkSchema`, `DetailSchema`, `PathwaySchema`, `TransitionSchema`) with CRS constants.
+  - `packages/wayfinding/src/wayfinding/etl/run.py`: Initial ETL entry point returning 0.
+  - `packages/wayfinding/tests/test_dt002_etl_infrastructure.py`: Comprehensive test suite (19 passed, 2 skipped, 96.67% coverage).
+  - All gates clean (`make test lint type`), CHANGELOG updated, `judge` verdict `APPROVE`.
+- **DT-003 initiated:**
+  - Plan written: [docs/plans/DT-003.md](plans/DT-003.md).
+  - Test suite written & committed: [packages/wayfinding/tests/test_dt003_extract.py](../packages/wayfinding/tests/test_dt003_extract.py) (commit `6259836`).
 
 ## Open questions blocking Phase 1
 
@@ -35,9 +39,15 @@ extracts, room-alias source, elevator-wait/walking-speed constants. None of thes
 Phase 1 ETL, but the accessibility-survey question should be raised with stakeholders before the
 accessible-routing UI copy is finalized.
 
-## Next steps
+## Next steps (for fresh session)
 
-1. `/sprint-plan` Phase 1 ETL deliverable (GeoPackage + contracted graph + build report) into
-   tickets.
-2. `/tdd-feature` per ticket thereafter — all tests and implementation now run via the Docker-based
-   gate established in DT-001.
+1. **Implement DT-003 (`implementer` agent)**:
+   - Create `packages/wayfinding/src/wayfinding/etl/extract.py` implementing `extract_to_gpkg(gdb_path, gpkg_path, layers, overwrite)`.
+   - Extract 7 AIIM layers from `/data/IndoorWayfinding.gdb` to `build/wayfinding.gpkg` with dual CRS: native EPSG:26910 (3D) and EPSG:4326 (`_wgs84` suffix, 2D) = 14 layers total.
+   - Note container execution: ensure GDAL/`ogr2ogr` or `osgeo.gdal`/`fiona` is properly invoked within container context.
+2. **Run gates & verify GREEN**:
+   - Run `make test lint type` to confirm all DT-003 tests pass.
+3. **Judge review**:
+   - Run `judge` agent to review DT-003 against [docs/plans/DT-003.md](plans/DT-003.md) and [docs/DOD.md](DOD.md).
+4. **Doc-writer & next ticket**:
+   - Update CHANGELOG.md, commit, and advance to DT-004 (Normalise Tables).
