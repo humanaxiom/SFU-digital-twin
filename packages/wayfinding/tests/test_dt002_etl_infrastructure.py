@@ -52,12 +52,7 @@ class TestDockerComposeEtlService:
         assert "etl" in compose_config["services"], "docker-compose.yml missing 'etl' service"
 
     def test_etl_service_has_gdal_image(self):
-        """etl service must use Python 3.12+.
-        
-        DT-002 is infrastructure-only; actual geodata processing (requiring GDAL)
-        is deferred to DT-003. The image must have Python 3.12+ for the no-op
-        entry point and future DT-003+ implementations.
-        """
+        """etl service must use Python 3.12+ (GDAL deferred to DT-003)."""
         with open(DOCKER_COMPOSE_PATH) as f:
             compose_config = yaml.safe_load(f)
 
