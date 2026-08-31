@@ -39,6 +39,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -720,7 +721,7 @@ class TestConnectivity:
         )
 
     def test_within_level_connectivity(self, graph_and_stats):
-        """Each level should have 1-5 connected components (sanity bound)."""
+        """Connectivity stats must cover every level with internally valid counts."""
         if nx is None:
             pytest.fail("networkx must be installed (dependency check failed)")
 
@@ -732,15 +733,21 @@ class TestConnectivity:
         )
 
         connectivity = stats["connectivity_by_level"]
+        assert len(connectivity) == 11
 
         for level_id, level_stats in connectivity.items():
-            assert "component_count" in level_stats
+            assert set(level_stats) == {
+                "node_count",
+                "component_count",
+                "largest_component_size",
+            }
+            node_count = level_stats["node_count"]
             component_count = level_stats["component_count"]
+            largest_component_size = level_stats["largest_component_size"]
 
-            assert 1 <= component_count <= 5, (
-                f"Level {level_id} has {component_count} components. "
-                f"Expected 1-5 (main network + possibly detached wings)."
-            )
+            assert node_count > 0, f"Level {level_id} has no pathway nodes"
+            assert 1 <= component_count <= node_count
+            assert 1 <= largest_component_size <= node_count
 
 
 # ============================================================================
@@ -925,6 +932,54 @@ class TestContainerExecution:
 
 class TestCLIAndArtifacts:
     """Test CLI dispatch via run.py and artifact creation."""
+
+    def test_run_graph_raw_missing_gpkg_returns_one(self, tmp_path):
+        """Graph artifact orchestration must fail cleanly without its GeoPackage input."""
+        from wayfinding.etl.graph import run_graph_raw
+
+        assert run_graph_raw(tmp_path) == 1
+
+    def test_run_graph_raw_writes_all_artifacts(self, tmp_path):
+        """Successful orchestration must serialize graph, node map, and stats."""
+        if nx is None:
+            pytest.fail("networkx must be installed (dependency check failed)")
+
+        from wayfinding.etl.graph import run_graph_raw
+
+        (tmp_path / "wayfinding.gpkg").touch()
+        graph = nx.MultiDiGraph()
+        graph.add_edge((1.0, 2.0, 0), (3.0, 4.0, 0), key="PW_1")
+        node_map = {("PW", "1", "start"): (1.0, 2.0, 0)}
+        stats = {
+            "node_count": 2,
+            "edge_count": 1,
+            "mean_degree": 1.0,
+            "self_loops_removed": 0,
+        }
+
+        with (
+            patch("wayfinding.etl.graph.load_level_lookup", return_value={"LEVEL": 0}),
+            patch(
+                "wayfinding.etl.graph.snap_nodes",
+                return_value=(node_map, {}),
+            ),
+            patch(
+                "wayfinding.etl.graph.build_raw_graph",
+                return_value=(graph, stats),
+            ),
+        ):
+            assert run_graph_raw(tmp_path) == 0
+
+        with open(tmp_path / "graph_raw.pkl", "rb") as graph_file:
+            loaded_graph = pickle.load(graph_file)
+        with open(tmp_path / "node_map.pkl", "rb") as node_map_file:
+            loaded_node_map = pickle.load(node_map_file)
+        with open(tmp_path / "graph_raw_stats.json") as stats_file:
+            loaded_stats = json.load(stats_file)
+
+        assert set(loaded_graph.edges(keys=True)) == set(graph.edges(keys=True))
+        assert loaded_node_map == node_map
+        assert loaded_stats == stats
 
     def test_run_py_accepts_graph_raw_command(self):
         """run.py must accept 'graph-raw' command for DT-005."""

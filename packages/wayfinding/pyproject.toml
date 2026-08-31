@@ -5,6 +5,8 @@ description = "SFU indoor wayfinding digital twin — routing, search, and acces
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0.0",
+    "networkx>=3.0",
+    "shapely>=2.0",
 ]
 
 [project.optional-dependencies]

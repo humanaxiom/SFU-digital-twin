@@ -77,6 +77,12 @@ EXPECTED_VERTICAL_ORDER = {
 # Stable source GDB date for provenance (mtime 2026-08-29T01:44:22Z)
 SOURCE_VERIFIED_DATE = "2026-08-29"
 
+NORMALISED_LAYERS = [
+    f"{table}_{crs}"
+    for table in ("facility", "level", "unit", "landmark", "detail", "door")
+    for crs in ("26910", "wgs84")
+]
+
 
 # Helper functions for robust ogrinfo parsing
 
@@ -184,6 +190,25 @@ def list_gpkg_layers(gpkg_path: Path) -> list[str]:
     return [layer["name"] for layer in data.get("layers", [])]
 
 
+def copy_raw_gpkg(destination: Path) -> None:
+    """Copy the build artifact and remove DT-004 outputs for a clean input fixture."""
+    shutil.copy2(SOURCE_GPKG, destination)
+    existing_layers = set(list_gpkg_layers(destination))
+    for layer_name in NORMALISED_LAYERS:
+        if layer_name not in existing_layers:
+            continue
+        result = subprocess.run(
+            ["ogrinfo", str(destination), "-sql", f"DELLAYER:{layer_name}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to remove {layer_name} from DT-004 fixture: {result.stderr}"
+            )
+
+
 def sql_query(gpkg_path: Path, sql: str) -> list[tuple]:
     """Execute SQL query and return results as list of tuples."""
     cmd = [
@@ -261,7 +286,7 @@ def temp_gpkg_for_module():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         temp_gpkg = Path(tmpdir) / "wayfinding_test.gpkg"
-        shutil.copy2(SOURCE_GPKG, temp_gpkg)
+        copy_raw_gpkg(temp_gpkg)
         yield temp_gpkg
 
 
@@ -276,7 +301,7 @@ def temp_gpkg():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         temp_gpkg = Path(tmpdir) / "wayfinding_test.gpkg"
-        shutil.copy2(SOURCE_GPKG, temp_gpkg)
+        copy_raw_gpkg(temp_gpkg)
         yield temp_gpkg
 
 
@@ -1757,8 +1782,8 @@ class TestIdempotency:
             gpkg1 = Path(tmpdir) / "run1.gpkg"
             gpkg2 = Path(tmpdir) / "run2.gpkg"
 
-            shutil.copy2(SOURCE_GPKG, gpkg1)
-            shutil.copy2(SOURCE_GPKG, gpkg2)
+            copy_raw_gpkg(gpkg1)
+            copy_raw_gpkg(gpkg2)
 
             # Run 1
             normalise_facilities(gpkg1)

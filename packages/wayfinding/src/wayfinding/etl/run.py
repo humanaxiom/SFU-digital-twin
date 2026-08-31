@@ -1,6 +1,14 @@
 """ETL entry point — invoked by `make etl` or `make etl-extract`."""
 
+import logging
 from pathlib import Path
+
+# Configure logging for ETL operations
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 def main(command: str | None = None) -> int:
@@ -9,6 +17,7 @@ def main(command: str | None = None) -> int:
     Supports commands:
     - extract: Extract layers from GDB to GeoPackage
     - normalise: Normalise extracted layers into production tables
+    - graph-raw: Snap nodes and build raw pathway graph
     """
     if command is None:
         print("ETL infrastructure ready. No data processing yet (DT-003+).")
@@ -16,6 +25,7 @@ def main(command: str | None = None) -> int:
         print("Commands:")
         print("  extract     Extract layers from GDB to GeoPackage")
         print("  normalise   Normalise extracted layers into production tables")
+        print("  graph-raw   Snap nodes and build raw pathway graph")
         return 0
 
     if command == "extract":
@@ -23,6 +33,9 @@ def main(command: str | None = None) -> int:
 
     if command == "normalise":
         return run_normalise()
+
+    if command == "graph-raw":
+        return run_graph_raw()
 
     print(f"Unknown command: {command}")
     return 1
@@ -138,6 +151,25 @@ def run_normalise() -> int:
         import traceback
 
         print(f"\nERROR: Normalisation failed: {error}")
+        traceback.print_exc()
+        return 1
+
+
+def run_graph_raw() -> int:
+    """Run the graph-raw step: snap nodes and build raw pathway graph."""
+    from wayfinding.etl.graph import run_graph_raw
+
+    output_dir = Path("/workspace/build")
+
+    print("=== DT-005: Graph Node Snapping and Raw Graph Construction ===")
+    print(f"Output directory: {output_dir}")
+
+    try:
+        return run_graph_raw(output_dir)
+    except Exception as error:
+        import traceback
+
+        print(f"\nERROR: Graph construction failed: {error}")
         traceback.print_exc()
         return 1
 
