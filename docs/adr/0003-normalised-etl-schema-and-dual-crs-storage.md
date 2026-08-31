@@ -364,6 +364,111 @@ beyond test expectations). This ADR covers the **storage model and table organiz
 schema addition itself. DoorSchema follows the same pattern as DetailSchema; it is a data-split
 refinement, not a new spatial operation.
 
+### 8. Centroid fallback for toxic geometries with null centroids
+
+**Evidence from data-QA:** Searchable unit `SFU_BURNABY_QUAD_2000_2017` (source Shape reports
+`Invalid: Toxic Geometry ... too few points`) has WKT `GEOMETRYCOLLECTION()` after extraction,
+causing `ST_Centroid()`, `ST_PointOnSurface()`, and `ST_MakeValid()` to all return `NULL`. However,
+the envelope is finite and well-formed: minX 506007.0801, maxX 506016.3695, minY 5458486.3091, maxY
+5458495.9219 (EPSG:26910).
+
+**DT-005 requires every searchable unit to connect via a centroid** for graph snapping. A null
+centroid breaks routing; omitting the unit contradicts the searchable flag (SEARCHABLE='Y' in source).
+
+**Decision:** Add a narrow, deterministic fallback **only for null centroids** (not invalid
+geometries in general). When `ST_Centroid(geom)` returns `NULL`, compute the envelope center in
+EPSG:26910:
+
+```python
+centroid_x = (envelope.minX + envelope.maxX) / 2.0
+centroid_y = (envelope.minY + envelope.minY) / 2.0
+# For SFU_BURNABY_QUAD_2000_2017: (506011.7248, 5458491.1155)
+```
+
+Store the approximated centroid in `centroid_26910` with **provenance tracking**: add
+`centroid_method: str` field to `UnitSchema`:
+
+```python
+centroid_method: str = Field(
+    ...,
+    description="Method used to derive centroid: 'geometry_centroid' (ST_Centroid) or "
+                "'envelope_center_fallback' (envelope midpoint when ST_Centroid returns null)"
+)
+```
+
+All units populate this field; it makes the approximation transparent to downstream systems (DT-005,
+DT-010, API). This is **spatial data provenance**, not an accessibility claim (accessibility
+provenance is tracked via `verified_by`/`verified_date` fields).
+
+**Source geometry remains untouched.** `geom_26910` and `geom_wgs84` store the toxic
+`GEOMETRYCOLLECTION()` as-is; the centroid fallback affects only the derived `centroid_26910` field.
+This preserves the audit trail (why was the fallback needed?) and allows future reprocessing if the
+source geometry is corrected.
+
+**Expected occurrence:** Rare (1 out of 1017 searchable units in current data). Build logs a warning
+when fallback is applied, listing the `unit_id` and envelope bounds for manual review. No build
+failure; the fallback ensures routing connectivity.
+
+**Consequences:**
+- **Positive:** Every searchable unit has a valid centroid for graph snapping, preserving routing
+  completeness. Provenance field `centroid_method` documents approximations transparently.
+- **Negative:** Envelope center may not be geometrically "inside" the unit polygon if the shape is
+  concave or multipart (e.g., L-shaped room). For a `GEOMETRYCOLLECTION()` this is moot (no interior
+  exists), but for future toxic polygons (e.g., self-intersecting), the fallback may place the
+  centroid outside the intended space. DT-009 QA must validate centroid placement visually for all
+  fallback cases.
+
+**Test additions:** DT-004 must add:
+- `test_normalise_unit_centroid_fallback_toxic_geometry` — given a unit with null ST_Centroid,
+  assert `centroid_26910` equals envelope center and `centroid_method='envelope_center_fallback'`.
+- `test_normalise_unit_centroid_method_coverage` — assert `centroid_method` is never null; all
+  values are `'geometry_centroid'` or `'envelope_center_fallback'`.
+- Update AC3 to include `centroid_method` field in unit schema.
+
+### 9. Landmark normalization must query raw layers directly without persistent temp layers
+
+**Context:** Landmark deduplication (§5–6) requires parsing DESCRIPTION, grouping by category/level,
+and spatial clustering. Initial implementation may create intermediate layers (e.g.,
+`landmarks_parsed_26910`, `landmarks_parsed_wgs84`) to hold parsed category fields before
+deduplication.
+
+**Problem:** GeoPackage metadata tables (`gpkg_contents`, `gpkg_geometry_columns`) persist layer
+registrations even after `DROP TABLE` via OGR. Stale entries cause:
+- QGIS warnings when opening the GeoPackage ("layer X not found")
+- `ogrinfo` reporting phantom layers
+- Confusion during DT-009 QA ("why are there temp layers in the build artifact?")
+
+**Decision:** `normalise_landmarks()` must query the raw `Landmarks_26910` and `Landmarks_wgs84`
+layers directly using in-memory structures (e.g., GeoPandas DataFrame, Python list of dicts) for
+parsing and clustering. **Do not create any physical GeoPackage layer with `landmarks_parsed` in the
+name.** Only write the final deduplicated `landmark_26910` and `landmark_wgs84` layers.
+
+**Validation:** After `normalise_landmarks()` completes, assert **zero entries** in `gpkg_contents`
+and `gpkg_geometry_columns` matching the pattern `landmarks_parsed%`. This is a regression test
+against temp-layer pollution; enforce via:
+
+```python
+# In test_normalise_landmark_no_temp_layers.py
+conn = sqlite3.connect(gpkg_path)
+cursor = conn.execute(
+    "SELECT table_name FROM gpkg_contents WHERE table_name LIKE 'landmarks_parsed%'"
+)
+assert cursor.fetchall() == [], "Temp layers must not persist in GeoPackage metadata"
+```
+
+**Consequences:**
+- **Positive:** Clean build artifact; no metadata pollution. QGIS and ogrinfo report only
+  intentional layers (14 raw + 12 normalised = 26 total). Idempotent reruns do not accumulate stale
+  metadata.
+- **Negative:** In-memory processing requires loading all 41 landmarks into RAM. At 41 features this
+  is trivial (<1 KB), but the pattern may not scale to millions of features. For this dataset, the
+  tradeoff is clear: correctness over hypothetical scalability.
+
+**Test additions:** DT-004 must add:
+- `test_normalise_landmark_no_temp_layers` — query `gpkg_contents` and `gpkg_geometry_columns` for
+  `landmarks_parsed%` entries, assert zero matches.
+- Update AC5 to require zero temp-layer metadata entries.
+
 ## Consequences
 
 ### Positive
@@ -393,6 +498,15 @@ refinement, not a new spatial operation.
 - **normalise_details API is efficient.** Reading Details layer once (55,593 features) and splitting
   in-memory is faster than two separate reads. The dict return clearly signals dual output.
 
+- **Centroid fallback ensures routing completeness.** Every searchable unit has a valid centroid for
+  graph snapping, even when ST_Centroid returns null due to toxic geometry. Provenance field
+  `centroid_method` transparently documents which units used the envelope-center approximation,
+  enabling manual review without breaking the routing pipeline.
+
+- **Clean GeoPackage metadata.** Landmark normalization uses in-memory processing; no temp layers
+  pollute `gpkg_contents`/`gpkg_geometry_columns`. QGIS and ogrinfo report exactly 26 layers (14 raw
+  + 12 normalised), no phantom layers or warnings.
+
 ### Negative
 
 - **12 GeoPackage layers is verbose.** A developer inspecting `build/wayfinding.gpkg` in QGIS sees
@@ -418,19 +532,35 @@ refinement, not a new spatial operation.
   [docs/02-system-design.md §12 open question 2](../02-system-design.md#12-open-questions-for-stakeholders))
   would override this with `verified_by="facilities_survey_2027"` and a real audit date.
 
+- **Envelope-center fallback may place centroid outside concave polygons.** For toxic geometries like
+  `GEOMETRYCOLLECTION()` this is moot (no interior exists), but for future self-intersecting or
+  concave polygons, the envelope center may be geometrically invalid (e.g., outside the unit
+  boundary). DT-009 QA must visually inspect all fallback cases (logged at build time) to flag
+  obviously incorrect placements. Rare occurrence (1/1017 units in current data) makes manual review
+  feasible.
+
+- **In-memory landmark processing does not scale to millions of features.** Loading 41 landmarks into
+  RAM is trivial, but the pattern would break for a campus-wide dataset with 100k+ landmarks.
+  Acceptable tradeoff for this dataset (AQ/SH/ECC only); document as a scalability constraint if
+  expanding to all SFU buildings.
+
 ### Affected components
 
 - **DT-004 plan:** Update §2.2 from "5 normalised tables" to "6 normalised tables", clarify
   "coexist with raw layers, do not replace". Add `verified_by` and `verified_date` to AC4 and AC11.
-  Clarify clustering algorithm and `normalise_details` return dict in §5.
+  Clarify clustering algorithm and `normalise_details` return dict in §5. Add `centroid_method` field
+  to AC3. Add AC for centroid fallback validation. Add AC for zero temp-layer metadata entries. Add
+  regression tests for centroid fallback (`test_normalise_unit_centroid_fallback_toxic_geometry`,
+  `test_normalise_unit_centroid_method_coverage`) and landmark temp layers
+  (`test_normalise_landmark_no_temp_layers`).
 
 - **PHASE-1-ETL.md:** Update DT-004 output from "5 normalised tables" to "6 normalised tables:
   `facility`, `level`, `unit`, `landmark`, `detail`, `door`". Add note: "stored as 12 GeoPackage
   layers (dual CRS pairs)."
 
-- **schema.py:** Add `verified_by` and `verified_date` fields to `UnitSchema`. Add comment
-  clarifying Pydantic schemas are logical models; physical storage is dual CRS layers. Add
-  `DoorSchema` (already planned in DT-004 Step 1).
+- **schema.py:** Add `verified_by` and `verified_date` fields to `UnitSchema`. Add `centroid_method`
+  field to `UnitSchema` (required, never null). Add comment clarifying Pydantic schemas are logical
+  models; physical storage is dual CRS layers. Add `DoorSchema` (already planned in DT-004 Step 1).
 
 - **category_mapping.yaml:** No change required (already has `accessible: true/false` flags for 38
   units).

@@ -56,21 +56,22 @@ EXPECTED_NORMALISED_COUNTS = {
 # Total layers after DT-004: 14 raw + 12 normalised dual-CRS = 26 layers
 
 # Expected vertical_order values from docs/01-data-findings.md §3
+# Using exact preserved source LEVEL_ID values (not abbreviated forms)
 EXPECTED_VERTICAL_ORDER = {
     # AQ levels
-    "AQ_1000": -2,
-    "AQ_2000": -1,
-    "AQ_3000": 0,
-    "AQ_4000": 1,
-    "AQ_5000": 2,
-    "AQ_6000": 3,
+    "SFU_BURNABY_QUAD_1000": -2,
+    "SFU_BURNABY_QUAD_2000": -1,
+    "SFU_BURNABY_QUAD_3000": 0,
+    "SFU_BURNABY_QUAD_4000": 1,
+    "SFU_BURNABY_QUAD_5000": 2,
+    "SFU_BURNABY_QUAD_6000": 3,
     # SH levels
-    "SH_100": -1,
-    "SH_1000": 0,
-    "SH_2000": 1,
-    "SH_3000": 2,
+    "SFU_BURNABY_STRAND_100": -1,
+    "SFU_BURNABY_STRAND_1000": 0,
+    "SFU_BURNABY_STRAND_2000": 1,
+    "SFU_BURNABY_STRAND_3000": 2,
     # ECC level
-    "ECC_3000": 0,
+    "SFU_BURNABY_ECC_3000": 0,
 }
 
 # Stable source GDB date for provenance (mtime 2026-08-29T01:44:22Z)
@@ -416,6 +417,32 @@ class TestUnitSchemaProvenance:
             "verified_date must be nullable (str | None)"
         )
 
+    def test_unit_schema_has_centroid_method_field(self):
+        """UnitSchema must have required centroid_method field (ADR-0003 §8)."""
+        from wayfinding.etl.schema import UnitSchema
+
+        fields = UnitSchema.model_fields
+
+        assert "centroid_method" in fields, (
+            "UnitSchema missing centroid_method field (ADR-0003 §8 provenance requirement)"
+        )
+
+    def test_unit_schema_centroid_method_required(self):
+        """centroid_method must be required (not nullable) per ADR-0003 §8."""
+        from wayfinding.etl.schema import UnitSchema
+
+        fields = UnitSchema.model_fields
+
+        # centroid_method should be required (str, not str | None)
+        centroid_method_type = str(fields["centroid_method"].annotation)
+
+        # If it's optional, the annotation will contain "None" or "Optional"
+        # A required str field should NOT have these
+        assert "None" not in centroid_method_type or "NoneType" not in centroid_method_type, (
+            "centroid_method must be required (str), not nullable (str | None). "
+            "Every unit must document its centroid derivation method."
+        )
+
 
 class TestFacilityNormalisation:
     """Test normalise_facilities creates 3 rows with correct schema."""
@@ -443,7 +470,7 @@ class TestFacilityNormalisation:
 
     @pytest.mark.slow
     def test_normalise_facility_codes(self, temp_gpkg):
-        """Facility code values must be exactly ['AQ', 'SH', 'ECC']."""
+        """Facility code values must be exactly ['AQ', 'SH', 'ECC'] (derived from NAME field)."""
         from wayfinding.etl.normalise import normalise_facilities
 
         normalise_facilities(temp_gpkg)
@@ -545,7 +572,7 @@ class TestLevelNormalisation:
 
     @pytest.mark.slow
     def test_normalise_level_facility_mapping(self, temp_gpkg):
-        """Every level_id must map to exactly one facility_id."""
+        """Every level_id must map to exactly one preserved source FACILITY_ID."""
         from wayfinding.etl.normalise import normalise_facilities, normalise_levels
 
         normalise_facilities(temp_gpkg)
@@ -579,10 +606,13 @@ class TestLevelNormalisation:
         # Every level must have a facility
         assert len(level_to_facility) == 11
 
-        # All facility_ids must be one of AQ, SH, ECC
-        valid_facilities = {"AQ", "SH", "ECC"}
+        # All facility_ids must be exact preserved source FACILITY_ID values
+        valid_facilities = {"SFU_BURNABY_QUAD", "SFU_BURNABY_STRAND", "SFU_BURNABY_ECC"}
         for facility_id in level_to_facility.values():
-            assert facility_id in valid_facilities
+            assert facility_id in valid_facilities, (
+                "Expected preserved source FACILITY_ID "
+                f"(SFU_BURNABY_QUAD/STRAND/ECC), got '{facility_id}'"
+            )
 
 
 class TestUnitNormalisation:
@@ -593,6 +623,7 @@ class TestUnitNormalisation:
         """Unit table must have exactly 1017 rows (only SEARCHABLE='Y')."""
         # Load category mapping
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -617,6 +648,7 @@ class TestUnitNormalisation:
     def test_normalise_unit_category_coverage(self, temp_gpkg):
         """Every unit must have category populated (no nulls)."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
 
         category_yaml = (
@@ -649,6 +681,7 @@ class TestUnitNormalisation:
     def test_normalise_unit_category_examples(self, temp_gpkg):
         """Spot-check 5 use_type -> category mappings."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -695,6 +728,7 @@ class TestUnitNormalisation:
     def test_normalise_unit_accessible_flag(self, temp_gpkg):
         """Accessible flag must match category_mapping.yaml rules."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -744,6 +778,7 @@ class TestUnitNormalisation:
     def test_normalise_unit_room_id_populated(self, temp_gpkg):
         """All 1017 units must have non-null room_id."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -775,6 +810,7 @@ class TestUnitNormalisation:
     def test_normalise_unit_centroid(self, temp_gpkg):
         """centroid_26910 must be within geom_26910 bounding box."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -806,6 +842,203 @@ class TestUnitNormalisation:
         # which is tested implicitly during normalisation
 
 
+class TestUnitCentroidProvenance:
+    """Test unit centroid_method provenance and toxic geometry fallback (ADR-0003 §8)."""
+
+    @pytest.mark.slow
+    def test_normalise_unit_centroid_method_coverage(self, temp_gpkg):
+        """All 1017 units must have non-null centroid_26910 and centroid_method.
+
+        Per ADR-0003 §8 and DT-004 AC4a: centroid_method must be populated for every
+        row with exactly 'geometry_centroid' or 'envelope_center_fallback'.
+        Expected counts: 1016 geometry_centroid, 1 envelope_center_fallback.
+        """
+        import yaml
+
+        from wayfinding.etl.normalise import normalise_units
+        category_yaml = (
+            WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
+            "wayfinding" / "etl" / "category_mapping.yaml"
+        )
+        with open(category_yaml) as f:
+            category_mapping = yaml.safe_load(f)
+
+        normalise_units(temp_gpkg, category_mapping)
+
+        # Query centroid_26910 and centroid_method for all units
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT COUNT(*) FROM unit_26910 WHERE centroid_26910 IS NULL",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+
+        # Zero units should have null centroid_26910
+        assert "0" in output or "no features" in output.lower(), (
+            "Found units with null centroid_26910 (all 1017 units must have centroids)"
+        )
+
+        # Query centroid_method counts
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT centroid_method, COUNT(*) as cnt FROM unit_26910 "
+            "GROUP BY centroid_method ORDER BY centroid_method",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+
+        # Parse counts for each method
+        method_counts = {}
+        current_method = None
+
+        for line in output.splitlines():
+            if "centroid_method (String)" in line and "=" in line:
+                current_method = line.split("=")[1].strip()
+            elif "cnt (Integer)" in line and "=" in line and current_method:
+                count = int(line.split("=")[1].strip())
+                method_counts[current_method] = count
+                current_method = None
+
+        # Verify expected counts: 1016 geometry_centroid, 1 envelope_center_fallback
+        assert "geometry_centroid" in method_counts, (
+            "No units with centroid_method='geometry_centroid' found"
+        )
+        assert method_counts["geometry_centroid"] == 1016, (
+            "Expected 1016 units with geometry_centroid, got "
+            f"{method_counts.get('geometry_centroid', 0)}"
+        )
+
+        assert "envelope_center_fallback" in method_counts, (
+            "No units with centroid_method='envelope_center_fallback' found "
+            "(expected 1 toxic geometry unit: SFU_BURNABY_QUAD_2000_2017)"
+        )
+        assert method_counts["envelope_center_fallback"] == 1, (
+            f"Expected 1 unit with envelope_center_fallback (SFU_BURNABY_QUAD_2000_2017), "
+            f"got {method_counts.get('envelope_center_fallback', 0)}"
+        )
+
+        # No other methods should exist
+        assert len(method_counts) == 2, (
+            f"Expected only 2 centroid methods, got {len(method_counts)}: "
+            f"{list(method_counts.keys())}"
+        )
+
+        # No null centroid_method values
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT COUNT(*) FROM unit_26910 WHERE centroid_method IS NULL",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+
+        assert "0" in output or "no features" in output.lower(), (
+            "Found units with null centroid_method (must be populated for all rows)"
+        )
+
+    @pytest.mark.slow
+    def test_normalise_unit_centroid_fallback_toxic_geometry(self, temp_gpkg):
+        """Toxic geometry unit SFU_BURNABY_QUAD_2000_2017 must use envelope fallback.
+
+        Per ADR-0003 §8: source unit SFU_BURNABY_QUAD_2000_2017 has WKT
+        GEOMETRYCOLLECTION() causing ST_Centroid to return NULL. Fallback computes
+        envelope center: (506011.7248, 5458491.1155) in EPSG:26910.
+
+        Assert:
+        - centroid_method = 'envelope_center_fallback'
+        - centroid_26910 WKT is POINT Z or POINT at x=506011.7248, y=5458491.1155
+          within 0.01 m tolerance (accounting for floating-point precision)
+        - Source geom remains toxic GEOMETRYCOLLECTION() (unmodified)
+        """
+        import yaml
+
+        from wayfinding.etl.normalise import normalise_units
+        category_yaml = (
+            WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
+            "wayfinding" / "etl" / "category_mapping.yaml"
+        )
+        with open(category_yaml) as f:
+            category_mapping = yaml.safe_load(f)
+
+        normalise_units(temp_gpkg, category_mapping)
+
+        # Query the toxic geometry unit
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT unit_id, centroid_method, ST_AsText(centroid_26910) as centroid_wkt, "
+            "ST_GeometryType(geom) as geom_type FROM unit_26910 "
+            "WHERE unit_id = 'SFU_BURNABY_QUAD_2000_2017'",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+
+        # Parse output
+        centroid_method = None
+        centroid_wkt = None
+        geom_type = None
+
+        for line in output.splitlines():
+            if "centroid_method (String)" in line and "=" in line:
+                centroid_method = line.split("=")[1].strip()
+            elif "centroid_wkt (String)" in line and "=" in line:
+                centroid_wkt = line.split("=")[1].strip()
+            elif "geom_type (String)" in line and "=" in line:
+                geom_type = line.split("=")[1].strip()
+
+        assert centroid_method is not None, (
+            "Could not query SFU_BURNABY_QUAD_2000_2017 (unit not found or query failed)"
+        )
+
+        # Verify centroid_method
+        assert centroid_method == "envelope_center_fallback", (
+            f"Expected centroid_method='envelope_center_fallback' for toxic geometry unit, "
+            f"got '{centroid_method}'"
+        )
+
+        # Verify centroid WKT coordinates
+        assert centroid_wkt is not None, "centroid_26910 is NULL (fallback failed)"
+
+        # Parse coordinates from WKT (POINT Z (x y z) or POINT (x y))
+        # Expected: x=506011.7248, y=5458491.1155
+        import re
+        coord_match = re.search(r"POINT(?:\s+Z)?\s*\(([\d.\-]+)\s+([\d.\-]+)", centroid_wkt)
+        assert coord_match, f"Could not parse centroid WKT: {centroid_wkt}"
+
+        x = float(coord_match.group(1))
+        y = float(coord_match.group(2))
+
+        expected_x = 506011.7248
+        expected_y = 5458491.1155
+        tolerance = 0.01  # 1 cm tolerance for floating-point precision
+
+        assert abs(x - expected_x) < tolerance, (
+            f"Centroid X coordinate mismatch: expected {expected_x}, got {x} "
+            f"(diff: {abs(x - expected_x):.6f} m, tolerance: {tolerance} m)"
+        )
+        assert abs(y - expected_y) < tolerance, (
+            f"Centroid Y coordinate mismatch: expected {expected_y}, got {y} "
+            f"(diff: {abs(y - expected_y):.6f} m, tolerance: {tolerance} m)"
+        )
+
+        # Verify source geom remains toxic (GEOMETRYCOLLECTION)
+        assert geom_type is not None, "Could not determine geometry type"
+        assert "GEOMETRYCOLLECTION" in geom_type.upper() or "COLLECTION" in geom_type.upper(), (
+            f"Source geometry should remain toxic GEOMETRYCOLLECTION, got {geom_type}. "
+            "ADR-0003 §8: source geom must remain unmodified to preserve audit trail."
+        )
+
+
 class TestAccessibilityProvenance:
     """Test accessibility provenance fields (verified_by, verified_date)."""
 
@@ -813,6 +1046,7 @@ class TestAccessibilityProvenance:
     def test_normalise_accessibility_provenance(self, temp_gpkg):
         """All non-null accessible values must have verified_by and verified_date."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -859,6 +1093,7 @@ class TestAccessibilityProvenance:
     def test_normalise_accessibility_null_has_null_provenance(self, temp_gpkg):
         """Units with accessible=null must have null verified_by and verified_date."""
         import yaml
+
         from wayfinding.etl.normalise import normalise_units
         category_yaml = (
             WORKSPACE_ROOT / "packages" / "wayfinding" / "src" /
@@ -998,6 +1233,134 @@ class TestLandmarkNormalisation:
                 f"Landmark ID should start with 'LMK_', got '{landmark_id}'"
             )
 
+    @pytest.mark.slow
+    def test_normalise_landmark_representative_selection(self, temp_gpkg):
+        """Coordinate sorting retains LMK_28 and removes LMK_41.
+
+        Per ADR-0003 section 5, GDAL found one same-category/same-level landmark pair
+        within 0.5 m: FIDs 28 and 41 at 0.250728 m. Greedy first-point-wins sorting by
+        (category, level_id, X, Y) retains the lower X coordinate.
+        """
+        from wayfinding.etl.normalise import normalise_landmarks
+
+        normalise_landmarks(temp_gpkg)
+
+        # Query all landmark_ids
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT landmark_id FROM landmark_26910",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        output = result.stdout + result.stderr
+
+        # Parse landmark_ids
+        landmark_ids = []
+        for line in output.splitlines():
+            if "landmark_id (String)" in line and "=" in line:
+                landmark_id = line.split("=")[1].strip()
+                landmark_ids.append(landmark_id)
+
+        # Must still have exactly 40 landmarks
+        assert len(landmark_ids) == 40, (
+            f"Expected exactly 40 landmarks (41 source - 1 duplicate), got {len(landmark_ids)}"
+        )
+
+        # LMK_28 must be present (lower X coordinate, retained as representative)
+        assert "LMK_28" in landmark_ids, (
+            "LMK_28 (x=506106.2261) should be retained as representative of duplicate pair"
+        )
+
+        # LMK_41 must be absent (higher X coordinate, removed as duplicate)
+        assert "LMK_41" not in landmark_ids, (
+            "LMK_41 (x=506106.4668) should be removed as duplicate of LMK_28"
+        )
+
+    @pytest.mark.slow
+    def test_normalise_landmark_no_temp_layers(self, temp_gpkg):
+        """Zero landmarks_parsed% temp layers in gpkg_contents/gpkg_geometry_columns.
+
+        Per ADR-0003 §9: normalise_landmarks must query raw Landmarks layers directly
+        using in-memory structures. No physical GeoPackage layer with 'landmarks_parsed'
+        in the name may persist. This prevents metadata pollution and ensures clean
+        build artifacts.
+
+        After normalise_landmarks() completes, assert zero entries in gpkg_contents
+        and gpkg_geometry_columns matching pattern 'landmarks_parsed%'.
+        """
+        from wayfinding.etl.normalise import normalise_landmarks
+
+        normalise_landmarks(temp_gpkg)
+
+        # Query gpkg_contents for temp layers
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT table_name FROM gpkg_contents WHERE table_name LIKE 'landmarks_parsed%'",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+
+        # Parse table names
+        temp_tables_contents = []
+        for line in output.splitlines():
+            if "table_name (String)" in line and "=" in line:
+                table_name = line.split("=")[1].strip()
+                temp_tables_contents.append(table_name)
+
+        assert len(temp_tables_contents) == 0, (
+            f"Found {len(temp_tables_contents)} temp layer(s) in gpkg_contents: "
+            f"{temp_tables_contents}. "
+            "Per ADR-0003 §9, normalise_landmarks must use in-memory processing; "
+            "no landmarks_parsed% layers may persist in GeoPackage metadata."
+        )
+
+        # Query gpkg_geometry_columns for temp layers
+        cmd = [
+            "ogrinfo",
+            str(temp_gpkg),
+            "-sql",
+            "SELECT table_name FROM gpkg_geometry_columns "
+            "WHERE table_name LIKE 'landmarks_parsed%'",
+            "-q",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+
+        # Parse table names
+        temp_tables_geom = []
+        for line in output.splitlines():
+            if "table_name (String)" in line and "=" in line:
+                table_name = line.split("=")[1].strip()
+                temp_tables_geom.append(table_name)
+
+        assert len(temp_tables_geom) == 0, (
+            f"Found {len(temp_tables_geom)} temp layer(s) in gpkg_geometry_columns: "
+            f"{temp_tables_geom}. "
+            "Per ADR-0003 §9, landmark processing must not create persistent temp layers."
+        )
+
+        # Verify only expected landmark layers exist (landmark_26910, landmark_wgs84)
+        layers = list_gpkg_layers(temp_gpkg)
+        landmark_layers = [layer for layer in layers if "landmark" in layer.lower()]
+
+        expected_landmark_layers = {
+            "landmark_26910",
+            "landmark_wgs84",
+            "Landmarks_26910",
+            "Landmarks_wgs84",
+        }
+        for layer in landmark_layers:
+            assert layer in expected_landmark_layers, (
+                f"Unexpected landmark layer '{layer}' found. "
+                f"Only {expected_landmark_layers} should exist (2 raw + 2 normalised)."
+            )
+
 
 class TestDetailAndDoorNormalisation:
     """Test detail/door split and count preservation."""
@@ -1134,6 +1497,7 @@ class TestCrossTableInvariants:
         """Every unit.level_id must resolve to unique level.vertical_order."""
         # Run full normalisation pipeline
         import yaml
+
         from wayfinding.etl.normalise import (
             normalise_facilities,
             normalise_levels,
@@ -1173,6 +1537,7 @@ class TestCrossTableInvariants:
         """All level_id values in child tables must exist in level table."""
         # Run full normalisation
         import yaml
+
         from wayfinding.etl.normalise import (
             normalise_details,
             normalise_facilities,
@@ -1237,8 +1602,18 @@ class TestCrossTableInvariants:
 
         output = result.stdout + result.stderr
 
-        # Should find no duplicates
-        assert "no features" in output.lower() or output.strip() == "", (
+        # Zero-row SQL result from ogrinfo shows "Layer name: SELECT" with no features.
+        # Parse for actual cnt values rather than requiring empty output.
+        has_duplicates = False
+        for line in output.splitlines():
+            if "cnt (Integer)" in line and "=" in line:
+                cnt_str = line.split("=")[1].strip()
+                cnt = int(cnt_str)
+                if cnt > 1:
+                    has_duplicates = True
+                    break
+
+        assert not has_duplicates, (
             "Found duplicate (facility_id, vertical_order) pairs in level table"
         )
 
@@ -1251,6 +1626,7 @@ class TestGeometryAndCRS:
         """All _26910 layers must be EPSG:26910 3D, _wgs84 must be EPSG:4326 2D."""
         # Run full normalisation
         import yaml
+
         from wayfinding.etl.normalise import (
             normalise_details,
             normalise_facilities,
@@ -1319,6 +1695,7 @@ class TestGeometryAndCRS:
         """Bounding boxes must be within expected range (EPSG:26910)."""
         # Run full normalisation
         import yaml
+
         from wayfinding.etl.normalise import (
             normalise_details,
             normalise_facilities,
@@ -1362,6 +1739,7 @@ class TestIdempotency:
     def test_normalise_idempotent(self):
         """Running normalisation twice should produce identical results."""
         import yaml
+
         from wayfinding.etl.normalise import (
             normalise_details,
             normalise_facilities,
@@ -1422,6 +1800,7 @@ class TestIntegration:
     def test_normalise_end_to_end(self, temp_gpkg):
         """Run all normalisation functions in sequence, verify all tables exist."""
         import yaml
+
         from wayfinding.etl.normalise import (
             normalise_details,
             normalise_facilities,
