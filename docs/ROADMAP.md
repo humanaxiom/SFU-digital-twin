@@ -8,7 +8,7 @@ in sync by `doc-writer` after every `judge` APPROVE; the authoritative narrative
 | Phase | Deliverable | Status |
 | --- | --- | --- |
 | 0 | Data profiling, system design, harness scaffolding | ✅ Complete |
-| 1 | ETL → GeoPackage + contracted graph + build report | In progress (DT-001, DT-002 ✅ Complete; DT-003 in progress - TDD RED phase) |
+| 1 | ETL → GeoPackage + contracted graph + build report | In progress (DT-001, DT-002, DT-003 ✅ Complete; DT-004 next) |
 | 2 | Routing core: profiles, A*, accessible invariant tests | Not started |
 | 3 | Turn-by-turn instruction generator | Not started |
 | 4 | FastAPI service + search index + tiles | Not started |

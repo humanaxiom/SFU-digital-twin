@@ -15,21 +15,17 @@ fresh session can resume cold from it alone.
 **Phase 1 ETL — in progress.**
 - **DT-001 (harness bootstrap)**: Complete & approved. Skeleton `packages/wayfinding/`, `infra/docker-compose.yml` test service, `Makefile` gates (`test`/`lint`/`type`), ADR-0002.
 - **DT-002 (ETL infrastructure & schema)**: Complete & approved. `etl` service in `infra/docker-compose.yml`, `make etl` target, `category_mapping.yaml` (all 62 `USE_TYPE` values), `schema.py` (7 Pydantic schemas with EPSG:26910 native CRS metadata), `run.py` (entry point). 19 passed, 2 skipped, 96.67% coverage.
-- **DT-003 (extract layers to GeoPackage)**: In progress (TDD RED). Detailed plan at [docs/plans/DT-003.md](plans/DT-003.md); test suite written and committed at [packages/wayfinding/tests/test_dt003_extract.py](../packages/wayfinding/tests/test_dt003_extract.py) (29 tests across 7 test classes, commit `6259836`).
+- **DT-003 (extract layers to GeoPackage)**: Complete & approved. `extract.py::extract_to_gpkg()` function, `make etl-extract` target, `build/wayfinding.gpkg` with 14 layers (7 EPSG:26910 native 3D, 7 EPSG:4326 web 2D), 158,694 records (79,347 features × 2 CRS). 51 tests passed, 2 skipped, 95.52% coverage. Lint/type clean, data-QA PASS, judge APPROVE.
 
 ## What changed most recently
 
-- **DT-002 closed & approved:**
-  - `infra/docker-compose.yml`: Added `etl` service.
-  - `Makefile`: Added `etl` target.
-  - `packages/wayfinding/src/wayfinding/etl/category_mapping.yaml`: 62 `USE_TYPE` mappings to controlled categories.
-  - `packages/wayfinding/src/wayfinding/etl/schema.py`: 7 Pydantic v2 schemas (`FacilitySchema`, `LevelSchema`, `UnitSchema`, `LandmarkSchema`, `DetailSchema`, `PathwaySchema`, `TransitionSchema`) with CRS constants.
-  - `packages/wayfinding/src/wayfinding/etl/run.py`: Initial ETL entry point returning 0.
-  - `packages/wayfinding/tests/test_dt002_etl_infrastructure.py`: Comprehensive test suite (19 passed, 2 skipped, 96.67% coverage).
-  - All gates clean (`make test lint type`), CHANGELOG updated, `judge` verdict `APPROVE`.
-- **DT-003 initiated:**
-  - Plan written: [docs/plans/DT-003.md](plans/DT-003.md).
-  - Test suite written & committed: [packages/wayfinding/tests/test_dt003_extract.py](../packages/wayfinding/tests/test_dt003_extract.py) (commit `6259836`).
+- **DT-003 closed & approved:**
+  - `packages/wayfinding/src/wayfinding/etl/extract.py`: `extract_to_gpkg()` function extracting all 7 AIIM layers from FileGDB to GeoPackage with dual CRS (EPSG:26910 native 3D + EPSG:4326 web 2D) via containerised `ogr2ogr`.
+  - `build/wayfinding.gpkg`: 14 layers, 158,694 records (Facilities: 3, Levels: 11, Units: 1,210, Pathways: 22,426, Transitions: 63, Landmarks: 41, Details: 55,593 × 2 CRS copies).
+  - `Makefile`: Added `etl-extract` target.
+  - `infra/docker-compose.yml`: Updated `etl` service to pinned GDAL container (`ghcr.io/osgeo/gdal@sha256:3019206f...`).
+  - `packages/wayfinding/tests/test_dt003_extract.py`: Comprehensive test suite (29 tests across 7 test classes, 51 passed, 2 skipped, 95.52% coverage).
+  - All gates clean (`make test lint type`), data-QA PASS, CHANGELOG updated, `judge` verdict `APPROVE`.
 
 ## Open questions blocking Phase 1
 
@@ -41,13 +37,13 @@ accessible-routing UI copy is finalized.
 
 ## Next steps (for fresh session)
 
-1. **Implement DT-003 (`implementer` agent)**:
-   - Create `packages/wayfinding/src/wayfinding/etl/extract.py` implementing `extract_to_gpkg(gdb_path, gpkg_path, layers, overwrite)`.
-   - Extract 7 AIIM layers from `/data/IndoorWayfinding.gdb` to `build/wayfinding.gpkg` with dual CRS: native EPSG:26910 (3D) and EPSG:4326 (`_wgs84` suffix, 2D) = 14 layers total.
-   - Note container execution: ensure GDAL/`ogr2ogr` or `osgeo.gdal`/`fiona` is properly invoked within container context.
-2. **Run gates & verify GREEN**:
-   - Run `make test lint type` to confirm all DT-003 tests pass.
-3. **Judge review**:
-   - Run `judge` agent to review DT-003 against [docs/plans/DT-003.md](plans/DT-003.md) and [docs/DOD.md](DOD.md).
-4. **Doc-writer & next ticket**:
-   - Update CHANGELOG.md, commit, and advance to DT-004 (Normalise Tables).
+1. **Plan DT-004 (Normalise Tables) with `planner` agent**:
+   - Read [docs/plans/PHASE-1-ETL.md](plans/PHASE-1-ETL.md) DT-004 section for scope: transform extracted layers into target schema, apply category mapping, deduplicate landmarks, derive `vertical_order` mappings.
+   - Create detailed plan at [docs/plans/DT-004.md](plans/DT-004.md) following established plan template.
+2. **Execute DT-004 via `/tdd-feature` workflow**:
+   - Invoke `test-writer` to create comprehensive test suite before implementation.
+   - Invoke `implementer` to create `packages/wayfinding/src/wayfinding/etl/normalise.py` with functions `normalise_facilities()`, `normalise_levels()`, `normalise_units()`, `normalise_landmarks()`, `normalise_details()`.
+   - Write 5 normalised tables to `build/wayfinding.gpkg`: `facility`, `level`, `unit`, `landmark`, `detail`.
+3. **Judge review & doc-writer**:
+   - Run `judge` agent against plan and DOD.
+   - Update CHANGELOG, HANDOFF, and advance to DT-005 (Graph Node Snapping).

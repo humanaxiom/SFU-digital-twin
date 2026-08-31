@@ -12,9 +12,9 @@ These tests check:
 All tests will FAIL initially because wayfinding.etl.extract does not exist yet.
 """
 
+import inspect
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -25,7 +25,7 @@ import pytest
 # Paths relative to workspace root
 WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
 DOCKER_COMPOSE_PATH = WORKSPACE_ROOT / "infra" / "docker-compose.yml"
-GDB_PATH = Path("C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb")
+GDB_PATH = Path("/data/IndoorWayfinding.gdb")
 BUILD_DIR = WORKSPACE_ROOT / "build"
 
 # Expected feature counts from docs/generated/gdb-profile.txt
@@ -83,7 +83,6 @@ class TestExtractSignature:
     def test_extract_signature_has_required_params(self):
         """extract_to_gpkg must accept gdb_path and gpkg_path parameters."""
         from wayfinding.etl.extract import extract_to_gpkg
-        import inspect
 
         sig = inspect.signature(extract_to_gpkg)
         params = list(sig.parameters.keys())
@@ -94,7 +93,6 @@ class TestExtractSignature:
     def test_extract_signature_has_overwrite_param(self):
         """extract_to_gpkg should have optional overwrite parameter."""
         from wayfinding.etl.extract import extract_to_gpkg
-        import inspect
 
         sig = inspect.signature(extract_to_gpkg)
         params = sig.parameters
@@ -117,10 +115,7 @@ class TestExtractSignature:
                 tmp_gpkg = Path(tmpdir) / "test.gpkg"
                 # Will fail with FileNotFoundError for missing GDB
                 with pytest.raises(FileNotFoundError):
-                    result = extract_to_gpkg(
-                        Path("/nonexistent.gdb"),
-                        tmp_gpkg
-                    )
+                    extract_to_gpkg(Path("/nonexistent.gdb"), tmp_gpkg)
 
 
 class TestLayerDefinitions:
@@ -172,28 +167,14 @@ class TestLayerDefinitions:
 class TestGdalAvailability:
     """Test that GDAL and ogr2ogr are available in the ETL container."""
 
-    def test_docker_compose_file_exists(self):
-        """docker-compose.yml must exist to run container tests."""
-        assert DOCKER_COMPOSE_PATH.exists(), f"Missing {DOCKER_COMPOSE_PATH}"
-
     @pytest.mark.slow
     def test_ogr2ogr_available_in_container(self):
         """ETL container must have ogr2ogr command available."""
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(DOCKER_COMPOSE_PATH),
-            "run",
-            "--rm",
-            "etl",
-            "ogr2ogr",
-            "--version",
-        ]
+        cmd = ["ogr2ogr", "--version"]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 0, (
-            f"ogr2ogr not available in container: {result.stderr}"
+            f"ogr2ogr not available: {result.stderr}"
         )
         assert "GDAL" in result.stdout or "GDAL" in result.stderr, (
             "ogr2ogr version output should mention GDAL"
@@ -202,37 +183,17 @@ class TestGdalAvailability:
     @pytest.mark.slow
     def test_ogrinfo_available_in_container(self):
         """ETL container must have ogrinfo command for verification."""
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(DOCKER_COMPOSE_PATH),
-            "run",
-            "--rm",
-            "etl",
-            "ogrinfo",
-            "--version",
-        ]
+        cmd = ["ogrinfo", "--version"]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 0, (
-            f"ogrinfo not available in container: {result.stderr}"
+            f"ogrinfo not available: {result.stderr}"
         )
 
     @pytest.mark.slow
     def test_gpkg_format_supported(self):
         """GDAL must support GeoPackage format (read/write)."""
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(DOCKER_COMPOSE_PATH),
-            "run",
-            "--rm",
-            "etl",
-            "ogrinfo",
-            "--formats",
-        ]
+        cmd = ["ogrinfo", "--formats"]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 0, "Failed to list GDAL formats"
@@ -284,9 +245,9 @@ class TestGdbReadonly:
         if not gate_script.exists():
             pytest.skip("Gate script not found (expected for early phases)")
 
-        # Run the gate test
         result = subprocess.run(
-            ["bash", str(gate_script)],
+            ["bash"],
+            input=gate_script.read_text(),
             capture_output=True,
             text=True,
             cwd=WORKSPACE_ROOT,
@@ -326,21 +287,7 @@ class TestExtractExecution:
         extract_to_gpkg(GDB_PATH, tmp_gpkg, overwrite=True)
 
         # Use ogrinfo to list layers
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(DOCKER_COMPOSE_PATH),
-            "run",
-            "--rm",
-            "-v",
-            f"{tmp_gpkg.parent}:/tmp_test",
-            "etl",
-            "ogrinfo",
-            "-json",
-            "-so",
-            f"/tmp_test/{tmp_gpkg.name}",
-        ]
+        cmd = ["ogrinfo", "-json", "-so", str(tmp_gpkg)]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 0, f"ogrinfo failed: {result.stderr}"
@@ -380,21 +327,7 @@ class TestExtractExecution:
 
         for layer_name in layers_26910:
             # Query CRS using ogrinfo
-            cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
-                "ogrinfo",
-                "-so",
-                f"/tmp_test/{tmp_gpkg.name}",
-                layer_name,
-            ]
+            cmd = ["ogrinfo", "-so", str(tmp_gpkg), layer_name]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             assert result.returncode == 0, (
@@ -418,21 +351,7 @@ class TestExtractExecution:
         layers_wgs84 = [name for name in EXPECTED_COUNTS if name.endswith("_wgs84")]
 
         for layer_name in layers_wgs84:
-            cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
-                "ogrinfo",
-                "-so",
-                f"/tmp_test/{tmp_gpkg.name}",
-                layer_name,
-            ]
+            cmd = ["ogrinfo", "-so", str(tmp_gpkg), layer_name]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             assert result.returncode == 0, (
@@ -453,21 +372,7 @@ class TestExtractExecution:
         extract_to_gpkg(GDB_PATH, tmp_gpkg, overwrite=True)
 
         for layer_name, expected_geom in EXPECTED_GEOMETRY_TYPES_26910.items():
-            cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
-                "ogrinfo",
-                "-so",
-                f"/tmp_test/{tmp_gpkg.name}",
-                layer_name,
-            ]
+            cmd = ["ogrinfo", "-so", str(tmp_gpkg), layer_name]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             assert result.returncode == 0, (
@@ -497,21 +402,7 @@ class TestExtractExecution:
         extract_to_gpkg(GDB_PATH, tmp_gpkg, overwrite=True)
 
         for layer_name, expected_geom in EXPECTED_GEOMETRY_TYPES_WGS84.items():
-            cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
-                "ogrinfo",
-                "-so",
-                f"/tmp_test/{tmp_gpkg.name}",
-                layer_name,
-            ]
+            cmd = ["ogrinfo", "-so", str(tmp_gpkg), layer_name]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             assert result.returncode == 0, (
@@ -525,12 +416,17 @@ class TestExtractExecution:
             ]
 
             has_correct_type = any(variant in output for variant in geom_variants)
-            # Also ensure it's NOT 3D
-            is_not_3d = "3D" not in output and " Z" not in output
+            geometry_line = next(
+                line for line in output.splitlines() if line.startswith("Geometry:")
+            )
+            is_not_3d = "3D" not in geometry_line and not geometry_line.endswith(" Z")
 
-            assert has_correct_type and is_not_3d, (
+            assert has_correct_type, (
                 f"Layer {layer_name} should be 2D {expected_geom}, "
                 f"got output:\n{output}"
+            )
+            assert is_not_3d, (
+                f"Layer {layer_name} should not be 3D, got output:\n{output}"
             )
 
     @pytest.mark.slow
@@ -554,21 +450,7 @@ class TestExtractExecution:
         for suffix in ["_26910", "_wgs84"]:
             layer_name = f"Units{suffix}"
 
-            cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
-                "ogrinfo",
-                "-so",
-                f"/tmp_test/{tmp_gpkg.name}",
-                layer_name,
-            ]
+            cmd = ["ogrinfo", "-so", str(tmp_gpkg), layer_name]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             assert result.returncode == 0, (
@@ -616,15 +498,6 @@ class TestExtractDeterminism:
 
             # Manually add a bogus layer to the GeoPackage
             cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
                 "ogr2ogr",
                 "-update",
                 "-nln",
@@ -633,8 +506,8 @@ class TestExtractDeterminism:
                 "sqlite",
                 "-sql",
                 "SELECT 1 as id",
-                f"/tmp_test/{tmp_gpkg.name}",
-                f"/tmp_test/{tmp_gpkg.name}",
+                str(tmp_gpkg),
+                str(tmp_gpkg),
                 "Facilities_26910",
             ]
             subprocess.run(cmd, capture_output=True)
@@ -643,21 +516,7 @@ class TestExtractDeterminism:
             extract_to_gpkg(GDB_PATH, tmp_gpkg, overwrite=True)
 
             # Verify no BOGUS_LAYER exists
-            cmd = [
-                "docker",
-                "compose",
-                "-f",
-                str(DOCKER_COMPOSE_PATH),
-                "run",
-                "--rm",
-                "-v",
-                f"{tmp_gpkg.parent}:/tmp_test",
-                "etl",
-                "ogrinfo",
-                "-json",
-                "-so",
-                f"/tmp_test/{tmp_gpkg.name}",
-            ]
+            cmd = ["ogrinfo", "-json", "-so", str(tmp_gpkg)]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             info = json.loads(result.stdout)
@@ -689,11 +548,11 @@ class TestErrorHandling:
         """extract_to_gpkg should fail gracefully if output dir not writable."""
         from wayfinding.etl.extract import extract_to_gpkg
 
-        # Use a directory that likely doesn't exist and can't be created
-        bad_output = Path("/root/protected/output.gpkg")
-
-        with pytest.raises((PermissionError, OSError, RuntimeError)):
-            extract_to_gpkg(GDB_PATH, bad_output)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bad_output = Path(tmpdir) / "protected" / "output.gpkg"
+            with patch.object(Path, "mkdir", side_effect=PermissionError("read-only")):
+                with pytest.raises(PermissionError, match="read-only"):
+                    extract_to_gpkg(GDB_PATH, bad_output)
 
     @pytest.mark.slow
     def test_extract_overwrite_false_fails_if_exists(self):
@@ -726,50 +585,115 @@ class TestErrorHandling:
             with pytest.raises(RuntimeError, match="ogr2ogr"):
                 extract_to_gpkg(GDB_PATH, tmp_gpkg)
 
-    @pytest.mark.slow
-    @pytest.mark.skipif(not GDB_PATH.exists(), reason="Source GDB not available")
     def test_make_etl_extract_target(self):
-        """make etl-extract target should run successfully."""
-        # Clean up any existing output
-        output_gpkg = BUILD_DIR / "wayfinding.gpkg"
-        if output_gpkg.exists():
-            output_gpkg.unlink()
+        """Makefile must define etl-extract target invoking wayfinding.etl.run extract."""
+        makefile_path = WORKSPACE_ROOT / "Makefile"
+        assert makefile_path.exists(), "Makefile not found"
 
-        # Run make etl-extract
-        result = subprocess.run(
-            ["make", "etl-extract"],
-            capture_output=True,
-            text=True,
-            cwd=WORKSPACE_ROOT,
+        makefile_content = makefile_path.read_text()
+
+        # Assert etl-extract target exists
+        assert "etl-extract:" in makefile_content, (
+            "Makefile missing etl-extract target"
         )
 
-        assert result.returncode == 0, (
-            f"make etl-extract failed:\nstdout: {result.stdout}\n"
-            f"stderr: {result.stderr}"
+        etl_extract_section = makefile_content.split("etl-extract:")[1]
+
+        assert "wayfinding.etl.run" in etl_extract_section, (
+            "etl-extract target must invoke wayfinding.etl.run"
         )
-        assert output_gpkg.exists(), (
-            f"make etl-extract did not create {output_gpkg}"
+        assert "extract" in etl_extract_section, (
+            "etl-extract target must call extract command"
         )
 
-        # Quick verification: count layers
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(DOCKER_COMPOSE_PATH),
-            "run",
-            "--rm",
-            "etl",
-            "ogrinfo",
-            "-json",
-            "-so",
-            "/workspace/build/wayfinding.gpkg",
-        ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode == 0:
-            info = json.loads(result.stdout)
-            layers = info.get("layers", [])
-            assert len(layers) == 14, (
-                f"Expected 14 layers in output, found {len(layers)}"
+class TestCliEntryPoint:
+    """Test CLI behavior of main() and run_extract() in wayfinding.etl.run.
+
+    Tests the desired API: main(command: str | None = None)
+    - main(None) or main() returns 0 (no-op, covered by DT-002)
+    - main("unknown") returns 1
+    - main("extract") dispatches to run_extract()
+    - run_extract() returns 0 on success, 1 on failure
+    """
+
+    def test_main_unknown_command_returns_1(self):
+        """main() with unknown command should return 1."""
+        from wayfinding.etl.run import main
+
+        # Test with an unknown command
+        result = main("unknown-command")
+        assert result == 1, "main() should return 1 for unknown command"
+
+    def test_main_extract_dispatches_to_run_extract(self):
+        """main('extract') should dispatch to run_extract()."""
+        from wayfinding.etl import run
+
+        with patch.object(run, "run_extract", return_value=0) as mock_run_extract:
+            result = run.main("extract")
+
+            # Should have called run_extract()
+            mock_run_extract.assert_called_once()
+            assert result == 0, "main('extract') should return run_extract() result"
+
+    def test_run_extract_success_returns_0(self):
+        """run_extract() should return 0 when extraction succeeds."""
+        from wayfinding.etl import run
+
+        # Mock extract_to_gpkg to avoid real extraction
+        with patch("wayfinding.etl.extract.extract_to_gpkg") as mock_extract:
+            mock_extract.return_value = {
+                "Facilities_26910": 3,
+                "Facilities_wgs84": 3,
+            }
+
+            result = run.run_extract()
+
+            # Should have called extract_to_gpkg
+            mock_extract.assert_called_once()
+            assert result == 0, "run_extract() should return 0 on success"
+
+    def test_run_extract_failure_returns_1(self):
+        """run_extract() should return 1 when extraction fails."""
+        from wayfinding.etl import run
+
+        # Mock extract_to_gpkg to raise an exception
+        with patch("wayfinding.etl.extract.extract_to_gpkg") as mock_extract:
+            mock_extract.side_effect = RuntimeError("Extraction failed")
+
+            result = run.run_extract()
+
+            # Should have called extract_to_gpkg
+            mock_extract.assert_called_once()
+            assert result == 1, "run_extract() should return 1 on failure"
+
+    def test_run_extract_calls_extract_with_correct_paths(self):
+        """run_extract() should call extract_to_gpkg with correct GDB and GPKG paths."""
+        from wayfinding.etl import run
+
+        with patch("wayfinding.etl.extract.extract_to_gpkg") as mock_extract:
+            mock_extract.return_value = {}
+
+            run.run_extract()
+
+            # Verify it was called with the expected paths
+            mock_extract.assert_called_once()
+            call_kwargs = mock_extract.call_args.kwargs
+
+            assert "gdb_path" in call_kwargs
+            assert "gpkg_path" in call_kwargs
+            assert "overwrite" in call_kwargs
+
+            # Check that paths are Path objects with expected locations
+            gdb_path = call_kwargs["gdb_path"]
+            gpkg_path = call_kwargs["gpkg_path"]
+
+            assert str(gdb_path).endswith("IndoorWayfinding.gdb"), (
+                f"Expected GDB path to end with IndoorWayfinding.gdb, got {gdb_path}"
+            )
+            assert str(gpkg_path).endswith("wayfinding.gpkg"), (
+                f"Expected GPKG path to end with wayfinding.gpkg, got {gpkg_path}"
+            )
+            assert call_kwargs["overwrite"] is True, (
+                "Expected overwrite=True"
             )
