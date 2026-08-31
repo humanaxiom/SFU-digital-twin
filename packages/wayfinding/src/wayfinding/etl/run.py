@@ -18,14 +18,16 @@ def main(command: str | None = None) -> int:
     - extract: Extract layers from GDB to GeoPackage
     - normalise: Normalise extracted layers into production tables
     - graph-raw: Snap nodes and build raw pathway graph
+    - graph-transitions: Add transition edges to pathway graph
     """
     if command is None:
         print("ETL infrastructure ready. No data processing yet (DT-003+).")
         print("Usage: python -m wayfinding.etl.run <command>")
         print("Commands:")
-        print("  extract     Extract layers from GDB to GeoPackage")
-        print("  normalise   Normalise extracted layers into production tables")
-        print("  graph-raw   Snap nodes and build raw pathway graph")
+        print("  extract            Extract layers from GDB to GeoPackage")
+        print("  normalise          Normalise extracted layers into production tables")
+        print("  graph-raw          Snap nodes and build raw pathway graph")
+        print("  graph-transitions  Add transition edges to pathway graph")
         return 0
 
     if command == "extract":
@@ -36,6 +38,9 @@ def main(command: str | None = None) -> int:
 
     if command == "graph-raw":
         return run_graph_raw()
+
+    if command == "graph-transitions":
+        return run_graph_transitions()
 
     print(f"Unknown command: {command}")
     return 1
@@ -170,6 +175,25 @@ def run_graph_raw() -> int:
         import traceback
 
         print(f"\nERROR: Graph construction failed: {error}")
+        traceback.print_exc()
+        return 1
+
+
+def run_graph_transitions() -> int:
+    """Run the graph-transitions step: add transition edges to pathway graph."""
+    from wayfinding.etl.graph import run_graph_transitions
+
+    output_dir = Path("/workspace/build")
+
+    print("=== DT-006: Add Transition Edges to Graph ===")
+    print(f"Output directory: {output_dir}")
+
+    try:
+        return run_graph_transitions(output_dir)
+    except Exception as error:
+        import traceback
+
+        print(f"\nERROR: Adding transitions failed: {error}")
         traceback.print_exc()
         return 1
 

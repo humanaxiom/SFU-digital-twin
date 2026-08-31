@@ -1,4 +1,4 @@
-.PHONY: test lint type etl etl-extract etl-normalise etl-graph-raw
+.PHONY: test lint type etl etl-extract etl-normalise etl-graph-raw etl-graph-transitions
 
 test:
 	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq >/dev/null 2>&1 && pip install -e packages/wayfinding[dev] -q --break-system-packages && pytest packages/wayfinding/tests"
@@ -20,3 +20,6 @@ etl-normalise:
 
 etl-graph-raw:
 	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq > /dev/null 2>&1 && pip install -e packages/wayfinding -q --break-system-packages && python -m wayfinding.etl.run graph-raw"
+
+etl-graph-transitions:
+	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq > /dev/null 2>&1 && pip install -e packages/wayfinding -q --break-system-packages && python -m wayfinding.etl.run graph-transitions"

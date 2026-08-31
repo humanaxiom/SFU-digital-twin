@@ -582,3 +582,461 @@ def run_graph_raw(output_dir: Path) -> int:
     logger.info(f"  {stats_json}")
 
     return 0
+
+
+def add_transitions(
+    graph: nx.MultiDiGraph,
+    node_map: dict[NodeMapKey, NodeID],
+    gpkg_path: str,
+) -> tuple[nx.MultiDiGraph, dict[str, Any]]:
+    """Add transition edges (stairs, elevators) to pathway graph.
+
+    Reads Transitions_26910 layer from GeoPackage, looks up snapped endpoints
+    in node_map, and adds bidirectional edges. Marks all transition endpoints
+    as protected from contraction. Adds transition-only nodes not present in
+    the pathway graph with complete node attributes.
+
+    Args:
+        graph: NetworkX MultiDiGraph with pathway edges (from DT-005)
+        node_map: Mapping from (layer_prefix, fid, role) to snapped node ID
+        gpkg_path: Path to GeoPackage with Transitions_26910 layer
+
+    Returns:
+        (graph, stats) tuple where:
+        - graph is the updated MultiDiGraph with transition edges added
+        - stats is a dict with transition counts, connectivity, warnings
+
+    Raises:
+        ValueError: If any transition endpoint not found in node_map (orphan)
+        RuntimeError: If connectivity regresses or no components bridged
+    """
+    ds = ogr.Open(gpkg_path, 0)  # Read-only
+    if ds is None:
+        raise RuntimeError(f"Cannot open GeoPackage: {gpkg_path}")
+
+    transitions_layer = ds.GetLayerByName("Transitions_26910")
+    if transitions_layer is None:
+        raise RuntimeError("Transitions_26910 layer not found")
+
+    pathway_graph = nx.Graph()
+    pathway_graph.add_edges_from(
+        (start, end)
+        for start, end, edge_data in graph.edges(data=True)
+        if edge_data.get("mode") == "pathway"
+    )
+    pathway_only_baseline = nx.number_connected_components(pathway_graph)
+
+    # Transition type mapping per data findings and ADR-0004
+    transition_type_map = {
+        2: "stairs",
+        4: "elevator",
+    }
+
+    # Track statistics
+    transition_features = 0
+    stairs_arcs = 0
+    elevator_arcs = 0
+    express_elevators = []
+    orphan_transitions = []
+    transition_endpoint_nodes = set()
+
+    # Collect raw node data for transition-only nodes
+    raw_node_data: dict[NodeID, list[tuple[str, float]]] = defaultdict(list)
+
+    # First pass: validate all endpoints exist and collect data
+    transitions_layer.ResetReading()
+    transition_data = []
+
+    for feature in transitions_layer:
+        fid = str(feature.GetFID())
+        transition_type = feature.GetField("TRANSITION_TYPE")
+        facility_id = feature.GetField("FACILITY_ID")
+        level_name_from = feature.GetField("LEVEL_NAME_FROM")
+        level_name_to = feature.GetField("LEVEL_NAME_TO")
+        length_3d = feature.GetField("LENGTH_3D")
+
+        if transition_type not in transition_type_map:
+            raise ValueError(
+                f"Transition FID {fid} has unsupported TRANSITION_TYPE {transition_type}"
+            )
+
+        mode = transition_type_map[transition_type]
+        level_id_from = f"{facility_id}_{level_name_from}"
+        level_id_to = f"{facility_id}_{level_name_to}"
+
+        # Look up snapped endpoints in node_map
+        start_key = ("TR", fid, "start")
+        end_key = ("TR", fid, "end")
+
+        if start_key not in node_map:
+            orphan_transitions.append((fid, "start", level_id_from))
+            continue
+
+        if end_key not in node_map:
+            orphan_transitions.append((fid, "end", level_id_to))
+            continue
+
+        start_node = node_map[start_key]
+        end_node = node_map[end_key]
+
+        # Extract vertical_order from node IDs (third element)
+        vertical_order_from = start_node[2]
+        vertical_order_to = end_node[2]
+
+        # Get geometry
+        geom_ogr = feature.GetGeometryRef()
+        geom_wkt_str = geom_ogr.ExportToWkt()
+        geom = wkt.loads(geom_wkt_str)
+
+        if not isinstance(geom, (LineString, MultiLineString)):
+            raise ValueError(f"Transition FID {fid} has unsupported geometry {geom.geom_type}")
+
+        # Convert to LineString
+        if isinstance(geom, LineString):
+            line_geom = geom
+        elif len(geom.geoms) == 1:
+            line_geom = cast(LineString, geom.geoms[0])
+        else:
+            # Flatten multipart into single LineString
+            all_coords = []
+            for part in geom.geoms:
+                all_coords.extend(part.coords)
+            line_geom = LineString(all_coords)
+
+        # Collect endpoint Z coordinates for node attributes
+        start_coord, end_coord = extract_endpoints(geom)
+        raw_node_data[start_node].append((level_id_from, start_coord[2]))
+        raw_node_data[end_node].append((level_id_to, end_coord[2]))
+
+        # Track express elevators (vertical_order delta > 1)
+        vo_delta = abs(vertical_order_to - vertical_order_from)
+        if mode == "elevator" and vo_delta > 1:
+            express_elevators.append({
+                "feature_id": fid,
+                "vertical_order_from": vertical_order_from,
+                "vertical_order_to": vertical_order_to,
+            })
+
+        transition_data.append({
+            "fid": fid,
+            "mode": mode,
+            "start_node": start_node,
+            "end_node": end_node,
+            "level_id_from": level_id_from,
+            "level_id_to": level_id_to,
+            "vertical_order_from": vertical_order_from,
+            "vertical_order_to": vertical_order_to,
+            "length_3d": length_3d,
+            "geometry": line_geom,
+        })
+
+        transition_endpoint_nodes.add(start_node)
+        transition_endpoint_nodes.add(end_node)
+        transition_features += 1
+
+    ds = None  # Close dataset
+
+    # Fail on orphan transitions
+    if orphan_transitions:
+        orphan_details = ", ".join(
+            f"FID {fid} {endpoint} ({level_id})"
+            for fid, endpoint, level_id in orphan_transitions[:5]
+        )
+        raise ValueError(
+            f"Found {len(orphan_transitions)} orphan transition(s) with endpoints "
+            f"not in node_map: {orphan_details}. This indicates a DT-005 snapping bug."
+        )
+
+    logger.info(f"Validated {transition_features} transition features, all endpoints in node_map")
+
+    # Add transition-only nodes (not in graph yet) with complete node attributes
+    transition_only_nodes = transition_endpoint_nodes - set(graph.nodes())
+
+    for node_id in transition_only_nodes:
+        if node_id in raw_node_data:
+            level_z_pairs = raw_node_data[node_id]
+            level_ids = {level_id for level_id, z in level_z_pairs}
+            z_values = [z for level_id, z in level_z_pairs]
+
+            # Add node with complete DT-005 attribute contract
+            graph.add_node(
+                node_id,
+                x=node_id[0],
+                y=node_id[1],
+                vertical_order=node_id[2],
+                level_ids=level_ids,
+                z_min=min(z_values),
+                z_max=max(z_values),
+                z_mean=sum(z_values) / len(z_values),
+            )
+
+    logger.info(
+        f"Added {len(transition_only_nodes)} transition-only nodes with complete attributes"
+    )
+
+    # Add transition edges (bidirectional)
+    for trans in transition_data:
+        # Forward edge
+        forward_key = f"TR_{trans['fid']}"
+        graph.add_edge(
+            trans["start_node"],
+            trans["end_node"],
+            key=forward_key,
+            length_3d=trans["length_3d"],
+            mode=trans["mode"],
+            level_id_from=trans["level_id_from"],
+            level_id_to=trans["level_id_to"],
+            vertical_order_from=trans["vertical_order_from"],
+            vertical_order_to=trans["vertical_order_to"],
+            feature_id=trans["fid"],
+            geometry=trans["geometry"],
+        )
+
+        # Reverse edge with reversed geometry
+        reverse_key = f"TR_{trans['fid']}_R"
+        reverse_geom = LineString(list(reversed(trans["geometry"].coords)))
+        graph.add_edge(
+            trans["end_node"],
+            trans["start_node"],
+            key=reverse_key,
+            length_3d=trans["length_3d"],
+            mode=trans["mode"],
+            level_id_from=trans["level_id_to"],
+            level_id_to=trans["level_id_from"],
+            vertical_order_from=trans["vertical_order_to"],
+            vertical_order_to=trans["vertical_order_from"],
+            feature_id=trans["fid"],
+            geometry=reverse_geom,
+        )
+
+        if trans["mode"] == "stairs":
+            stairs_arcs += 2
+        elif trans["mode"] == "elevator":
+            elevator_arcs += 2
+
+    logger.info(
+        f"Added {transition_features * 2} transition edges "
+        f"({stairs_arcs} stairs, {elevator_arcs} elevator)"
+    )
+
+    # Mark all transition endpoints as protected
+    for node in transition_endpoint_nodes:
+        graph.nodes[node]["is_transition_endpoint"] = True
+
+    logger.info(f"Marked {len(transition_endpoint_nodes)} transition endpoints as protected")
+
+    # Compute connectivity statistics
+    pathway_arcs = sum(
+        1 for u, v, k, d in graph.edges(keys=True, data=True) if d["mode"] == "pathway"
+    )
+
+    # Default profile: pathway + stairs + elevator
+    default_graph = nx.Graph()
+    for u, v, _k, d in graph.edges(keys=True, data=True):
+        if d["mode"] in ("pathway", "stairs", "elevator"):
+            default_graph.add_edge(u, v)
+
+    default_components = list(nx.connected_components(default_graph))
+    default_component_count = len(default_components)
+    default_largest = max((len(c) for c in default_components), default=0)
+    default_component_sizes = sorted((len(c) for c in default_components), reverse=True)
+
+    # Accessible profile: pathway + elevator only
+    accessible_graph = nx.Graph()
+    for u, v, _k, d in graph.edges(keys=True, data=True):
+        if d["mode"] in ("pathway", "elevator"):
+            accessible_graph.add_edge(u, v)
+
+    accessible_components = list(nx.connected_components(accessible_graph))
+    accessible_component_count = len(accessible_components)
+    accessible_largest = max((len(c) for c in accessible_components), default=0)
+    accessible_component_sizes = sorted((len(c) for c in accessible_components), reverse=True)
+
+    default_bridged = pathway_only_baseline - default_component_count
+    accessible_bridged = pathway_only_baseline - accessible_component_count
+    stairs_bridged = default_bridged - accessible_bridged
+
+    # Validate non-regression
+    if default_component_count > pathway_only_baseline:
+        raise RuntimeError(
+            f"Default profile component count ({default_component_count}) increased from "
+            f"pathway-only baseline ({pathway_only_baseline}). This indicates a node-identity bug."
+        )
+
+    if default_bridged <= 0:
+        raise RuntimeError(
+            f"Default profile bridged zero components. This suggests transitions not connecting "
+            f"across components (pathway baseline: {pathway_only_baseline}, "
+            f"current: {default_component_count})."
+        )
+
+    if accessible_component_count > pathway_only_baseline:
+        raise RuntimeError(
+            f"Accessible profile component count ({accessible_component_count}) increased from "
+            f"pathway-only baseline ({pathway_only_baseline}). This indicates a bug."
+        )
+
+    if accessible_bridged <= 0:
+        raise RuntimeError(
+            "Accessible profile bridged zero components. This suggests elevators not connecting "
+            "across components."
+        )
+
+    if stairs_bridged <= 0:
+        raise RuntimeError(
+            "Default profile gained no additional component bridges from stairs. "
+            "This suggests stairs are not connecting across components."
+        )
+
+    logger.info(
+        f"Default profile: {default_component_count} components "
+        f"(baseline: {pathway_only_baseline}, bridged: {default_bridged}), "
+        f"largest: {default_largest}"
+    )
+
+    logger.info(
+        f"Accessible profile: {accessible_component_count} components "
+        f"(baseline: {pathway_only_baseline}, bridged: {accessible_bridged}), "
+        f"largest: {accessible_largest}"
+    )
+
+    # Emit warning for accessible profile fragmentation
+    warning_msg = (
+        f"Accessible profile has {accessible_component_count} connected components; "
+        f"elevator-only routing available within connected regions only. Stairs excluded "
+        f"from accessible profile. Fragmentation due to pathway topology gaps "
+        f"(gap G2, thin elevator coverage). No wheelchair certification implied "
+        f"(elevator-only != wheelchair-accessible). Query-time 'no route available' errors "
+        f"expected for disconnected unit pairs. Not verified: door_width, path_width, slope, "
+        f"powered_doors, surface. See ADR-0005."
+    )
+
+    logger.warning(warning_msg)
+
+    # Build stats dict
+    stats = {
+        "etl_version": "0.1.0",
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "node_count": graph.number_of_nodes(),
+        "edge_count": graph.number_of_edges(),
+        "mean_degree": round(
+            sum(dict(graph.degree()).values()) / graph.number_of_nodes()
+            if graph.number_of_nodes() > 0
+            else 0.0,
+            2,
+        ),
+        "pathway_arcs": pathway_arcs,
+        "stairs_arcs": stairs_arcs,
+        "elevator_arcs": elevator_arcs,
+        "transition_features_processed": transition_features,
+        "express_elevators": express_elevators,
+        "protected_nodes": len(transition_endpoint_nodes),
+        "connectivity_default_profile": {
+            "component_count": default_component_count,
+            "largest_component_size": default_largest,
+            "pathway_only_baseline": pathway_only_baseline,
+            "components_bridged_by_transitions": default_bridged,
+            "components_bridged_by_stairs": stairs_bridged,
+            "component_sizes": default_component_sizes,
+        },
+        "connectivity_accessible_profile": {
+            "component_count": accessible_component_count,
+            "largest_component_size": accessible_largest,
+            "pathway_only_baseline": pathway_only_baseline,
+            "components_bridged_by_elevators": accessible_bridged,
+            "component_sizes": accessible_component_sizes,
+        },
+        "warnings": [warning_msg],
+    }
+
+    return graph, stats
+
+
+def run_graph_transitions(output_dir: Path) -> int:
+    """Run graph-transitions ETL step: add transition edges to pathway graph.
+
+    Loads graph_raw.pkl and node_map.pkl from DT-005, adds transition edges,
+    and outputs graph_with_transitions.pkl and graph_with_transitions_stats.json.
+
+    Args:
+        output_dir: Directory for output artifacts (typically /workspace/build)
+
+    Returns:
+        Exit code (0 = success)
+    """
+    import pickle
+
+    graph_raw_pkl = output_dir / "graph_raw.pkl"
+    node_map_pkl = output_dir / "node_map.pkl"
+    gpkg_path = output_dir / "wayfinding.gpkg"
+
+    # Validate inputs exist
+    if not graph_raw_pkl.exists():
+        logger.error(f"graph_raw.pkl not found: {graph_raw_pkl}")
+        logger.error("Run 'make etl-graph-raw' first.")
+        return 1
+
+    if not node_map_pkl.exists():
+        logger.error(f"node_map.pkl not found: {node_map_pkl}")
+        logger.error("Run 'make etl-graph-raw' first.")
+        return 1
+
+    if not gpkg_path.exists():
+        logger.error(f"GeoPackage not found: {gpkg_path}")
+        logger.error("Run 'make etl-extract' and 'make etl-normalise' first.")
+        return 1
+
+    logger.info("=== DT-006: Add Transition Edges to Graph ===")
+    logger.info(f"Inputs: {graph_raw_pkl}, {node_map_pkl}, {gpkg_path}")
+
+    # Load inputs
+    logger.info("Loading graph_raw.pkl...")
+    with open(graph_raw_pkl, "rb") as f:
+        graph = pickle.load(f)
+
+    logger.info("Loading node_map.pkl...")
+    with open(node_map_pkl, "rb") as f:
+        node_map = pickle.load(f)
+
+    # Add transitions
+    logger.info("Adding transition edges...")
+    graph, stats = add_transitions(graph, node_map, str(gpkg_path))
+
+    # Serialize outputs
+    graph_transitions_pkl = output_dir / "graph_with_transitions.pkl"
+    stats_json = output_dir / "graph_with_transitions_stats.json"
+
+    logger.info(f"Writing graph to {graph_transitions_pkl}...")
+    with open(graph_transitions_pkl, "wb") as f:
+        pickle.dump(graph, f, protocol=5)
+
+    logger.info(f"Writing stats to {stats_json}...")
+    with open(stats_json, "w") as f:
+        json.dump(stats, f, indent=2)
+
+    logger.info("\n=== Graph with Transitions Complete ===")
+    logger.info(f"Nodes: {stats['node_count']:,}")
+    logger.info(f"Edges: {stats['edge_count']:,}")
+    logger.info(f"  Pathway: {stats['pathway_arcs']:,}")
+    logger.info(f"  Stairs: {stats['stairs_arcs']:,}")
+    logger.info(f"  Elevator: {stats['elevator_arcs']:,}")
+    logger.info(f"Mean degree: {stats['mean_degree']:.2f}")
+    logger.info(f"Protected transition endpoints: {stats['protected_nodes']}")
+    logger.info(f"Express elevators: {len(stats['express_elevators'])}")
+    logger.info(
+        f"\nDefault profile connectivity: "
+        f"{stats['connectivity_default_profile']['component_count']} components "
+        f"(bridged {stats['connectivity_default_profile']['components_bridged_by_transitions']} "
+        f"from {stats['connectivity_default_profile']['pathway_only_baseline']} baseline)"
+    )
+    logger.info(
+        f"Accessible profile connectivity: "
+        f"{stats['connectivity_accessible_profile']['component_count']} components "
+        f"(bridged {stats['connectivity_accessible_profile']['components_bridged_by_elevators']} "
+        f"from {stats['connectivity_accessible_profile']['pathway_only_baseline']} baseline)"
+    )
+    logger.info("\nOutputs:")
+    logger.info(f"  {graph_transitions_pkl}")
+    logger.info(f"  {stats_json}")
+
+    return 0
