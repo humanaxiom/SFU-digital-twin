@@ -20,12 +20,10 @@ connectivity. DT-008 (search index) and DT-009 (basemap) are polish — the rout
 function without them initially, though search is required for end-user value. DT-010 (build report)
 is observability and should not block the first API deployment.
 
-**Key risks mitigated:**
+### Key risks mitigated
 - **Over-noded geometry (22k segments, 0.94 m mean)**: DT-007 contracts degree-2 chains, reducing
   edge count by ~85% and making turn-by-turn feasible.
-- **Accessible route connectivity**: DT-009 validation explicitly reports connected components per
-  profile; >1 component for accessible is a *warning* (not failure) with a reachability matrix,
-  acknowledging thin elevator coverage (gap G2).
+- **Pathway topology fragmentation (ADR-0005)**: DT-005 measured **855 connected components** in the pathway-only graph. Adding transitions reduces this to **816** (default profile) and **840** (accessible profile). Fragmentation is documented as a data-quality limitation; DT-009 will produce a connected-component catalog enabling query-time "no route available" detection. Topology repair deferred to post-Phase-1.
 - **Category mapping brittleness**: DT-002 externalises the USE_TYPE → category mapping into a
   checked-in YAML, editable by facilities staff without code changes.
 
@@ -165,8 +163,9 @@ then build a raw undirected graph with one edge per feature.
 3. ✅ Every edge has attributes `{length_3d, mode, level_id, feature_id, geometry}`;
    `mode='pathway'` for Pathways, `mode='stairs'|'elevator'` for Transitions (parsed from
    `TRANSITION_TYPE` 2/4).
-4. ✅ Test `test_graph_raw_connected_default` asserts the graph filtered to
-   `mode in ['pathway','stairs','elevator']` has exactly 1 connected component (default profile).
+4. ✅ Connectivity is recorded as an informational baseline. DT-005 measured 855 pathway-only
+   components; transition and topology-repair disposition follows in DT-006 through DT-009 per
+   ADR-0005.
 5. ✅ Test `test_graph_raw_edge_weights_positive` asserts all `length_3d > 0`.
 6. ✅ No self-loops; test `test_no_self_loops` asserts `len([e for e in G.edges if e[0] == e[1]]) ==
    0`.
@@ -180,7 +179,7 @@ then build a raw undirected graph with one edge per feature.
 **Description:** Augment the raw graph with vertical transition edges parsed from the 63 Transition
 features, linking nodes across `VERTICAL_ORDER_FROM` and `VERTICAL_ORDER_TO`.
 
-**Input:** DT-005 (`build/graph_raw.pkl`), normalised `Transitions_26910` layer from DT-003.
+**Input:** DT-005 (`build/graph_raw.pkl`, `build/node_map.pkl`), normalised `Transitions_26910` layer from DT-003.
 
 **Output:**
 - Updated `packages/wayfinding/src/wayfinding/etl/graph.py::add_transitions(graph, transitions_layer)`
@@ -193,11 +192,18 @@ features, linking nodes across `VERTICAL_ORDER_FROM` and `VERTICAL_ORDER_TO`.
    feature_id}`.
 3. ✅ Test `test_transition_endpoints_protected` asserts all transition endpoints are marked with a
    node attribute `is_transition_endpoint=True` (prevents contraction in DT-007).
-4. ✅ Test `test_accessible_profile_no_stairs` asserts a graph filtered to
-   `mode != 'stairs'` has ≤11 connected components (one per level, possibly disconnected across
-   levels if elevators are sparse).
+4. ✅ **Measured validation** (ADR-0005): The pinned fixture reproduces 816 default-profile
+   components and 840 elevator-only components from the 855-component pathway baseline. Generic
+   checks reject increased component counts or a transition mode that bridges no components.
 5. ✅ Express elevators (spanning >1 vertical_order delta) are handled: 2 features span
    `vertical_order 0→2`; validate they produce single edges, not intermediate hops.
+
+**Measured baseline (ADR-0005):**
+- Pathway-only graph (DT-005): **855 undirected components**
+- After adding all transitions: **816 components** (39 transitions bridged components)
+- Accessible profile (elevators only): **840 components** (15 elevator transitions bridged components)
+- Global connectivity is informational in DT-006; measured regression and no-op checks are hard.
+   DT-009 owns topology-repair disposition and the unit-to-component catalog.
 
 **Expected Effort:** S (2 days)
 
@@ -280,10 +286,12 @@ build-report.json with all graph stats and validation results.
 **Acceptance Criteria:**
 1. ✅ Connectivity validation reports connected components for each profile: `default`
    (pathway+stairs+elevator), `accessible` (pathway+elevator only).
-2. ✅ **Hard failure** if default profile has >1 connected component (implies the building network is
-   broken).
-3. ✅ **Warning** (not failure) if accessible profile has >1 connected component; report includes a
-   reachability matrix showing which `vertical_order` pairs are disconnected.
+2. ✅ **Hard failure** if component counts regress from the accepted ADR-0005 baseline or fail an
+   explicit topology-repair target adopted before DT-009. Global one-component connectivity is not
+   assumed from the source data.
+3. ✅ Produce a connected-component catalog mapping every unit to its component for default and
+   elevator-only profiles. Disconnected origin/destination pairs return an explicit no-route result;
+   do not infer reachability from `vertical_order` pairs.
 4. ✅ Test `test_validation_fails_on_disconnected_default` artificially removes 10 edges, asserts
    validation raises an exception.
 5. ✅ `build-report.json` is valid JSON and includes: `{gdb_hash, etl_version, timestamp,
@@ -463,8 +471,8 @@ parallelising DT-010/DT-011 and overlapping graph tickets.
 
 | Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- |
-| **Graph disconnection in default profile** (accessibility aside, the *walking* network is broken) | Low | High — build fails | Test against known connected component = 1 at every graph construction stage (DT-005, DT-006, DT-007, DT-008). Fail fast with a clear error pointing to the feature_id that broke connectivity. |
-| **Accessible profile has >5 components** (thin elevator coverage causes isolated regions) | Medium | Medium — warning only, but poor UX | DT-009 emits a reachability matrix showing which `vertical_order` pairs are disconnected, so the UI can explain "no step-free route from Level 2000 to Level 6000 exists". Phase 3 work can add a "request accessible route survey" feature. |
+| **Pathway topology fragmentation** | High (measured: 855 pathway-only components → 816 with transitions) | High — routing limited to connected regions | ADR-0005 redefines DT-006 to validate measured improvement rather than global connectivity. DT-009 produces a connected-component catalog for query-time "no route available" detection. Topology repair (manual GDB edits or ETL inference) is deferred to post-Phase-1. |
+| **Elevator-only profile severely fragmented** (840 components) | High (measured) | High — routing is limited to connected regions | ADR-0005 documents fragmentation. UI must surface per-query reachability and the `not_verified` limitations. Elevator-only means stairs excluded; it is not wheelchair certification. |
 | **Contraction over-aggressively removes necessary nodes** (e.g., a junction too close to a unit centroid gets contracted) | Low | Medium — routing through walls | Protect all nodes within 0.5 m of any unit centroid (DT-007 AC#2); snapshot-test 10 known good routes before/after contraction to catch geometry regressions. |
 | **Category mapping has gaps** (a new USE_TYPE appears in a future GDB extract) | Low | Low — build fails loudly | DT-002 AC#4 enforces exhaustive coverage; any unmapped USE_TYPE raises an exception with a clear "add this to category_mapping.yaml" message. |
 | **PMTiles generation OOM on large detail geometries** (55k line features) | Low | Low — can stub basemap | DT-011 runs in the same container with GDAL; if memory is an issue, add a simplification pass or split `detail` into per-level sub-tilesets. Alternative: defer basemap to Phase 2 and serve static PNGs initially. |

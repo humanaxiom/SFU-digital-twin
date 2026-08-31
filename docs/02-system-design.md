@@ -127,9 +127,12 @@ This is the core of the ETL and the step the data most requires (mean segment le
 5. **Connect destinations.** For each `unit`, project its centroid to the nearest pathway node on the
    same `level_id` and add a zero-cost connector edge. Record the connector so instructions can say
    "AQ 3150 is on your left".
-6. **Validate.** Report connected components per profile. A component count > 1 for the walking
-   profile is a hard build failure; for the accessible profile it is a warning plus an explicit
-   reachability matrix (gap **G2**).
+6. **Validate.** Report connected components per profile. The measured pathway baseline is 855
+  components; transitions reduce it to 816 for the default profile and 840 for the elevator-only,
+  stairs-excluded profile ([ADR-0005](adr/0005-measured-connectivity-baseline-and-validation-gates.md)).
+  Reject regressions and no-op transition modes, but do not require global connectivity. A
+  unit-to-component catalog enables explicit query-time no-route results. Topology repair is
+  deferred beyond Phase 1; elevator-only routing is not wheelchair certification.
 
 Artifacts: `graph.pkl` (NetworkX), `wayfinding.gpkg`, `search.sqlite`, `basemap.pmtiles`, and a
 `build-report.json` with all validation counts.

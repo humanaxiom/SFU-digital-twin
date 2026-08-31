@@ -297,21 +297,11 @@ then asserts `mtime` is unchanged after.
 
 ### 12. Connectivity gate timing: within-level (DT-005) vs cross-level (DT-006)
 
-The plan proposes **within-level connectivity** for DT-005 (each level filtered by `level_id`,
-expect 1–3 components) and defers **cross-level connectivity** (the full walking/accessible profile
-checks) to DT-006. This is correct because DT-005 has no transition edges yet — cross-level
-connectivity is impossible.
-
-However, "within-level connectivity" is **informational only, not a hard gate** (AC5 clarification).
-A level with 5 components (e.g., multiple detached wings or isolated rooms) is logged as a warning,
-not a build failure — it may be legitimate topology (e.g., rooms connected only via stairs, which
-are DT-006 edges). The hard gate is **zero isolated nodes** (any node with degree 0 is a snapping
-bug or data corruption).
-
-DT-006 will add the cross-level connectivity gate: after adding transition edges, the graph
-filtered to `mode in ['pathway', 'stairs', 'elevator']` must have exactly 1 connected component
-(PHASE-1-ETL AC4). The accessible-profile gate (`mode in ['pathway', 'elevator']`, stairs excluded)
-allows >1 component but must report the reachability matrix (gap G2 acknowledgment).
+This section is superseded by [ADR-0005](0005-measured-connectivity-baseline-and-validation-gates.md).
+Measured DT-005 output has 855 pathway-only components, so the original global-connectivity
+assumption was impossible. DT-006 must reproduce the measured 816 default and 840 elevator-only
+component baselines, reject regressions and no-op transition modes, and preserve zero isolated
+nodes. DT-009 owns topology disposition and unit-to-component reachability reporting.
 
 ### 13. Dependency additions to pyproject.toml
 

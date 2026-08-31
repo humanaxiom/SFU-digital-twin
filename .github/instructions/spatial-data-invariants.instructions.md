@@ -12,9 +12,11 @@ applyTo: "packages/**"
 - The raw pathway network is extremely over-noded (22,426 segments, mean length 0.94 m). Degree-2
   chains must be contracted before instruction generation, or the output is thousands of useless
   micro-steps.
-- A disconnected graph for the `default` routing profile is a hard build failure. A disconnected
-  graph for the `accessible` profile is a warning plus an explicit reachability matrix — it is not
-  an error, because 21 elevator transitions across 11 levels is genuinely thin coverage.
+- **Measured connectivity baseline** ([ADR-0005](../../docs/adr/0005-measured-connectivity-baseline-and-validation-gates.md)):
+  the pathway network has 855 connected components. The pinned fixture must reproduce 816 default
+  components (all transitions) and 840 elevator-only components, with at least one component bridged
+  by each transition mode. DT-006 rejects regressions and no-op transition modes but does not require
+  global connectivity. DT-009 maps every unit to a component for query-time no-route results.
 - Every searchable unit (`SEARCHABLE = 'Y'`) must have a zero-cost connector edge to the nearest
   pathway node on its own `level_id`; an orphan searchable unit is a data-QA failure.
 - `DELAY` is 99.5% null and must not be used as a cost term; elevator wait is a configuration
