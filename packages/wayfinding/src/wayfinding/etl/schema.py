@@ -2,6 +2,12 @@
 
 Defines Pydantic models for each output table with field types, constraints,
 and CRS metadata. These schemas are used for validation and documentation.
+
+Note: These schemas define the logical table structure. In the GeoPackage,
+each table is stored as two layers (<table>_26910 and <table>_wgs84) due to
+GeoPackage's single-geometry-per-layer constraint. Each physical layer has
+ONE registered geometry column named 'geom' in the target CRS, not
+separate geom_26910+geom_wgs84 columns in one layer. See ADR-0003.
 """
 
 
@@ -48,13 +54,32 @@ class UnitSchema(BaseModel):
     use_type: str = Field(..., description="Original USE_TYPE from source GDB")
     category: str = Field(..., description="Controlled vocabulary category")
     accessible: bool | None = Field(
-        None, description="Accessibility flag from category mapping"
+        None,
+        description="Destination is accessible (e.g., accessible washroom). "
+                    "This is NOT route accessibility; see routing profile."
     )
     gender: str | None = Field(
         None, description="Gender (male, female, neutral, unspecified)"
     )
+    verified_by: str | None = Field(
+        None,
+        description=(
+            "Provenance of accessibility claim "
+            "(e.g., 'source_gdb_use_type', 'facilities_audit_2026')"
+        )
+    )
+    verified_date: str | None = Field(
+        None,
+        description="ISO 8601 date source was verified (e.g., '2026-08-29'). "
+                    "Records source provenance, not ETL run date."
+    )
     centroid_26910: str = Field(
         ..., description=f"Centroid geometry in {CRS_NATIVE} (WKT/binary)"
+    )
+    centroid_method: str = Field(
+        ...,
+        description="Method used to derive centroid: 'geometry_centroid' or "
+                    "'envelope_center_fallback'"
     )
     geom_26910: str = Field(
         ..., description=f"Polygon geometry in {CRS_NATIVE} (WKT/binary)"
@@ -79,10 +104,22 @@ class LandmarkSchema(BaseModel):
 class DetailSchema(BaseModel):
     """Schema for the Detail output table.
 
-    Represents architectural details from the Details layer.
+    Represents architectural details from the Details layer (excludes doors).
     """
     detail_id: str = Field(..., description="Unique detail identifier")
     use_type: str = Field(..., description="Detail USE_TYPE from source GDB")
+    level_id: str = Field(..., description="Foreign key to Level")
+    geom_26910: str = Field(..., description=f"Geometry in {CRS_NATIVE} (WKT or binary)")
+    geom_wgs84: str = Field(..., description=f"Geometry in {CRS_WEB} (WKT or binary)")
+
+
+class DoorSchema(BaseModel):
+    """Schema for the Door output table.
+
+    Represents door features (USE_TYPE='ADO') split from Details for instruction hints.
+    """
+    door_id: str = Field(..., description="Unique door identifier")
+    use_type: str = Field(..., description="Door USE_TYPE from source GDB (always 'ADO')")
     level_id: str = Field(..., description="Foreign key to Level")
     geom_26910: str = Field(..., description=f"Geometry in {CRS_NATIVE} (WKT or binary)")
     geom_wgs84: str = Field(..., description=f"Geometry in {CRS_WEB} (WKT or binary)")

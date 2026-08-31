@@ -400,10 +400,11 @@ All units populate this field; it makes the approximation transparent to downstr
 DT-010, API). This is **spatial data provenance**, not an accessibility claim (accessibility
 provenance is tracked via `verified_by`/`verified_date` fields).
 
-**Source geometry remains untouched.** `geom_26910` and `geom_wgs84` store the toxic
-`GEOMETRYCOLLECTION()` as-is; the centroid fallback affects only the derived `centroid_26910` field.
-This preserves the audit trail (why was the fallback needed?) and allows future reprocessing if the
-source geometry is corrected.
+**No replacement geometry is fabricated.** The centroid fallback affects only the derived
+`centroid_26910` field. OGR materializes a nonempty surface from this toxic geometry's finite
+envelope when rewriting it, so the normalized row stores `geom=NULL` for this known source feature.
+The raw DT-003 layer retains the extracted `GEOMETRYCOLLECTION()` and finite envelope for the audit
+trail and future reprocessing if the source is corrected.
 
 **Expected occurrence:** Rare (1 out of 1017 searchable units in current data). Build logs a warning
 when fallback is applied, listing the `unit_id` and envelope bounds for manual review. No build

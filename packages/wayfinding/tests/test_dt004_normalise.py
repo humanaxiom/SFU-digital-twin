@@ -956,7 +956,7 @@ class TestUnitCentroidProvenance:
         - centroid_method = 'envelope_center_fallback'
         - centroid_26910 WKT is POINT Z or POINT at x=506011.7248, y=5458491.1155
           within 0.01 m tolerance (accounting for floating-point precision)
-        - Source geom remains toxic GEOMETRYCOLLECTION() (unmodified)
+        - Normalized geom is null or empty, never a fabricated surface
         """
         import yaml
 
@@ -975,8 +975,9 @@ class TestUnitCentroidProvenance:
             "ogrinfo",
             str(temp_gpkg),
             "-sql",
-            "SELECT unit_id, centroid_method, ST_AsText(centroid_26910) as centroid_wkt, "
-            "ST_GeometryType(geom) as geom_type FROM unit_26910 "
+            "SELECT unit_id, centroid_method, centroid_26910 as centroid_wkt, "
+            "CASE WHEN geom IS NULL OR ST_IsEmpty(geom) THEN 1 ELSE 0 END "
+            "as geom_is_absent FROM unit_26910 "
             "WHERE unit_id = 'SFU_BURNABY_QUAD_2000_2017'",
             "-q",
         ]
@@ -986,15 +987,15 @@ class TestUnitCentroidProvenance:
         # Parse output
         centroid_method = None
         centroid_wkt = None
-        geom_type = None
+        geom_is_absent = None
 
         for line in output.splitlines():
             if "centroid_method (String)" in line and "=" in line:
                 centroid_method = line.split("=")[1].strip()
             elif "centroid_wkt (String)" in line and "=" in line:
                 centroid_wkt = line.split("=")[1].strip()
-            elif "geom_type (String)" in line and "=" in line:
-                geom_type = line.split("=")[1].strip()
+            elif "geom_is_absent (" in line and "=" in line:
+                geom_is_absent = line.split("=")[1].strip()
 
         assert centroid_method is not None, (
             "Could not query SFU_BURNABY_QUAD_2000_2017 (unit not found or query failed)"
@@ -1031,11 +1032,8 @@ class TestUnitCentroidProvenance:
             f"(diff: {abs(y - expected_y):.6f} m, tolerance: {tolerance} m)"
         )
 
-        # Verify source geom remains toxic (GEOMETRYCOLLECTION)
-        assert geom_type is not None, "Could not determine geometry type"
-        assert "GEOMETRYCOLLECTION" in geom_type.upper() or "COLLECTION" in geom_type.upper(), (
-            f"Source geometry should remain toxic GEOMETRYCOLLECTION, got {geom_type}. "
-            "ADR-0003 §8: source geom must remain unmodified to preserve audit trail."
+        assert geom_is_absent == "1", (
+            "Normalized toxic geometry must remain null/empty; no surface may be fabricated"
         )
 
 
