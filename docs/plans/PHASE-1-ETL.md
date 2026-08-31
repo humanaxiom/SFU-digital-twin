@@ -176,36 +176,39 @@ then build a raw undirected graph with one edge per feature.
 
 ### DT-006: Add Transition Edges to Graph
 
+**Status:** ✅ Complete & Approved (Judge verdict `APPROVE`, 2026-08-31)
+
 **Description:** Augment the raw graph with vertical transition edges parsed from the 63 Transition
 features, linking nodes across `VERTICAL_ORDER_FROM` and `VERTICAL_ORDER_TO`.
 
-**Input:** DT-005 (`build/graph_raw.pkl`, `build/node_map.pkl`), normalised `Transitions_26910` layer from DT-003.
+**Input:** DT-005 (`build/graph_raw.pkl`, `build/node_map.pkl`), raw `Transitions_26910` layer from DT-003.
 
 **Output:**
-- Updated `packages/wayfinding/src/wayfinding/etl/graph.py::add_transitions(graph, transitions_layer)`
-- `build/graph_with_transitions.pkl` — raw graph + transition edges
+- Updated `packages/wayfinding/src/wayfinding/etl/graph.py` with `add_transitions()` function
+- `build/graph_with_transitions.pkl` — 15,587 nodes, 44,952 directed arcs (44,826 pathway + 84 stairs + 42 elevator), 12.6 MB
+- `build/graph_with_transitions_stats.json` — cross-level connectivity metadata per ADR-0005
+- `Makefile` `etl-graph-transitions` target
+- Test suite `packages/wayfinding/tests/test_dt006_transitions.py` (212 passed, 2 pre-existing skips,
+  88.19% coverage)
 
 **Acceptance Criteria:**
-1. ✅ 63 transition features become 63 directed edge pairs (126 edges total, because
-   `TRAVEL_DIRECTION=1` for all).
-2. ✅ Edge attributes: `{mode='stairs'|'elevator', length_3d, vertical_order_from, vertical_order_to,
-   feature_id}`.
-3. ✅ Test `test_transition_endpoints_protected` asserts all transition endpoints are marked with a
-   node attribute `is_transition_endpoint=True` (prevents contraction in DT-007).
-4. ✅ **Measured validation** (ADR-0005): The pinned fixture reproduces 816 default-profile
-   components and 840 elevator-only components from the 855-component pathway baseline. Generic
-   checks reject increased component counts or a transition mode that bridges no components.
-5. ✅ Express elevators (spanning >1 vertical_order delta) are handled: 2 features span
-   `vertical_order 0→2`; validate they produce single edges, not intermediate hops.
+1. ✅ 63 transition features become 126 directed edges (63 × 2 directions, all `TRAVEL_DIRECTION=1`).
+2. ✅ Edge attributes: `{mode='stairs'|'elevator', length_3d, level_id_from, level_id_to, vertical_order_from, vertical_order_to, feature_id, geometry: LineString}`. Transition type mapping: `TRANSITION_TYPE=2` → `mode='stairs'` (42 features, 84 arcs), `TRANSITION_TYPE=4` → `mode='elevator'` (21 features, 42 arcs).
+3. ✅ All 85 unique transition endpoints marked with node attribute `is_transition_endpoint=True` (prevents contraction in DT-007). 5 transition-only nodes added with complete node-attribute contract.
+4. ✅ **Measured validation** (ADR-0005): Default routing profile (pathways + stairs + elevators) yields 816 connected components (down from 855 pathway-only baseline), largest component 7,436 nodes, 39 components bridged by transitions (24 stairs-only contributions). The elevator-only, stairs-excluded profile yields 840 components, largest component 7,060 nodes, and 15 components bridged by elevators. Non-regression enforced: component count must not increase, each transition mode must bridge ≥1 component.
+5. ✅ Express elevators handled: 2 features span `vertical_order 0→2` as single edges without intermediate hops.
 
 **Measured baseline (ADR-0005):**
-- Pathway-only graph (DT-005): **855 undirected components**
-- After adding all transitions: **816 components** (39 transitions bridged components)
+- Pathway-only graph (DT-005): **855 connected components** (severe fragmentation from data-collection gaps or topology errors)
+- After adding all transitions: **816 components** (39 transitions bridged components, 24 stairs-only contributions)
 - Accessible profile (elevators only): **840 components** (15 elevator transitions bridged components)
-- Global connectivity is informational in DT-006; measured regression and no-op checks are hard.
-   DT-009 owns topology-repair disposition and the unit-to-component catalog.
+- **Routing explicitly limited to within-component origin/destination pairs.** Global connectivity not required; DT-009 owns topology-repair disposition and unit-to-component catalog.
+- **Accessible routing:** Elevator-only (stairs excluded), no wheelchair certification implied, unverified attributes (door_width, path_width, slope, powered_doors, surface) pending facilities survey per system design §4.2 and accessibility-claims instruction.
 
-**Expected Effort:** S (2 days)
+**Delivered:** 212 tests passed, 2 pre-existing skips, 88.19% coverage, lint/type clean, data-QA PASS
+(30 checks), judge APPROVE. Commits: 2233feb, 0c89ce4, 031fc5c.
+
+**Expected Effort:** S (2 days) — *Delivered*
 
 ---
 

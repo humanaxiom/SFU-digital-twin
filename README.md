@@ -69,10 +69,14 @@ they disagree with `ogrinfo`, **`ogrinfo` is authoritative** (see the note in
 
 Phase 0 complete: data profiled, findings documented, system designed, and the delivery harness
 scaffolded (`.github/`, `docs/DOD.md`, `docs/HANDOFF.md`). **Phase 1 ETL in progress:** DT-001
-through DT-005 complete (package skeleton, ETL infrastructure, extraction, normalisation, and raw
-pathway-graph construction). The `packages/wayfinding/` package now contains working ETL code
-producing `build/wayfinding.gpkg` (26 layers: 14 raw + 12 normalised dual-CRS) and graph artifacts
-`build/graph_raw.pkl` (15,582 nodes, 44,826 pathway arcs), `build/node_map.pkl` (44,978
-endpoints), and `build/graph_raw_stats.json`. Next: DT-006 (Add Transition Edges). See
+through DT-006 complete (package skeleton, ETL infrastructure, extraction, normalisation, raw
+pathway-graph construction, and transition-edge integration). The `packages/wayfinding/` package now
+contains working ETL code producing `build/wayfinding.gpkg` (26 layers: 14 raw + 12 normalised
+dual-CRS) and graph artifacts `build/graph_with_transitions.pkl` (15,587 nodes, 44,952 arcs: 44,826
+pathway + 84 stairs + 42 elevator), `build/node_map.pkl` (44,978 endpoints), and
+`build/graph_with_transitions_stats.json`. Graph exhibits 816 connected components (default) and 840
+(elevator-only, stairs-excluded) due to fragmentation documented in ADR-0005; routing is limited to
+connected regions. This is not wheelchair certification; door width, path width, slope, powered
+doors, and surface remain unverified. Next: DT-007 (Contract Degree-2 Chains). See
 [delivery phases](docs/02-system-design.md#11-delivery-phases) and
 [docs/HANDOFF.md](docs/HANDOFF.md) for current state and next steps.
