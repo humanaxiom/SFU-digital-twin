@@ -113,8 +113,12 @@ This is the core of the ETL and the step the data most requires (mean segment le
 
 1. **Snap nodes.** Round every pathway/transition endpoint to a 1 cm grid in (x, y, `vertical_order`).
    Z alone is unreliable for identity; `vertical_order` is the authoritative level discriminator.
-2. **Build the raw graph.** One undirected edge per feature — justified because `TRAVEL_DIRECTION = 1`
-   for *all* 22,426 pathways and all 63 transitions. Weight = `LENGTH_3D` (100 % populated).
+   Node IDs are the snapped coordinate tuples themselves (deterministic, stable, self-documenting —
+   see ADR-0004).
+2. **Build the raw graph.** NetworkX `MultiDiGraph` with bidirectional edges (two directed arcs per
+   feature) — justified because `TRAVEL_DIRECTION = 1` for *all* 22,426 pathways and all 63
+   transitions. Weight = `LENGTH_3D` (100% populated). Multi-directed representation supports future
+   one-way features and allows parallel edges before contraction (ADR-0004).
 3. **Add transition edges.** `Transitions` connect nodes across `VERTICAL_ORDER_FROM/TO`, tagged
    `mode = stairs | elevator` from `TRANSITION_TYPE` (2 / 4).
 4. **Contract degree-2 chains.** Collapse runs of degree-2 nodes into a single edge carrying the full
