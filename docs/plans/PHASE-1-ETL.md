@@ -67,7 +67,7 @@ define the controlled-vocabulary YAML mapping USE_TYPE → category.
 
 ### DT-003: Extract Layers to GeoPackage
 
-**Status:** 🔄 In Progress — TDD RED Phase (Plan in [docs/plans/DT-003.md](DT-003.md), test suite committed at `packages/wayfinding/tests/test_dt003_extract.py`)
+**Status:** ✅ Complete & Approved (Judge verdict `APPROVE`, 2026-08-30)
 
 **Description:** Use `ogr2ogr` to extract all AIIM layers from the File Geodatabase into a working
 GeoPackage, preserving native EPSG:26910 for computation and adding an EPSG:4326 copy for web
@@ -76,10 +76,10 @@ display.
 **Input:** DT-002 (ETL container + schema), source GDB at `/data/IndoorWayfinding.gdb`.
 
 **Output:**
-- `build/wayfinding.gpkg` containing 7 layers (Facilities, Levels, Units, Pathways, Transitions,
-  Landmarks, Details) in EPSG:26910, plus 7 corresponding `_wgs84` layers in EPSG:4326
-- `packages/wayfinding/src/wayfinding/etl/extract.py` with a function `extract_to_gpkg(gdb_path,
-  gpkg_path)` wrapping `ogr2ogr` calls
+- `build/wayfinding.gpkg` containing 14 layers: 7 in EPSG:26910 (3D, native CRS) and 7 in EPSG:4326 (2D, web display)
+- `packages/wayfinding/src/wayfinding/etl/extract.py` with `extract_to_gpkg(gdb_path, gpkg_path, layers, overwrite)` function
+- `Makefile` target `etl-extract` wrapping containerised extraction
+- Test suite `packages/wayfinding/tests/test_dt003_extract.py` (29 tests, 51 passed/2 skipped, 95.52% coverage)
 
 **Acceptance Criteria:**
 1. ✅ `extract.py::extract_to_gpkg()` runs `ogr2ogr` for each layer, preserving 3D geometry and
@@ -87,14 +87,16 @@ display.
 2. ✅ Output GeoPackage has 14 layers: 7 native (suffix `_26910`) and 7 web (suffix `_wgs84`).
 3. ✅ Test `test_extract_feature_counts` asserts extracted feature counts match
    [docs/generated/gdb-profile.txt](../generated/gdb-profile.txt): Facilities 3, Levels 11, Units
-   1210, Pathways 22426, Transitions 63, Landmarks 41, Details 55593.
+   1210, Pathways 22426, Transitions 63, Landmarks 41, Details 55593 (158,694 total records across dual CRS copies).
 4. ✅ Test `test_extract_crs` asserts all `_26910` layers are EPSG:26910 and all `_wgs84` layers are
    EPSG:4326.
 5. ✅ Extraction is deterministic: running twice produces byte-identical GeoPackages (modulo SQLite
    page timestamps).
 6. ✅ No write to the source GDB (verified by `tests/gate/test_gdb_readonly.sh` passing).
 
-**Expected Effort:** S (2 days)
+**Delivered:** 14 layers, 158,694 records, 51 tests passed/2 skipped, 95.52% coverage, lint/type clean, data-QA PASS, judge APPROVE.
+
+**Expected Effort:** S (2 days) — *Delivered*
 
 ---
 
@@ -108,8 +110,13 @@ into the GeoPackage.
 `schema.py`).
 
 **Output:**
-- 5 normalised tables written to `build/wayfinding.gpkg`: `facility`, `level`, `unit`, `landmark`,
-  `detail`
+- **6 normalised tables** written to `build/wayfinding.gpkg` **alongside the 14 raw layers** from
+  DT-003: `facility` (3 rows), `level` (11 rows), `unit` (1017 rows), `landmark` (40 rows),
+  `detail` (48,728 rows), `door` (6,865 rows). Total: 56,664 normalized records. Stored as **12
+  GeoPackage layers** (dual CRS pairs: `<table>_26910` and `<table>_wgs84`) per
+  [ADR-0003](../adr/0003-normalised-etl-schema-and-dual-crs-storage.md).
+- Raw `Pathways_26910` and `Transitions_26910` layers remain intact for DT-005 graph construction.
+- Final layer count after DT-004: 14 (raw) + 12 (normalised) = **26 layers**.
 - `packages/wayfinding/src/wayfinding/etl/normalise.py` with functions `normalise_facilities()`,
   `normalise_levels()`, `normalise_units()`, `normalise_landmarks()`, `normalise_details()`
 
@@ -119,14 +126,17 @@ into the GeoPackage.
    geom_26910, geom_wgs84`; `vertical_order` matches
    [docs/01-data-findings.md §3 table](../01-data-findings.md#3-facilities-and-levels).
 3. ✅ `unit` table: 1017 rows (only `SEARCHABLE='Y'`), columns `unit_id, room_id, level_id,
-   use_type, category, accessible, gender, centroid_26910, geom_26910, geom_wgs84`.
+   use_type, category, accessible, gender, verified_by, verified_date, centroid_26910, geom_26910,
+   geom_wgs84`. Accessibility provenance per ADR-0003.
 4. ✅ `unit.category` populated from `category_mapping.yaml`; test `test_category_coverage` asserts
    no null categories for searchable units.
-5. ✅ `landmark` table: deduplicated on `(category, level_id, 0.5 m cluster)` and category parsed
-   from `DESCRIPTION` regex (`Water Fountain|Vending Machine`). Expect ~25 rows (down from 41 due to
-   duplicates — see [docs/01-data-findings.md §7](../01-data-findings.md#7-landmarks)).
-6. ✅ `detail` table: 55593 rows; `use_type='ADO'` (doors) split into its own table `door` for
-   instruction hints.
+5. ✅ `landmark` table: **40 rows** (down from 41 source features due to exactly one duplicate pair
+   found at 0.250728 m). Deduplicated on `(category, level_id, 0.5 m cluster)` using greedy
+   first-point-wins algorithm (ADR-0003) and category parsed from `DESCRIPTION` regex
+   (`Water Fountain|Vending Machine`).
+6. ✅ `detail` table: 48,728 rows; `door` table: 6,865 rows. `use_type='ADO'` (doors) split into
+   separate `door` table for instruction hints. `normalise_details()` returns
+   `{"detail": 48728, "door": 6865}`.
 7. ✅ Test `test_normalise_vertical_order_invariant` asserts every unit's `level_id` maps to exactly
    one `vertical_order` and facility-level pairs are unique.
 
@@ -302,7 +312,7 @@ network-distance ranking).
   geom_wgs84_wkt}`
 
 **Acceptance Criteria:**
-1. ✅ FTS5 index contains 1017 units + ~25 landmarks + 3 facilities = ~1045 rows.
+1. ✅ FTS5 index contains 1017 units + 40 landmarks + 3 facilities = 1060 rows.
 2. ✅ `terms` column includes all searchable text: `room_id` (e.g. "AQ3150"), tokenised room_id
    ("AQ 3150"), `category`, `use_type`, level short name, facility name.
 3. ✅ Test `test_search_exact_room_id` searches for "AQ3150", asserts the correct unit is ranked
