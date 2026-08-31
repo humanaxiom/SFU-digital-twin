@@ -69,7 +69,10 @@ they disagree with `ogrinfo`, **`ogrinfo` is authoritative** (see the note in
 
 Phase 0 complete: data profiled, findings documented, system designed, and the delivery harness
 scaffolded (`.github/`, `docs/DOD.md`, `docs/HANDOFF.md`). **Phase 1 ETL in progress:** DT-001
-through DT-004 complete (package skeleton, ETL infrastructure, extraction, and normalisation). The
-`packages/wayfinding/` package now contains working ETL code producing `build/wayfinding.gpkg` with
-26 layers (14 raw + 12 normalised dual-CRS). See [delivery phases](docs/02-system-design.md#11-delivery-phases)
-and [docs/HANDOFF.md](docs/HANDOFF.md) for current state and next steps.
+through DT-005 complete (package skeleton, ETL infrastructure, extraction, normalisation, and raw
+pathway-graph construction). The `packages/wayfinding/` package now contains working ETL code
+producing `build/wayfinding.gpkg` (26 layers: 14 raw + 12 normalised dual-CRS) and graph artifacts
+`build/graph_raw.pkl` (15,582 nodes, 44,826 pathway arcs), `build/node_map.pkl` (44,978
+endpoints), and `build/graph_raw_stats.json`. Next: DT-006 (Add Transition Edges). See
+[delivery phases](docs/02-system-design.md#11-delivery-phases) and
+[docs/HANDOFF.md](docs/HANDOFF.md) for current state and next steps.
