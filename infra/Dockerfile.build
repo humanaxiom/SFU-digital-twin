@@ -1,0 +1,15 @@
+FROM ghcr.io/osgeo/gdal@sha256:3019206fdf42cfd9fb056877248c60230e0e51781e7af3c6f0e15d9756ff9c34
+
+USER root
+
+COPY infra/requirements.lock /tmp/requirements.lock
+
+RUN apt-get update -qq \
+    && apt-get install -y --no-install-recommends libatomic1 python3-pip python-is-python3 \
+    && pip3 install --break-system-packages --ignore-installed --no-cache-dir --require-hashes -r /tmp/requirements.lock \
+    && pyright --version \
+    && rm -rf /var/lib/apt/lists/* /tmp/requirements.lock
+
+WORKDIR /workspace
+
+CMD ["/bin/sh"]

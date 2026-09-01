@@ -1,0 +1,44 @@
+name: Publish build image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - infra/Dockerfile.build
+      - infra/requirements.lock
+      - .github/workflows/publish-build-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        run: docker buildx build --load -f infra/Dockerfile.build -t "$IMAGE:$GITHUB_SHA" .
+      - name: Smoke test image
+        run: |
+          docker run --rm "$IMAGE:$GITHUB_SHA" python --version
+          docker run --rm "$IMAGE:$GITHUB_SHA" ogr2ogr --version
+          docker run --rm "$IMAGE:$GITHUB_SHA" pytest --version
+          docker run --rm "$IMAGE:$GITHUB_SHA" ruff --version
+          docker run --rm "$IMAGE:$GITHUB_SHA" pyright --version
+      - name: Push image and expose digest
+        run: |
+          docker push "$IMAGE:$GITHUB_SHA"
+          digest="$(docker image inspect "$IMAGE:$GITHUB_SHA" --format '{{index .RepoDigests 0}}')"
+          echo "### Published build image" >> "$GITHUB_STEP_SUMMARY"
+          echo "Replace x-build-image in infra/docker-compose.yml with \`$digest\`." >> "$GITHUB_STEP_SUMMARY"
