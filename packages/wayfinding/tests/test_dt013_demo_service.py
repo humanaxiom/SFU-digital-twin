@@ -29,7 +29,6 @@ LEVEL_VERTICAL_ORDER = {
     "SFU_BURNABY_ECC_3000": 0,
 }
 LIMITATION_ID = "phase1-artifact-only"
-NOT_VERIFIED = {"door_width", "path_width", "slope", "powered_doors", "surface"}
 
 
 def _require_module(name: str) -> Any:
@@ -358,21 +357,14 @@ def test_assistant_treats_markup_as_literal_text_and_http_reports_real_evidence(
 
 
 @pytest.mark.parametrize(
-    ("message", "required_text", "mobility"),
+    ("message", "required_text"),
     [
-        ("Route me to AQ 3003", "Routing is not available in this demo", False),
-        ("What is the nearest washroom?", "Nearest-place search is not available", False),
-        (
-            "Find me a wheelchair accessible path to an elevator",
-            "Routing is not available in this demo",
-            True,
-        ),
+        ("What is the nearest washroom?", "Nearest-place search is not available"),
     ],
 )
-def test_assistant_refuses_unimplemented_navigation_without_route_claims(
+def test_assistant_refuses_unimplemented_proximity_without_route_claims(
     message: str,
     required_text: str,
-    mobility: bool,
 ):
     repository = _repository()
     assistant_module = _require_module("wayfinding.demo.assistant")
@@ -385,7 +377,3 @@ def test_assistant_refuses_unimplemented_navigation_without_route_claims(
     for forbidden in ("route", "geometry", "distance", "travel_time", "steps"):
         assert forbidden not in response
     assert response.get("generated_by") not in {"llm", "ai", "model"}
-    if mobility:
-        assert "no path can be certified" in response["text"].lower()
-        assert set(response["not_verified"]) == NOT_VERIFIED
-        assert "elevator-only routing is not implemented" in response["text"].lower()

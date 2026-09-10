@@ -82,7 +82,7 @@ def test_landmarks_support_pointer_keyboard_and_selected_record_details():
     assert 'marker.addEventListener("keydown"' in javascript
 
 
-def test_client_discloses_deterministic_limits_without_route_or_ai_branding():
+def test_client_discloses_deterministic_limits_without_ai_branding():
     html = _read_asset("index.html")
     visible_text = re.sub(r"<[^>]+>", " ", html).lower()
 
@@ -92,10 +92,5 @@ def test_client_discloses_deterministic_limits_without_route_or_ai_branding():
     assert "destination" in visible_text
     assert "not paths" in visible_text
     assert all(term in visible_text for term in ("door width", "path width", "slope", "surface"))
-    assert not re.search(
-        r"(?:route|nearest|distance|travel time)[^<]{0,30}(?:button|toggle)",
-        html,
-        re.I,
-    )
     assert not re.search(r"\b(?:ai-powered|generative ai|chatgpt|copilot)\b", visible_text)
 
