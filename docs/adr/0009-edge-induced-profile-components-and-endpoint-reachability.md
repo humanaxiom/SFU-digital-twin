@@ -1,7 +1,7 @@
 # 9. Edge-induced profile components and endpoint reachability
 
-Status: Accepted  
-Date: 2026-09-10  
+Status: Accepted
+Date: 2026-09-10
 Corrective refinement to: ADR-0008 §4
 
 ## Context
