@@ -20,6 +20,9 @@ build/
 dist/
 *.egg-info/
 
+# Local source geodatabases are immutable inputs and never enter the public repository.
+data/
+
 # CAS-gated Facilities reference files stay local; commit only their usage notes.
 reference/key-plans/*
 !reference/key-plans/README.md
