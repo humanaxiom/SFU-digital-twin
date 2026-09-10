@@ -374,6 +374,22 @@ controlled category vocabulary.
   list (each step an `aria-live` region during guidance), and a text-only route view that works
   without the map.
 
+### 9.1 Bounded stakeholder demo exception
+
+DT-015 does not promote the temporary `/demo/v1` SVG explorer to the production web architecture.
+For an attended demonstration on a trusted private LAN, ADR-0010 permits only the demo port to be
+published on all host interfaces, with an explicit no-auth/plain-HTTP warning, Host validation,
+bounded requests and logs, read-only artifacts, no external assets, and configurable loopback
+rollback. This exception does not authorize internet, open campus, guest-network, or persistent
+deployment.
+
+The demo's manual form, two-room activation, and exact deterministic chat directions make one
+unchanged `POST /demo/v1/route` request and share one response renderer. The browser and assistant
+do not compute routing, distance, reachability, instructions, geometry, or accessibility. The map
+draws only returned per-level graph geometry; approximate room-anchor segments remain unrepresented.
+`elevator_only` continues to mean elevators only and stairs excluded, with `door_width`,
+`path_width`, `slope`, `powered_doors`, and `surface` unverified on success and failure.
+
 ## 10. Validation and evaluation
 
 | Layer | Tests |

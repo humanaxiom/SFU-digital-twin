@@ -67,16 +67,18 @@ def test_demo_compose_mounts_only_the_artifact_read_only():
     assert _is_read_only(workspace_mounts[0])
 
 
-def test_demo_compose_publishes_only_launcher_selected_loopback_port():
+def test_demo_compose_keeps_explicit_loopback_publication_configurable():
     demo = _demo_service()
     ports = demo.get("ports", [])
     rendered_ports = yaml.safe_dump(ports)
 
     assert len(ports) == 1
-    assert "127.0.0.1" in rendered_ports
+    assert "DTWIN_DEMO_BIND_ADDRESS" in rendered_ports
     assert "DTWIN_DEMO_HOST_PORT" in rendered_ports
     assert re.search(r"(?:8080|8000)", rendered_ports)
-    assert "0.0.0.0" not in rendered_ports
+    assert "127.0.0.1" not in rendered_ports, (
+        "loopback rollback must be selected with DTWIN_DEMO_BIND_ADDRESS, not hard-coded"
+    )
 
 
 def test_demo_compose_runs_checked_in_module_without_runtime_install():
