@@ -1,4 +1,4 @@
-.PHONY: image-build test test-launchers lint type dataqa dataqa-source etl etl-extract etl-normalise etl-graph-raw etl-graph-transitions etl-graph-contract
+.PHONY: image-build test dt014 test-launchers lint type dataqa dataqa-source etl etl-extract etl-normalise etl-graph-raw etl-graph-transitions etl-graph-contract
 
 COMPOSE_FILES ?= -f infra/docker-compose.yml
 
@@ -7,6 +7,9 @@ image-build:
 
 test:
 	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests
+
+dt014:
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests/test_dt014_routing.py packages/wayfinding/tests/test_dt014_static_client.py packages/wayfinding/tests/test_dt014_demo_deployment.py --no-cov
 
 test-launchers:
 	docker compose $(COMPOSE_FILES) run --rm artifact sh tests/gate/test_launch_stack.sh

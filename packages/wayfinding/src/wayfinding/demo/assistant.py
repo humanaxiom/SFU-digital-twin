@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .artifact import ArtifactRepository
+from .routing import RoutingService
 
 LIMITATIONS_ID = "phase1-artifact-only"
 NOT_VERIFIED = ["door_width", "path_width", "slope", "powered_doors", "surface"]
@@ -43,9 +45,11 @@ def respond(
     message: str,
     facility_id: str | None = None,
     level_id: str | None = None,
+    routing_service: RoutingService | None = None,
 ) -> dict[str, Any]:
     """Return a deterministic response derived only from the artifact and map context."""
-    normalized = " ".join(message.split()).casefold()
+    compact = " ".join(message.split())
+    normalized = compact.casefold()
     mobility = any(
         term in normalized
         for term in ("accessible", "accessibility", "wheelchair", "mobility", "step-free")
@@ -53,6 +57,15 @@ def respond(
     routing = any(term in normalized for term in ("route", "directions", "path", "get me to"))
     nearest = any(term in normalized for term in ("nearest", "closest"))
     travel = any(term in normalized for term in ("distance", "travel time", "how far", "how long"))
+
+    directions = re.fullmatch(
+        r"(?:wheelchair\s+|mobility\s+|accessible\s+|step-free\s+)?directions\s+from\s+(\S+)\s+to\s+(\S+)",
+        compact,
+        re.IGNORECASE,
+    )
+    if directions and routing_service is not None:
+        profile = "elevator_only" if mobility else "default"
+        return routing_service.route(directions.group(1), directions.group(2), profile)
 
     if routing or travel or mobility:
         text = ROUTING_REFUSAL

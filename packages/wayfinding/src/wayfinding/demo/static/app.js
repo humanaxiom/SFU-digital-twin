@@ -12,8 +12,19 @@ const assistantInput = document.querySelector("#assistant-input");
 const assistantResponse = document.querySelector("#assistant-response");
 const assistantEvidence = document.querySelector("#assistant-evidence");
 const artifactHash = document.querySelector("#artifact-hash");
+const graphHash = document.querySelector("#graph-hash");
+const routeForm = document.querySelector("#route-form");
+const routeOrigin = document.querySelector("#route-origin");
+const routeDestination = document.querySelector("#route-destination");
+const routeProfile = document.querySelector("#route-profile");
+const routeStatus = document.querySelector("#route-status");
+const routeSteps = document.querySelector("#route-steps");
+const routeAccessibility = document.querySelector("#route-accessibility");
 let facilitiesById = new Map();
 let levelsByOrder = new Map();
+let allLevels = [];
+let activeRoute = null;
+let activeStep = 0;
 
 function element(name, attributes = {}) {
   const node = document.createElementNS(svgNamespace, name);
@@ -31,7 +42,11 @@ function option(value, label) {
 async function request(path, options) {
   const response = await fetch(path, options);
   const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "The artifact request failed.");
+  if (!response.ok) {
+    const error = new Error(body.error || body.code || "The artifact request failed.");
+    error.payload = body;
+    throw error;
+  }
   return body;
 }
 
@@ -157,6 +172,9 @@ function renderScene(scene) {
     layers[3].append(marker);
   });
   floorMap.append(...layers);
+  const routeOverlay = element("g", { id: "route-overlay" });
+  floorMap.append(routeOverlay);
+  renderRouteOverlay(scene.level.level_id);
 
   const buttons = scene.units.map((item) => {
     const button = document.createElement("button");
@@ -201,6 +219,7 @@ function updateFacilities() {
 }
 
 function initializeFloorControls(levels) {
+  allLevels = levels;
   levelsByOrder = levels.reduce((groups, level) => {
     const values = groups.get(level.vertical_order) || [];
     values.push(level);
@@ -218,6 +237,80 @@ function initializeFloorControls(levels) {
   if (levelsByOrder.has(0)) levelSelect.value = "0";
   updateFacilities();
 }
+
+async function selectLevel(levelId) {
+  const level = allLevels.find((item) => item.level_id === levelId);
+  if (!level) return;
+  const aligned = levelsByOrder.get(level.vertical_order) || [];
+  levelSelect.value = String(level.vertical_order);
+  updateFacilities();
+  if (aligned.some((item) => item.facility_id === level.facility_id)) {
+    facilitySelect.value = level.facility_id;
+  }
+  await loadScene();
+}
+
+function renderRouteOverlay(levelId) {
+  const overlay = document.querySelector("#route-overlay");
+  if (!overlay) return;
+  overlay.replaceChildren();
+  if (!activeRoute?.geometries) return;
+  activeRoute.geometries
+    .filter((item) => item.level_id === levelId)
+    .forEach((item) => overlay.append(svgPath(item, "route-segment")));
+}
+
+function renderRoute(body) {
+  activeRoute = body.status === 200 ? body : null;
+  activeStep = 0;
+  routeAccessibility.hidden = body.profile !== "elevator_only";
+  routeSteps.replaceChildren();
+  if (body.status !== 200) {
+    routeStatus.textContent = `${body.code}: no measured graph route is available for these anchors.`;
+    renderRouteOverlay(activeLevel()?.level_id);
+    return;
+  }
+  routeStatus.textContent = `${body.network_distance_m.toFixed(1)} m graph-only route over ${body.edge_ids.length} measured edges. Origin attachment ${body.origin.attachment_distance_m.toFixed(1)} m; destination attachment ${body.destination.attachment_distance_m.toFixed(1)} m.`;
+  const items = body.steps.map((step, index) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = step.instruction;
+    button.classList.toggle("active", index === activeStep);
+    button.addEventListener("click", async () => {
+      activeStep = index;
+      routeSteps.querySelectorAll("button").forEach((node, position) => node.classList.toggle("active", position === activeStep));
+      await selectLevel(step.level_id);
+    });
+    item.append(button);
+    return item;
+  });
+  routeSteps.replaceChildren(...items);
+  selectLevel(body.steps[0].level_id);
+}
+
+routeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  routeStatus.textContent = "Computing the deterministic graph route...";
+  try {
+    const body = await request("/demo/v1/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin: { unit_id: routeOrigin.value },
+        destination: { unit_id: routeDestination.value },
+        profile: routeProfile.value,
+      }),
+    });
+    renderRoute(body);
+  } catch (error) {
+    renderRoute(error.payload || { status: 500, code: error.message });
+  }
+});
+
+routeProfile.addEventListener("change", () => {
+  routeAccessibility.hidden = true;
+});
 
 assistantForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -256,10 +349,19 @@ async function initialize() {
       request("/demo/v1/levels"),
     ]);
     artifactHash.textContent = health.artifact_sha256;
+    graphHash.textContent = health.provenance?.graph_sha256 || "Unavailable";
     facilitiesById = new Map(
       facilities.facilities.map((facility) => [facility.facility_id, facility]),
     );
     initializeFloorControls(levels.levels);
+    const units = await request("/demo/v1/units");
+    const routeOptions = units.units.map((unit) => option(
+      unit.unit_id,
+      `${unit.room_id || unit.unit_id} · ${unit.level_id}`,
+    ));
+    routeOrigin.replaceChildren(...routeOptions.map((item) => item.cloneNode(true)));
+    routeDestination.replaceChildren(...routeOptions);
+    if (routeDestination.options.length > 1) routeDestination.selectedIndex = 1;
     await loadScene();
   } catch (error) {
     setStatus(error.message);

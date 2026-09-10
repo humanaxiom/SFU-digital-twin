@@ -83,10 +83,12 @@ and prints the demo URL, normally `http://127.0.0.1:18007/`. Open that URL for t
 artifact-backed floor explorer and deterministic data assistant.
 
 The demo renders normalized room, detail, and landmark geometry from `build/wayfinding.gpkg` and
-supports room/landmark selection plus bounded artifact lookups. It is not an LLM and does not
-provide routes, nearest-place ranking, distances, travel times, live status, or path-accessibility
-claims. Destination accessibility tags do not verify door width, path width, slope, powered doors,
-or surface conditions.
+supports deterministic indoor routes over `build/graph_contracted.pkl`. Routes connect disclosed
+approximate same-level room anchors within measured graph components; room-to-anchor traversal is
+not represented or verified. The elevator-only profile excludes stairs but does not verify door
+width, path width, slope, powered doors, surface, closures, opening hours, door access, or elevator
+status. The demo has no public-map geometry, nearest-place ranking, travel-time estimate, live
+status, or LLM dependency.
 
 To start the containers and then run the test, lint, type, and artifact data-QA gates, add the test
 option:
@@ -126,14 +128,14 @@ they disagree with `ogrinfo`, **`ogrinfo` is authoritative** (see the note in
 
 Phase 0 complete: data profiled, findings documented, system designed, and the delivery harness
 scaffolded (`.github/`, `docs/DOD.md`, `docs/HANDOFF.md`). **Phase 1 ETL in progress:** DT-001
-through DT-006 complete (package skeleton, ETL infrastructure, extraction, normalisation, raw
-pathway-graph construction, and transition-edge integration). The `packages/wayfinding/` package now
+through DT-007 are complete, and DT-013/DT-014 provide the local artifact-backed explorer and
+bounded routing proof of concept. The `packages/wayfinding/` package now
 contains working ETL code producing `build/wayfinding.gpkg` (26 layers: 14 raw + 12 normalised
 dual-CRS) and graph artifacts `build/graph_with_transitions.pkl` (15,587 nodes, 44,952 arcs: 44,826
 pathway + 84 stairs + 42 elevator), `build/node_map.pkl` (44,978 endpoints), and
 `build/graph_with_transitions_stats.json`. Graph exhibits 816 connected components (default) and 840
 (elevator-only, stairs-excluded) due to fragmentation documented in ADR-0005; routing is limited to
 connected regions. This is not wheelchair certification; door width, path width, slope, powered
-doors, and surface remain unverified. Next: DT-007 (Contract Degree-2 Chains). See
+doors, and surface remain unverified. Revised-source profiling and promotion remain deferred. See
 [delivery phases](docs/02-system-design.md#11-delivery-phases) and
 [docs/HANDOFF.md](docs/HANDOFF.md) for current state and next steps.

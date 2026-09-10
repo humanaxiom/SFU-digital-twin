@@ -133,14 +133,27 @@ This is the core of the ETL and the step the data most requires (mean segment le
   nodes to be removed.
 5. **Connect destinations.** For each `unit`, project its centroid to the nearest pathway node on the
    same `level_id` and add a zero-cost connector edge. Record the connector so instructions can say
-   "AQ 3150 is on your left".
-6. **Validate.** Report connected components per profile. The measured pathway baseline is 855
-  components; contraction preserves the DT-006 profile counts exactly: 816 for the default profile
-  and 840 for the elevator-only, stairs-excluded profile. On the pinned fixture, all 20 deterministic
-  shortest-path comparisons are exact (maximum distance delta 0.0 m). Reject regressions and no-op
-  transition modes, but do not require global connectivity. A unit-to-component catalog enables
-  explicit query-time no-route results. Topology repair is deferred beyond Phase 1; elevator-only,
-  stairs-excluded routing is not wheelchair certification
+  "AQ 3150 is on your left". This remains the future product invariant. The bounded DT-014 PoC uses
+  ADR-0008 non-traversal approximate room anchors instead: it adds no connector geometry or graph
+  edges, does not treat the room-to-anchor segment as traversable, and does not claim full product
+  compliance.
+6. **Validate.** Report edge-induced connected components per profile: count only nodes incident to
+  an allowed edge. The measured pathway baseline is 855 components; contraction preserves the
+  DT-006 profile counts exactly: 816 for the default profile and 840 for the elevator-only,
+  stairs-excluded profile. On the pinned fixture, all 20 deterministic shortest-path comparisons
+  are exact (maximum distance delta 0.0 m). Reject regressions and no-op transition modes, but do not
+  require global connectivity. A query-time catalog gives every endpoint a profile-scoped
+  `reachability_id` and `reachability_kind`; its counted `component_id` is null when the anchor is
+  isolated under that profile. Prechecks compare reachability IDs. The same isolated anchor permits
+  a zero-edge route, while distinct identities return a profile-specific `409` without search.
+  Accepted-artifact evidence publishes a deterministic isolated-node inventory and count per
+  profile and the count of eligible searchable unit endpoints anchored to those nodes. The accepted
+  DT-014 artifacts have three `elevator_only` isolated graph nodes and zero such endpoint anchors,
+  so an isolated same-anchor artifact fixture is required only if actual eligible endpoints exist;
+  synthetic unit tests retain zero-edge semantic coverage. IDs and evidence use canonical RFC 8785
+  JSON and SHA-256 as defined by
+  [ADR-0009](adr/0009-edge-induced-profile-components-and-endpoint-reachability.md). Topology repair
+  is deferred beyond Phase 1; elevator-only, stairs-excluded routing is not wheelchair certification
   ([ADR-0005](adr/0005-measured-connectivity-baseline-and-validation-gates.md)).
 
 Artifacts: `graph.pkl` (NetworkX), `wayfinding.gpkg`, `search.sqlite`, `basemap.pmtiles`, and a

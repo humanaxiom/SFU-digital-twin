@@ -18,6 +18,7 @@
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: hidden;
   color: var(--ink);
   background-color: var(--paper);
   background-image: linear-gradient(rgba(24, 35, 33, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(24, 35, 33, .045) 1px, transparent 1px);
@@ -74,6 +75,7 @@ main { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(19rem, .8fr
 .detail-shape { fill: none; stroke: #aab1ae; stroke-width: .35; vector-effect: non-scaling-stroke; pointer-events: none; }
 .unit-shape { fill: #c7dfd8; stroke: var(--teal-dark); stroke-width: .45; vector-effect: non-scaling-stroke; cursor: pointer; }
 .unit-shape:hover, .unit-shape:focus, .unit-shape.selected { fill: var(--coral); outline: none; }
+.route-segment { fill: none; stroke: #c43f2d; stroke-width: 4; vector-effect: non-scaling-stroke; pointer-events: none; }
 .landmark-shape:hover, .landmark-shape:focus, .landmark-shape.selected { fill: var(--coral); outline: none; }
 .landmark-shape { fill: var(--gold); stroke: #6d5411; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .map-status { position: absolute; left: 1rem; bottom: 1rem; margin: 0; padding: .45rem .65rem; color: white; background: rgba(24, 35, 33, .88); font: .8rem "Trebuchet MS", sans-serif; }
@@ -91,6 +93,12 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .prompt-row { display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
 form label { display: block; margin-bottom: .35rem; font: .8rem "Trebuchet MS", sans-serif; color: var(--muted); }
 button[type="submit"] { padding: .55rem 1rem; border: 0; border-radius: 4px; color: white; background: var(--teal); cursor: pointer; }
+.route-controls { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .4rem .7rem; align-items: center; }
+.route-panel form { display: grid; gap: .75rem; }
+.route-status { min-height: 3rem; margin: .8rem 0; padding: .7rem; border-left: 4px solid var(--coral); background: #f8e9e4; font-family: "Trebuchet MS", sans-serif; }
+.route-steps { min-height: 2rem; max-height: 12rem; overflow: auto; padding-left: 1.5rem; font-family: "Trebuchet MS", sans-serif; }
+.route-steps button { width: 100%; padding: .4rem; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.route-steps button.active { border-left: 3px solid var(--teal); font-weight: 700; }
 .evidence { margin-top: .75rem; color: var(--muted); font: .75rem "Trebuchet MS", sans-serif; overflow-wrap: anywhere; }
 .limitations summary { cursor: pointer; font-weight: 700; }
 .limitations p { margin: .8rem 0 0; color: var(--muted); line-height: 1.45; }

@@ -33,6 +33,8 @@ services:
     volumes:
       - ..:/workspace:ro
       - ../build/wayfinding.gpkg:/data/wayfinding.gpkg:ro
+      - ../build/graph_contracted.pkl:/data/graph_contracted.pkl:ro
+      - ../build/graph_contracted_stats.json:/data/graph_contracted_stats.json:ro
     command:
       - python
       - -m
@@ -43,6 +45,10 @@ services:
       - "8080"
       - --artifact
       - /data/wayfinding.gpkg
+      - --graph
+      - /data/graph_contracted.pkl
+      - --stats
+      - /data/graph_contracted_stats.json
     ports:
       - "127.0.0.1:${DTWIN_DEMO_HOST_PORT:-18007}:8080"
     healthcheck:

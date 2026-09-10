@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from .artifact import ArtifactRepository, ArtifactUnavailableError, RecordNotFoundError
 from .assistant import LIMITATIONS_ID, respond
+from .routing import RoutingService
 
 MAX_BODY_BYTES = 4096
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
@@ -25,12 +26,17 @@ STATIC_FILES = {
 
 class DemoHTTPServer(ThreadingHTTPServer):
     repository: ArtifactRepository
+    routing_service: RoutingService | None
 
 
 class DemoRequestHandler(BaseHTTPRequestHandler):
     @property
     def repository(self) -> ArtifactRepository:
         return cast(DemoHTTPServer, self.server).repository
+
+    @property
+    def routing_service(self) -> RoutingService | None:
+        return cast(DemoHTTPServer, self.server).routing_service
 
     def _headers(self, status: int, content_type: str, length: int) -> None:
         self.send_response(status)
@@ -95,11 +101,16 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                         "required_layers_valid": True,
                         "limitations_id": LIMITATIONS_ID,
                         "capabilities": {
-                            "routing": False,
+                            "routing": self.routing_service is not None,
                             "nearest": False,
                             "live_status": False,
                             "llm": False,
                         },
+                        **(
+                            {"provenance": dict(self.routing_service.provenance)}
+                            if self.routing_service is not None
+                            else {}
+                        ),
                     },
                 )
                 return
@@ -125,6 +136,12 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                     self._collection(
                         "levels", self.repository.levels(facility_id), "level_26910"
                     ),
+                )
+                return
+            if path == "/demo/v1/units" and not target.query:
+                self._json(
+                    200,
+                    self._collection("units", self.repository.units(), "unit_26910"),
                 )
                 return
             scene_match = re.fullmatch(r"/demo/v1/levels/([^/]+)/scene", path)
@@ -157,6 +174,9 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             if path == "/demo/v1/assistant":
                 self._error(405, "Method not allowed.")
                 return
+            if path == "/demo/v1/route":
+                self._error(405, "Method not allowed.")
+                return
             self._error(404, "Not found.")
         except RecordNotFoundError:
             self._error(404, "Record not found.")
@@ -165,7 +185,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         target = urlsplit(self.path)
-        if target.path != "/demo/v1/assistant" or target.query:
+        if target.path not in {"/demo/v1/assistant", "/demo/v1/route"} or target.query:
             if self._is_get_route(target.path):
                 self._error(405, "Method not allowed.")
             else:
@@ -187,6 +207,29 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             self._error(400, "Malformed JSON request body.")
             return
+        if target.path == "/demo/v1/route":
+            if not self._valid_route_payload(payload) or self.routing_service is None:
+                response = {
+                    "status": 400,
+                    "code": "invalid_request",
+                    "profile": payload.get("profile", "") if isinstance(payload, dict) else "",
+                    "allowed_modes": [],
+                    "warnings": [],
+                    "provenance": (
+                        dict(self.routing_service.provenance)
+                        if self.routing_service is not None
+                        else {}
+                    ),
+                }
+                self._json(400, response)
+                return
+            response = self.routing_service.route(
+                payload["origin"]["unit_id"],
+                payload["destination"]["unit_id"],
+                payload["profile"],
+            )
+            self._json(response["status"], response)
+            return
         if not isinstance(payload, dict) or not isinstance(payload.get("message"), str):
             self._error(400, "Message must be a string.")
             return
@@ -204,7 +247,16 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         if invalid_context:
             self._error(400, "Invalid map context.")
             return
-        response = respond(self.repository, message, facility_id, level_id)
+        response = respond(
+            self.repository,
+            message,
+            facility_id,
+            level_id,
+            routing_service=self.routing_service,
+        )
+        if "status" in response:
+            self._json(response["status"], response)
+            return
         response["artifact_sha256"] = self.repository.artifact_sha256
         evidence_layers = dict.fromkeys(
             item["layer"] for item in response.get("evidence", [])
@@ -249,6 +301,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             "/demo/v1/health",
             "/demo/v1/facilities",
             "/demo/v1/levels",
+            "/demo/v1/units",
         } or bool(
             re.fullmatch(r"/demo/v1/levels/[^/]+/scene", path)
             or re.fullmatch(r"/demo/v1/units/[^/]+", path)
@@ -259,14 +312,40 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         static_dir = Path(__file__).with_name("static")
         self._send_bytes(200, content_type, (static_dir / name).read_bytes())
 
+    @staticmethod
+    def _valid_route_payload(payload: Any) -> bool:
+        if not isinstance(payload, dict) or set(payload) != {"origin", "destination", "profile"}:
+            return False
+        if payload["profile"] not in {"default", "elevator_only"}:
+            return False
+        for name in ("origin", "destination"):
+            endpoint = payload[name]
+            if not isinstance(endpoint, dict) or set(endpoint) != {"unit_id"}:
+                return False
+            identifier = endpoint["unit_id"]
+            if not isinstance(identifier, str) or not IDENTIFIER.fullmatch(identifier):
+                return False
+        return True
+
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         return
 
 
-def create_server(host: str, port: int, artifact_path: str | Path) -> DemoHTTPServer:
+def create_server(
+    host: str,
+    port: int,
+    artifact_path: str | Path,
+    graph_path: str | Path | None = None,
+    stats_path: str | Path | None = None,
+) -> DemoHTTPServer:
     server = DemoHTTPServer((host, port), DemoRequestHandler)
     try:
         server.repository = ArtifactRepository(artifact_path)
+        server.routing_service = (
+            RoutingService.from_artifacts(artifact_path, graph_path, stats_path)
+            if graph_path is not None and stats_path is not None
+            else None
+        )
     except Exception:
         server.server_close()
         raise
@@ -278,8 +357,16 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--artifact", type=Path, required=True)
+    parser.add_argument("--graph", type=Path, required=True)
+    parser.add_argument("--stats", type=Path, required=True)
     arguments = parser.parse_args()
-    server = create_server(arguments.host, arguments.port, arguments.artifact)
+    server = create_server(
+        arguments.host,
+        arguments.port,
+        arguments.artifact,
+        arguments.graph,
+        arguments.stats,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

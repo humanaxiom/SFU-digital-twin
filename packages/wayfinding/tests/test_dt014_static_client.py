@@ -54,7 +54,8 @@ def test_client_posts_exact_route_contract_and_renders_graph_geometry_only():
     assert all(term in javascript for term in ("geometries", "edge_ids", "network_distance_m"))
     assert "attachment_distance_m" in javascript
     assert "connector" not in javascript.lower() or "connector geometry" not in javascript.lower()
-    assert "http://" not in javascript and "https://" not in javascript
+    assert "http://" not in javascript
+    assert "https://" not in javascript
 
 
 def test_route_overlay_and_steps_follow_the_active_level_without_layout_shift():
@@ -93,6 +94,29 @@ def test_elevator_only_disclosure_is_complete_and_never_overclaims():
     )
     assert "wheelchair-certified" not in text
     assert "guaranteed step-free" not in text
+
+
+def test_elevator_only_disclosure_is_hidden_by_default_and_tracks_result_profile():
+    html = _asset("index.html")
+    javascript = _asset("app.js")
+    disclosure = re.search(
+        r'<(?P<tag>\w+)(?P<attrs>[^>]*\bid="route-accessibility"[^>]*)>(?P<body>.*?)</(?P=tag)>',
+        html,
+        re.S,
+    )
+
+    assert disclosure, "the profile-specific disclosure needs a dedicated UI region"
+    assert re.search(r"\bhidden(?:\s|=|$)", disclosure.group("attrs"))
+    assert "elevators only; stairs excluded" in disclosure.group("body").lower()
+    assert re.search(
+        r"routeAccessibility\.hidden\s*=\s*body\.profile\s*!==\s*[\"']elevator_only[\"']",
+        javascript,
+    ), "successes and failures must render disclosure from the response profile"
+    assert re.search(
+        r"routeProfile\.addEventListener\([\"']change[\"'][\s\S]*?"
+        r"routeAccessibility\.hidden\s*=\s*true",
+        javascript,
+    ), "switching profiles must immediately remove a stale elevator-only disclosure"
 
 
 def test_route_ui_keeps_legacy_provenance_and_has_no_external_or_deferred_capabilities():

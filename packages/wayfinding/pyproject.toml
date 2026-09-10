@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0.0",
     "networkx>=3.0",
+    "rfc8785==0.1.4",
     "shapely>=2.0",
 ]
 

@@ -73,5 +73,14 @@ def test_dt014_focused_gate_is_container_only_and_selects_only_new_tests():
     assert re.search(r"docker\s+compose\b.*\brun\s+--rm\s+artifact\b", recipe)
     assert "PYTHONPATH=/workspace/packages/wayfinding/src" in recipe
     assert "pytest" in recipe
-    assert "test_dt014_" in recipe
+    assert all(
+        test_file in recipe
+        for test_file in (
+            "test_dt014_routing.py",
+            "test_dt014_static_client.py",
+            "test_dt014_demo_deployment.py",
+        )
+    )
+    assert "test_dt014_*.py" not in recipe
+    assert "--no-cov" in recipe
     assert not re.search(r"\b(?:python|pip|pip3|uv|apt|apt-get)\b", recipe.split("pytest", 1)[0])
