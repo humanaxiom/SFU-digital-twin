@@ -78,8 +78,15 @@ Phase 1 developer containers:
 
 The launcher prints the selected Compose project, normally `sfudt-wayfinding-18000`. Keep that exact
 name: if port 18000 is occupied, the launcher advances in blocks of ten and may print a name such as
-`sfudt-wayfinding-18010`. Both `artifact` and `source-etl` remain running and healthy for interactive
-`docker compose exec` use.
+`sfudt-wayfinding-18010`. The launcher starts healthy `artifact`, `source-etl`, and `demo` containers
+and prints the demo URL, normally `http://127.0.0.1:18007/`. Open that URL for the real
+artifact-backed floor explorer and deterministic data assistant.
+
+The demo renders normalized room, detail, and landmark geometry from `build/wayfinding.gpkg` and
+supports room/landmark selection plus bounded artifact lookups. It is not an LLM and does not
+provide routes, nearest-place ranking, distances, travel times, live status, or path-accessibility
+claims. Destination accessibility tags do not verify door width, path width, slope, powered doors,
+or surface conditions.
 
 To start the containers and then run the test, lint, type, and artifact data-QA gates, add the test
 option:
@@ -108,8 +115,8 @@ should also be deleted. Use `-DryRun` or `--dry-run` to inspect either operation
 container state. `-ComposeFile` or `--compose-file` selects another compatible Compose definition;
 custom starts also support `-BasePort` / `--base-port` and `-ProjectName` / `--project-name`.
 
-The current Phase 1 Compose definition contains build and ETL jobs only. It does not publish the
-reserved PostGIS, Redis, Martin, API, web, or Neo4j ports until runtime services are added later.
+The current Phase 1 Compose definition publishes only the loopback demo port. Reserved PostGIS,
+Redis, Martin, API, web, and Neo4j ports remain unpublished until those services are added later.
 
 The two PowerShell scripts parse the FileGDB binary directly and exist as a no-Docker fallback; where
 they disagree with `ogrinfo`, **`ogrinfo` is authoritative** (see the note in

@@ -23,6 +23,7 @@ $portOffsets = [ordered]@{
     DTWIN_WEB_HOST_PORT       = 4
     DTWIN_NEO4J_HTTP_HOST_PORT = 5
     DTWIN_NEO4J_BOLT_HOST_PORT = 6
+    DTWIN_DEMO_HOST_PORT      = 7
 }
 $gates = @(
     @{ Name = 'test'; Command = 'pytest packages/wayfinding/tests'.Split(' ') },
@@ -130,6 +131,7 @@ try {
     foreach ($entry in $portOffsets.GetEnumerator()) {
         Write-Host ('{0,-28} {1}' -f $entry.Key, ($selectedBase + $entry.Value))
     }
+    Write-Host ('{0,-28} {1}' -f 'Demo URL', "http://127.0.0.1:$($selectedBase + 7)/")
 
     $upArgs = @('compose') + $composeArgs + @('-p', $selectedProject, 'up', '-d', '--wait')
     if ($Build) {

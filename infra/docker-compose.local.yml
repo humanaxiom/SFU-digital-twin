@@ -4,3 +4,5 @@ services:
     image: wayfinding-build:local
   source-etl:
     image: wayfinding-build:local
+  demo:
+    image: wayfinding-build:local

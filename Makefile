@@ -18,7 +18,7 @@ type:
 	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pyright packages/wayfinding/src
 
 dataqa:
-	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests -m dataqa --strict-markers
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests -m dataqa --strict-markers --no-cov
 
 dataqa-source:
 	docker compose $(COMPOSE_FILES) run --rm source-etl env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests -m source_dataqa --strict-markers

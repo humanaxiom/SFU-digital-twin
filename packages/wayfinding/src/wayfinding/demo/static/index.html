@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SFU Indoor Data Explorer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">SFU Burnaby · Phase 1 artifact</p>
+      <h1>Indoor data explorer</h1>
+    </div>
+    <div class="selectors" aria-label="Map controls">
+      <label for="facility-select">Building</label>
+      <select id="facility-select"></select>
+      <label for="level-select">Floor</label>
+      <select id="level-select"></select>
+    </div>
+  </header>
+
+  <main>
+    <section class="map-panel" aria-labelledby="map-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Normalized floor geometry</p>
+          <h2 id="map-heading">Floor plan</h2>
+        </div>
+        <div class="legend" aria-label="Map legend">
+          <span><i class="room-key"></i>Room</span>
+          <span><i class="detail-key"></i>Detail</span>
+          <span><i class="landmark-key"></i>Landmark</span>
+        </div>
+      </div>
+      <div class="map-frame">
+        <svg id="floor-map" role="img" aria-labelledby="map-title map-description">
+          <title id="map-title">Selected SFU floor</title>
+          <desc id="map-description">Real room, architectural detail, and landmark geometry from the selected normalized level.</desc>
+        </svg>
+        <p id="map-status" class="map-status" aria-live="polite">Loading artifact geometry…</p>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <section class="facts" aria-labelledby="details-heading">
+        <p class="eyebrow">Selected record</p>
+        <h2 id="details-heading">Record details</h2>
+        <dl id="unit-details">
+          <div><dt>Room</dt><dd>Select a room from the map or list.</dd></div>
+        </dl>
+        <div>
+          <h3>Rooms on this floor</h3>
+          <div id="room-list" class="room-list" aria-label="Keyboard-selectable rooms"></div>
+        </div>
+      </section>
+
+      <section class="assistant" aria-labelledby="assistant-heading">
+        <p class="eyebrow">Artifact lookup</p>
+        <h2 id="assistant-heading">Deterministic data assistant</h2>
+        <p class="muted">This is not an LLM or a general-purpose chatbot. Responses use fixed rules and current artifact records.</p>
+        <div id="assistant-response" class="response" aria-live="polite">Ask for an exact room ID, facilities, floors, landmarks, provenance, or limitations.</div>
+        <form id="assistant-form">
+          <label for="assistant-input">Artifact question</label>
+          <div class="prompt-row">
+            <input id="assistant-input" name="message" maxlength="500" required autocomplete="off" placeholder="Try: AQ1002">
+            <button type="submit">Ask</button>
+          </div>
+        </form>
+        <div id="assistant-evidence" class="evidence"></div>
+      </section>
+
+      <details class="limitations">
+        <summary>Data and limitations</summary>
+        <p>Content comes from normalized Phase 1 layers derived from the read-only AIIM source. Only source records marked searchable are shown.</p>
+        <p>There is no route, connector, search-index, live-status, or LLM capability. Accessibility tags describe destinations, not paths.</p>
+        <p>Door width, path width, slope, surface, powered doors, closures, and current elevator status are not verified.</p>
+        <p>Artifact SHA-256: <code id="artifact-hash">Loading…</code></p>
+      </details>
+    </aside>
+  </main>
+
+  <footer>SFU Indoor Wayfinding · Local artifact inspection</footer>
+</body>
+</html>

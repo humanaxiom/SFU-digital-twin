@@ -108,12 +108,12 @@ selected_base=
 attempt=0
 while [ "$attempt" -lt "$ATTEMPTS" ]; do
     candidate=$((BASE_PORT + attempt * PORT_BLOCK_SIZE))
-    if [ $((candidate + 6)) -gt 65535 ]; then
+    if [ $((candidate + 7)) -gt 65535 ]; then
         break
     fi
     block_free=1
     offset=0
-    while [ "$offset" -le 6 ]; do
+    while [ "$offset" -le 7 ]; do
         if ! port_is_free $((candidate + offset)); then
             block_free=0
             break
@@ -139,6 +139,7 @@ export DTWIN_API_HOST_PORT=$((selected_base + 3))
 export DTWIN_WEB_HOST_PORT=$((selected_base + 4))
 export DTWIN_NEO4J_HTTP_HOST_PORT=$((selected_base + 5))
 export DTWIN_NEO4J_BOLT_HOST_PORT=$((selected_base + 6))
+export DTWIN_DEMO_HOST_PORT=$((selected_base + 7))
 selected_project="$PROJECT_NAME-$selected_base"
 
 services=$(docker compose "$@" config --services)
@@ -168,7 +169,9 @@ printf '%-28s %s\n' \
     'DTWIN_API_HOST_PORT' "$DTWIN_API_HOST_PORT" \
     'DTWIN_WEB_HOST_PORT' "$DTWIN_WEB_HOST_PORT" \
     'DTWIN_NEO4J_HTTP_HOST_PORT' "$DTWIN_NEO4J_HTTP_HOST_PORT" \
-    'DTWIN_NEO4J_BOLT_HOST_PORT' "$DTWIN_NEO4J_BOLT_HOST_PORT"
+    'DTWIN_NEO4J_BOLT_HOST_PORT' "$DTWIN_NEO4J_BOLT_HOST_PORT" \
+    'DTWIN_DEMO_HOST_PORT' "$DTWIN_DEMO_HOST_PORT" \
+    'Demo URL' "http://127.0.0.1:$DTWIN_DEMO_HOST_PORT/"
 
 if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$build_local_image" -eq 1 ]; then

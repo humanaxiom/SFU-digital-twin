@@ -24,3 +24,32 @@ services:
       - ..:/workspace:rw
       - ../build:/workspace/build:rw
       - C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
+
+  demo:
+    image: *build-image
+    working_dir: /workspace
+    environment:
+      PYTHONPATH: /workspace/packages/wayfinding/src
+    volumes:
+      - ..:/workspace:ro
+      - ../build/wayfinding.gpkg:/data/wayfinding.gpkg:ro
+    command:
+      - python
+      - -m
+      - wayfinding.demo.server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --artifact
+      - /data/wayfinding.gpkg
+    ports:
+      - "127.0.0.1:${DTWIN_DEMO_HOST_PORT:-18007}:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/demo/v1/health', timeout=2).read()"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
