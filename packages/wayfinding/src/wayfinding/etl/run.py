@@ -19,6 +19,7 @@ def main(command: str | None = None) -> int:
     - normalise: Normalise extracted layers into production tables
     - graph-raw: Snap nodes and build raw pathway graph
     - graph-transitions: Add transition edges to pathway graph
+    - graph-contract: Contract degree-2 pathway chains
     """
     if command is None:
         print("ETL infrastructure ready. No data processing yet (DT-003+).")
@@ -28,6 +29,7 @@ def main(command: str | None = None) -> int:
         print("  normalise          Normalise extracted layers into production tables")
         print("  graph-raw          Snap nodes and build raw pathway graph")
         print("  graph-transitions  Add transition edges to pathway graph")
+        print("  graph-contract     Contract degree-2 pathway chains")
         return 0
 
     if command == "extract":
@@ -41,6 +43,9 @@ def main(command: str | None = None) -> int:
 
     if command == "graph-transitions":
         return run_graph_transitions()
+
+    if command == "graph-contract":
+        return run_graph_contract()
 
     print(f"Unknown command: {command}")
     return 1
@@ -194,6 +199,25 @@ def run_graph_transitions() -> int:
         import traceback
 
         print(f"\nERROR: Adding transitions failed: {error}")
+        traceback.print_exc()
+        return 1
+
+
+def run_graph_contract() -> int:
+    """Run the graph-contract step: contract degree-2 pathway chains."""
+    from wayfinding.etl.graph import run_graph_contract
+
+    output_dir = Path("/workspace/build")
+
+    print("=== DT-007: Contract Degree-2 Chains ===")
+    print(f"Output directory: {output_dir}")
+
+    try:
+        return run_graph_contract(output_dir)
+    except Exception as error:
+        import traceback
+
+        print(f"\nERROR: Contraction failed: {error}")
         traceback.print_exc()
         return 1
 

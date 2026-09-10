@@ -1,25 +1,42 @@
-.PHONY: test lint type etl etl-extract etl-normalise etl-graph-raw etl-graph-transitions
+.PHONY: image-build test test-launchers lint type dataqa dataqa-source etl etl-extract etl-normalise etl-graph-raw etl-graph-transitions etl-graph-contract
+
+COMPOSE_FILES ?= -f infra/docker-compose.yml
+
+image-build:
+	docker build -f infra/Dockerfile.build -t wayfinding-build:local .
 
 test:
-	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq >/dev/null 2>&1 && pip install -e packages/wayfinding[dev] -q --break-system-packages && pytest packages/wayfinding/tests"
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests
+
+test-launchers:
+	docker compose $(COMPOSE_FILES) run --rm artifact sh tests/gate/test_launch_stack.sh
 
 lint:
-	docker compose -f infra/docker-compose.yml run --rm test sh -c "pip install -e packages/wayfinding[dev] && ruff check packages/wayfinding"
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src ruff check packages/wayfinding
 
 type:
-	docker compose -f infra/docker-compose.yml run --rm test sh -c "apt-get update -qq && apt-get install -y --no-install-recommends libatomic1 -qq >/dev/null && pip install -e packages/wayfinding[dev] && pyright packages/wayfinding/src"
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pyright packages/wayfinding/src
+
+dataqa:
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests -m dataqa --strict-markers
+
+dataqa-source:
+	docker compose $(COMPOSE_FILES) run --rm source-etl env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests -m source_dataqa --strict-markers
 
 etl:
-	docker compose -f infra/docker-compose.yml run --rm etl sh -c "pip install -e packages/wayfinding[dev] && python -m wayfinding.etl.run"
+	docker compose $(COMPOSE_FILES) run --rm source-etl env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run
 
 etl-extract:
-	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq > /dev/null 2>&1 && pip install -e packages/wayfinding -q --break-system-packages && python -m wayfinding.etl.run extract"
+	docker compose $(COMPOSE_FILES) run --rm source-etl env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run extract
 
 etl-normalise:
-	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip python3-yaml -qq > /dev/null 2>&1 && pip install -e packages/wayfinding -q --break-system-packages && python -m wayfinding.etl.run normalise"
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run normalise
 
 etl-graph-raw:
-	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq > /dev/null 2>&1 && pip install -e packages/wayfinding -q --break-system-packages && python -m wayfinding.etl.run graph-raw"
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run graph-raw
 
 etl-graph-transitions:
-	docker compose -f infra/docker-compose.yml run --rm etl sh -c "apt-get update -qq && apt-get install -y python3-pip -qq > /dev/null 2>&1 && pip install -e packages/wayfinding -q --break-system-packages && python -m wayfinding.etl.run graph-transitions"
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run graph-transitions
+
+etl-graph-contract:
+	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run graph-contract

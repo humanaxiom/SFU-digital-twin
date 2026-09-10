@@ -13,9 +13,12 @@ Edge keys follow convention:
 """
 
 import json
+import hashlib
 import logging
+import random
 from collections import defaultdict
 from datetime import datetime
+from itertools import combinations
 from math import floor
 from pathlib import Path
 from typing import Any, cast
@@ -23,7 +26,7 @@ from typing import Any, cast
 import networkx as nx
 from osgeo import ogr  # pyright: ignore[reportMissingImports]
 from shapely import wkt
-from shapely.geometry import LineString, MultiLineString
+from shapely.geometry import LineString, MultiLineString, Point
 
 logger = logging.getLogger(__name__)
 ogr.UseExceptions()
@@ -1037,6 +1040,882 @@ def run_graph_transitions(output_dir: Path) -> int:
     )
     logger.info("\nOutputs:")
     logger.info(f"  {graph_transitions_pkl}")
+    logger.info(f"  {stats_json}")
+
+    return 0
+
+
+def contract_degree2_chains(
+    graph: nx.MultiDiGraph,
+    unit_centroids: list[tuple[float, float, str]],
+) -> tuple[nx.MultiDiGraph, dict[str, Any]]:
+    """Contract degree-2 pathway chain segments into single edges.
+
+    Implements DT-007: Contract Degree-2 Chains. The pinned fixture contracts
+    44,952 directed arcs and 15,587 nodes to the measured baseline of 19,884
+    arcs and 7,450 nodes. Protects junctions (≥3 pathway neighbors), transition
+    endpoints, unit-proximity nodes, and transition-adjacent nodes.
+
+    Args:
+        graph: NetworkX MultiDiGraph from DT-006 with pathway + transition edges
+        unit_centroids: List of (x, y, level_id) tuples for searchable units
+            in EPSG:26910 coordinates
+
+    Returns:
+        (contracted_graph, stats) tuple where:
+        - contracted_graph is NetworkX MultiDiGraph with contracted pathway edges
+        - stats is dict with node/edge counts, contraction ratio, connectivity,
+          shortest-path validation results
+
+    Raises:
+        RuntimeError: If cross-level chains detected or validation fails
+    """
+    logger.info("=== DT-007: Contract Degree-2 Chains ===")
+
+    # Step 1: Identify protected nodes
+    logger.info("Step 1/8: Identifying protected nodes...")
+    protected_node_categories = _identify_protected_node_categories(
+        graph, unit_centroids
+    )
+    protected_nodes = set().union(*protected_node_categories.values())
+    contractible_nodes = {
+        node
+        for node in graph.nodes
+        if _compute_physical_pathway_degree(graph, node) == 2
+        and node not in protected_nodes
+    }
+    ambiguous_degree2_nodes = _identify_ambiguous_degree2_nodes(
+        graph, contractible_nodes
+    )
+    contractible_nodes -= ambiguous_degree2_nodes
+    boundary_nodes = set(graph.nodes) - contractible_nodes
+
+    logger.info(f"  Protected nodes: {len(protected_nodes)} total")
+    logger.info(
+        f"  Ambiguous degree-2 nodes retained: {len(ambiguous_degree2_nodes)}"
+    )
+    for category, nodes in protected_node_categories.items():
+        logger.info(f"    {category}: {len(nodes)}")
+
+    # Step 2: Traverse chains and collect edges
+    logger.info("Step 2/8: Traversing pathway chains from protected nodes...")
+    chains = _traverse_chains(graph, boundary_nodes)
+
+    logger.info(f"  Found {len(chains)} chains to contract")
+
+    # Step 3: Build contracted graph
+    logger.info("Step 3/8: Building contracted graph...")
+    contracted_graph = nx.MultiDiGraph()
+
+    # Add all chain boundaries with attributes. Degree-1 pathway endpoints are
+    # boundaries even though they are not part of a protected category.
+    for node in sorted(boundary_nodes):
+        if node in graph.nodes:
+            contracted_graph.add_node(node, **graph.nodes[node])
+
+    # Step 4: Add contracted pathway edges
+    logger.info("Step 4/8: Creating contracted pathway edges...")
+    contracted_edges_added = 0
+
+    for chain_data in chains:
+        # Each chain produces a forward and reverse edge
+        forward_key, reverse_key = _add_contracted_chain(
+            contracted_graph, graph, chain_data
+        )
+        contracted_edges_added += 2
+
+    logger.info(f"  Added {contracted_edges_added} contracted pathway arcs")
+
+    # Step 5: Copy all transition edges unchanged
+    logger.info("Step 5/8: Copying transition edges (stairs, elevator) unchanged...")
+    transition_edges_added = 0
+
+    for u, v, key, data in graph.edges(keys=True, data=True):
+        if data.get("mode") in ("stairs", "elevator"):
+            # Add nodes if not already present (transition-only nodes)
+            if u not in contracted_graph.nodes:
+                contracted_graph.add_node(u, **graph.nodes[u])
+            if v not in contracted_graph.nodes:
+                contracted_graph.add_node(v, **graph.nodes[v])
+
+            # Copy edge with all attributes
+            contracted_graph.add_edge(u, v, key=key, **data)
+            transition_edges_added += 1
+
+    logger.info(f"  Copied {transition_edges_added} transition arcs unchanged")
+
+    # Step 6: Validate level consistency
+    logger.info("Step 6/8: Validating level consistency...")
+    _validate_level_consistency(contracted_graph, graph)
+
+    # Step 7: Compute connectivity and basic stats
+    logger.info("Step 7/8: Computing connectivity statistics...")
+    stats = _compute_contraction_stats(
+        graph,
+        contracted_graph,
+        protected_node_categories,
+        len(chains),
+        len(ambiguous_degree2_nodes),
+    )
+
+    # Step 8: Shortest-path validation
+    logger.info("Step 8/8: Validating shortest-path preservation (20 pairs)...")
+    shortest_path_stats = _validate_shortest_paths(
+        graph, contracted_graph, protected_nodes
+    )
+    stats["shortest_path_validation"] = shortest_path_stats
+
+    logger.info(
+        f"  Shortest-path validation: {shortest_path_stats['pairs_tested']} pairs, "
+        f"max delta: {shortest_path_stats['max_delta_m']:.4f}m"
+    )
+
+    logger.info("\n=== Contraction Complete ===")
+    logger.info(f"Nodes: {stats['node_count']:,} (pre: {stats['pre_contraction_node_count']:,})")
+    logger.info(
+        f"Edges: {stats['edge_count']:,} (pre: {stats['pre_contraction_edge_count']:,})"
+    )
+    logger.info(
+        f"Pathway arcs: {stats['pathway_arcs']:,} "
+        f"(pre: {stats['pre_contraction_pathway_arcs']:,}, "
+        f"reduction: {stats['pathway_contraction_ratio']:.1%})"
+    )
+    logger.info(
+        f"Mean pathway length: {stats['mean_pathway_length_m']:.2f}m "
+        f"(pre: {stats['pre_contraction_mean_pathway_length_m']:.2f}m)"
+    )
+    logger.info(
+        f"Transition arcs preserved: {stats['transition_arcs']} "
+        f"({stats['stairs_arcs']} stairs + {stats['elevator_arcs']} elevator)"
+    )
+    logger.info(
+        f"Default profile: {stats['connectivity_default']['component_count']} components"
+    )
+    logger.info(
+        f"Accessible profile: {stats['connectivity_accessible']['component_count']} components"
+    )
+
+    return contracted_graph, stats
+
+
+def _compute_physical_pathway_degree(graph: nx.MultiDiGraph, node: NodeID) -> int:
+    """Compute physical pathway degree: count of distinct pathway neighbors.
+
+    Uses undirected physical topology: collapse parallel edges, merge forward/reverse,
+    count only mode='pathway' edges, ignore transition edges.
+
+    Args:
+        graph: NetworkX MultiDiGraph
+        node: Node ID tuple (x, y, vertical_order)
+
+    Returns:
+        Count of distinct pathway-connected neighbors
+    """
+    pathway_neighbors = set()
+
+    # Outgoing edges
+    for _u, v, data in graph.edges(node, data=True):
+        if data.get("mode") == "pathway":
+            pathway_neighbors.add(v)
+
+    # Incoming edges
+    for u, _v, data in graph.in_edges(node, data=True):
+        if data.get("mode") == "pathway":
+            pathway_neighbors.add(u)
+
+    return len(pathway_neighbors)
+
+
+def _identify_ambiguous_degree2_nodes(
+    graph: nx.MultiDiGraph,
+    candidates: set[NodeID],
+) -> set[NodeID]:
+    """Find degree-2 nodes whose two neighbors have unequal feature multiplicity."""
+    ambiguous = set()
+    for node in candidates:
+        features_by_neighbor: dict[NodeID, set[str]] = defaultdict(set)
+        for _u, neighbor, data in graph.edges(node, data=True):
+            if data.get("mode") == "pathway":
+                features_by_neighbor[neighbor].add(str(data["feature_id"]))
+        for neighbor, _v, data in graph.in_edges(node, data=True):
+            if data.get("mode") == "pathway":
+                features_by_neighbor[neighbor].add(str(data["feature_id"]))
+        if len({len(features) for features in features_by_neighbor.values()}) > 1:
+            ambiguous.add(node)
+    return ambiguous
+
+
+def _identify_protected_nodes(
+    graph: nx.MultiDiGraph,
+    unit_centroids: list[tuple[float, float, str]],
+) -> set[NodeID]:
+    """Identify all protected nodes (never contracted).
+
+    Protected nodes:
+    1. Junctions: ≥3 distinct pathway neighbors in physical undirected topology
+    2. Transition endpoints: is_transition_endpoint=True
+    3. Unit-proximity: within 0.5m of any unit centroid on same level
+    4. Transition-adjacent: incident to any stairs/elevator edge
+
+    Args:
+        graph: NetworkX MultiDiGraph from DT-006
+        unit_centroids: List of (x, y, level_id) unit centroid coordinates
+
+    Returns:
+        Set of protected node IDs
+    """
+    categories = _identify_protected_node_categories(graph, unit_centroids)
+    return set().union(*categories.values())
+
+
+def _identify_protected_node_categories(
+    graph: nx.MultiDiGraph,
+    unit_centroids: list[tuple[float, float, str]],
+) -> dict[str, set[NodeID]]:
+    """Identify protected nodes grouped by their protection reason."""
+    junctions = set()
+    transition_endpoints = set()
+    unit_proximity = set()
+    transition_adjacent = set()
+
+    # 1. Junctions (physical pathway degree ≥3)
+    for node in graph.nodes():
+        if _compute_physical_pathway_degree(graph, node) >= 3:
+            junctions.add(node)
+
+    # 2. Transition endpoints
+    for node, attrs in graph.nodes(data=True):
+        if attrs.get("is_transition_endpoint", False):
+            transition_endpoints.add(node)
+
+    # 3. Unit-proximity (within 0.5m of centroids on same level)
+    for node, attrs in graph.nodes(data=True):
+        node_x, node_y = node[0], node[1]
+        node_level_ids = attrs.get("level_ids", set())
+        for centroid_x, centroid_y, centroid_level_id in unit_centroids:
+            # Check level match first
+            if centroid_level_id not in node_level_ids:
+                continue
+            # Then check XY distance
+            distance = ((node_x - centroid_x) ** 2 + (node_y - centroid_y) ** 2) ** 0.5
+            if distance <= 0.5:  # 0.5m threshold
+                unit_proximity.add(node)
+                break
+
+    # 4. Transition-adjacent (incident to stairs/elevator)
+    for u, v, data in graph.edges(data=True):
+        if data.get("mode") in ("stairs", "elevator"):
+            transition_adjacent.add(u)
+            transition_adjacent.add(v)
+
+    return {
+        "junctions": junctions,
+        "transition_endpoints": transition_endpoints,
+        "unit_proximity": unit_proximity,
+        "transition_adjacent": transition_adjacent,
+    }
+
+
+def _traverse_chains(
+    graph: nx.MultiDiGraph,
+    boundary_nodes: set[NodeID],
+) -> list[dict[str, Any]]:
+    """Traverse pathway chains from protected nodes.
+
+    A chain is a sequence of contractible pathway-degree-2 nodes between two
+    protected nodes. Discovers each physical chain once by traversing forward,
+    then creates both forward and reverse contracted edges.
+
+    Args:
+        graph: NetworkX MultiDiGraph
+        boundary_nodes: Nodes that cannot be contracted
+
+    Returns:
+        List of chain dicts with keys: start, end, nodes, edges
+    """
+    physical_edges: dict[str, tuple[NodeID, NodeID]] = {}
+    adjacency: dict[NodeID, list[tuple[NodeID, str]]] = defaultdict(list)
+    for u, v, _key, data in graph.edges(keys=True, data=True):
+        if data.get("mode") != "pathway":
+            continue
+        feature_id = str(data["feature_id"])
+        if feature_id in physical_edges:
+            continue
+        physical_edges[feature_id] = (u, v)
+        adjacency[u].append((v, feature_id))
+        adjacency[v].append((u, feature_id))
+
+    for incident in adjacency.values():
+        incident.sort(key=lambda item: (item[0], item[1]))
+
+    pairings: dict[tuple[NodeID, str], str] = {}
+
+    def feature_sort_key(feature_id: str) -> tuple[float, str]:
+        endpoint_a, endpoint_b = physical_edges[feature_id]
+        lengths = [
+            float(data.get("length_3d", 0.0))
+            for data in graph.get_edge_data(endpoint_a, endpoint_b, default={}).values()
+            if data.get("mode") == "pathway"
+            and str(data.get("feature_id")) == feature_id
+        ]
+        return (min(lengths), feature_id)
+
+    for node in sorted(set(graph.nodes) - boundary_nodes):
+        by_neighbor: dict[NodeID, list[str]] = defaultdict(list)
+        for neighbor, feature_id in adjacency[node]:
+            by_neighbor[neighbor].append(feature_id)
+        neighbor_a, neighbor_b = sorted(by_neighbor)
+        for feature_a, feature_b in zip(
+            sorted(by_neighbor[neighbor_a], key=feature_sort_key),
+            sorted(by_neighbor[neighbor_b], key=feature_sort_key),
+            strict=False,
+        ):
+            pairings[(node, feature_a)] = feature_b
+            pairings[(node, feature_b)] = feature_a
+
+    visited: set[str] = set()
+    chains: list[dict[str, Any]] = []
+
+    def oriented_edge(u: NodeID, v: NodeID, feature_id: str) -> tuple[Any, ...]:
+        candidates = [
+            (key, data)
+            for key, data in graph.get_edge_data(u, v, default={}).items()
+            if data.get("mode") == "pathway"
+            and str(data.get("feature_id")) == feature_id
+        ]
+        if not candidates:
+            raise RuntimeError(
+                f"Missing directed pathway arc for feature {feature_id}: {u} -> {v}"
+            )
+        key, data = sorted(candidates, key=lambda item: str(item[0]))[0]
+        return (u, v, key, data)
+
+    def other_endpoint(node: NodeID, feature_id: str) -> NodeID:
+        endpoint_a, endpoint_b = physical_edges[feature_id]
+        return endpoint_b if node == endpoint_a else endpoint_a
+
+    def walk(start: NodeID, first_fid: str) -> dict[str, Any]:
+        nodes = [start]
+        edges = []
+        current = start
+        feature_id = first_fid
+
+        while True:
+            next_node = other_endpoint(current, feature_id)
+            visited.add(feature_id)
+            nodes.append(next_node)
+            edges.append(oriented_edge(current, next_node, feature_id))
+            paired_feature = pairings.get((next_node, feature_id))
+            if paired_feature is None or paired_feature in visited:
+                break
+            current = next_node
+            feature_id = paired_feature
+
+        return {"start": nodes[0], "end": nodes[-1], "nodes": nodes, "edges": edges}
+
+    terminal_half_edges = sorted(
+        (node, feature_id)
+        for node, incident in adjacency.items()
+        for _neighbor, feature_id in incident
+        if (node, feature_id) not in pairings
+    )
+    for start, feature_id in terminal_half_edges:
+        if feature_id not in visited:
+            chains.append(walk(start, feature_id))
+
+    # Closed paired trails have no terminal half-edge. Anchor each at the
+    # lowest endpoint of its lowest unvisited feature.
+    while len(visited) < len(physical_edges):
+        feature_id = min(set(physical_edges) - visited)
+        start = min(physical_edges[feature_id])
+        if feature_id not in visited:
+            chains.append(walk(start, feature_id))
+
+    return chains
+
+
+def _add_contracted_chain(
+    contracted_graph: nx.MultiDiGraph,
+    source_graph: nx.MultiDiGraph,
+    chain: dict[str, Any],
+) -> tuple[str, str]:
+    """Add a contracted chain as forward and reverse edges.
+
+    Args:
+        contracted_graph: Target graph to add edges to
+        source_graph: Source graph with original edges
+        chain: Chain dict with start, end, nodes, edges
+
+    Returns:
+        (forward_key, reverse_key) tuple
+    """
+    start = chain["start"]
+    end = chain["end"]
+    edges = chain["edges"]
+
+    # Collect attributes from segments
+    length_3d = sum(d.get("length_3d", 0.0) for u, v, k, d in edges)
+    level_id = edges[0][3].get("level_id")  # All segments must share level_id
+    original_fids = sorted(str(d["feature_id"]) for u, v, k, d in edges)
+    contracted_segment_count = len(edges)
+
+    # Merge geometries: concatenate coordinates, drop intermediate duplicates
+    all_coords = []
+    for i, (_u, _v, _k, d) in enumerate(edges):
+        geom = d.get("geometry")
+        if geom is None:
+            continue
+        coords = list(geom.coords)
+        if i == 0:
+            # First segment: include all coords
+            all_coords.extend(coords)
+        else:
+            # Subsequent segments: skip first coord (duplicate of previous end)
+            all_coords.extend(coords[1:])
+
+    merged_geom = LineString(all_coords)
+
+    # Generate deterministic chain ID
+    # Use sorted endpoint nodes + sorted original FIDs
+    endpoints_str = f"{sorted([start, end])}"
+    fids_str = f"{sorted(original_fids)}"
+    chain_str = f"{endpoints_str}_{fids_str}"
+    chain_hash = hashlib.sha256(chain_str.encode()).hexdigest()[:16]
+    chain_id = f"CONTRACTED_{chain_hash}"
+
+    # Add forward edge
+    forward_key = f"PW_{chain_id}"
+    contracted_graph.add_edge(
+        start,
+        end,
+        key=forward_key,
+        length_3d=length_3d,
+        mode="pathway",
+        level_id=level_id,
+        geometry=merged_geom,
+        original_feature_ids=original_fids,
+        contracted_segment_count=contracted_segment_count,
+    )
+
+    # Add reverse edge with reversed geometry
+    reverse_key = f"PW_{chain_id}_R"
+    reverse_geom = LineString(list(reversed(merged_geom.coords)))
+    contracted_graph.add_edge(
+        end,
+        start,
+        key=reverse_key,
+        length_3d=length_3d,
+        mode="pathway",
+        level_id=level_id,
+        geometry=reverse_geom,
+        original_feature_ids=original_fids,
+        contracted_segment_count=contracted_segment_count,
+    )
+
+    return forward_key, reverse_key
+
+
+def _validate_level_consistency(
+    contracted_graph: nx.MultiDiGraph,
+    source_graph: nx.MultiDiGraph,
+) -> None:
+    """Validate that all segments in contracted chains share the same level_id.
+
+    Args:
+        contracted_graph: Contracted graph
+        source_graph: Pre-contraction graph
+
+    Raises:
+        RuntimeError: If any cross-level chains detected
+    """
+    # Build feature_id to level_id index for fast lookup
+    fid_to_level = {}
+    for _u, _v, _k, d in source_graph.edges(keys=True, data=True):
+        if d.get("mode") == "pathway":
+            fid = d.get("feature_id")
+            level_id = d.get("level_id")
+            if fid and level_id:
+                fid_to_level[fid] = level_id
+
+    cross_level_chains = []
+
+    for u, v, k, data in contracted_graph.edges(keys=True, data=True):
+        if data.get("mode") != "pathway":
+            continue
+        if data.get("contracted_segment_count", 1) <= 1:
+            continue
+
+        original_fids = data.get("original_feature_ids", [])
+
+        # Collect levels from original segments using index
+        levels: set[str] = {
+            fid_to_level[fid] for fid in original_fids if fid in fid_to_level
+        }
+
+        if len(levels) > 1:
+            cross_level_chains.append({
+                "edge": (u, v, k),
+                "levels": sorted(levels),
+                "fids": original_fids,
+            })
+
+    if cross_level_chains:
+        raise RuntimeError(
+            f"Found {len(cross_level_chains)} cross-level pathway chains. "
+            f"This is a data error: pathways should not cross levels without a transition. "
+            f"Sample: {cross_level_chains[:3]}"
+        )
+
+
+def _compute_contraction_stats(
+    graph_pre: nx.MultiDiGraph,
+    graph_post: nx.MultiDiGraph,
+    protected_node_categories: dict[str, set[NodeID]],
+    chain_count: int,
+    ambiguous_degree2_nodes_retained: int = 0,
+) -> dict[str, Any]:
+    """Compute contraction statistics.
+
+    Args:
+        graph_pre: Pre-contraction graph
+        graph_post: Contracted graph
+        protected_node_categories: Protected nodes grouped by protection reason
+        chain_count: Number of chains contracted
+
+    Returns:
+        Statistics dict
+    """
+    # Pre-contraction counts
+    pre_node_count = graph_pre.number_of_nodes()
+    pre_edge_count = graph_pre.number_of_edges()
+    pre_pathway_arcs = sum(
+        1 for u, v, k, d in graph_pre.edges(keys=True, data=True)
+        if d.get("mode") == "pathway"
+    )
+    pre_pathway_lengths = [
+        d.get("length_3d", 0.0)
+        for u, v, k, d in graph_pre.edges(keys=True, data=True)
+        if d.get("mode") == "pathway"
+    ]
+    pre_mean_pathway_length = (
+        sum(pre_pathway_lengths) / len(pre_pathway_lengths) if pre_pathway_lengths else 0.0
+    )
+
+    # Post-contraction counts
+    node_count = graph_post.number_of_nodes()
+    edge_count = graph_post.number_of_edges()
+
+    pathway_arcs = sum(
+        1 for u, v, k, d in graph_post.edges(keys=True, data=True)
+        if d.get("mode") == "pathway"
+    )
+    stairs_arcs = sum(
+        1 for u, v, k, d in graph_post.edges(keys=True, data=True)
+        if d.get("mode") == "stairs"
+    )
+    elevator_arcs = sum(
+        1 for u, v, k, d in graph_post.edges(keys=True, data=True)
+        if d.get("mode") == "elevator"
+    )
+    transition_arcs = stairs_arcs + elevator_arcs
+
+    pathway_lengths = [
+        d.get("length_3d", 0.0)
+        for u, v, k, d in graph_post.edges(keys=True, data=True)
+        if d.get("mode") == "pathway"
+    ]
+    mean_pathway_length = (
+        sum(pathway_lengths) / len(pathway_lengths) if pathway_lengths else 0.0
+    )
+
+    # Contraction ratio
+    pathway_contraction_ratio = (
+        (pre_pathway_arcs - pathway_arcs) / pre_pathway_arcs if pre_pathway_arcs > 0 else 0.0
+    )
+
+    # Mean degree
+    degrees = dict(graph_post.degree())
+    mean_degree = sum(degrees.values()) / node_count if node_count > 0 else 0.0
+
+    # Connectivity statistics
+    # Default profile: pathway + stairs + elevator
+    default_graph = nx.Graph()
+    for u, v, data in graph_post.edges(data=True):
+        if data.get("mode") in ("pathway", "stairs", "elevator"):
+            default_graph.add_edge(u, v)
+
+    default_component_count = nx.number_connected_components(default_graph)
+    default_components = list(nx.connected_components(default_graph))
+    default_largest = max((len(c) for c in default_components), default=0)
+
+    # Accessible profile: pathway + elevator only
+    accessible_graph = nx.Graph()
+    for u, v, data in graph_post.edges(data=True):
+        if data.get("mode") in ("pathway", "elevator"):
+            accessible_graph.add_edge(u, v)
+
+    accessible_component_count = nx.number_connected_components(accessible_graph)
+    accessible_components = list(nx.connected_components(accessible_graph))
+    accessible_largest = max((len(c) for c in accessible_components), default=0)
+
+    protected_nodes = set().union(*protected_node_categories.values())
+    protected_node_counts = {
+        category: len(nodes)
+        for category, nodes in protected_node_categories.items()
+    }
+    protected_node_counts["total"] = len(protected_nodes)
+
+    stats = {
+        "etl_version": "0.1.0",
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "pre_contraction_node_count": pre_node_count,
+        "pre_contraction_edge_count": pre_edge_count,
+        "pre_contraction_pathway_arcs": pre_pathway_arcs,
+        "pre_contraction_mean_pathway_length_m": round(pre_mean_pathway_length, 2),
+        "node_count": node_count,
+        "edge_count": edge_count,
+        "pathway_arcs": pathway_arcs,
+        "stairs_arcs": stairs_arcs,
+        "elevator_arcs": elevator_arcs,
+        "transition_arcs": transition_arcs,
+        "mean_pathway_length_m": round(mean_pathway_length, 2),
+        "mean_degree": round(mean_degree, 2),
+        "chains_contracted": chain_count,
+        "ambiguous_degree2_nodes_retained": ambiguous_degree2_nodes_retained,
+        "pathway_contraction_ratio": round(pathway_contraction_ratio, 4),
+        "protected_node_count": len(protected_nodes),
+        "connectivity_default": {
+            "component_count": default_component_count,
+            "largest_component_size": default_largest,
+        },
+        "connectivity_accessible": {
+            "component_count": accessible_component_count,
+            "largest_component_size": accessible_largest,
+        },
+        "pathway_arc_count": pathway_arcs,
+        "transition_arc_count": transition_arcs,
+        "contraction_ratio": round(pathway_contraction_ratio, 4),
+        "mean_pathway_length": round(mean_pathway_length, 2),
+        "protected_node_counts": protected_node_counts,
+        "component_counts": {
+            "default": default_component_count,
+            "elevator_only": accessible_component_count,
+        },
+    }
+
+    return stats
+
+
+def _validate_shortest_paths(
+    graph_pre: nx.MultiDiGraph,
+    graph_post: nx.MultiDiGraph,
+    protected_nodes: set[NodeID],
+) -> dict[str, Any]:
+    """Validate shortest-path preservation across 20 connected protected-node pairs.
+
+    Args:
+        graph_pre: Pre-contraction graph
+        graph_post: Contracted graph
+        protected_nodes: Set of protected nodes
+
+    Returns:
+        Stats dict with pairs_tested, pairs_matched, max_delta_m
+    """
+    # Build default profile graphs (pathway + stairs + elevator)
+    def build_profile_graph(graph):
+        profile = nx.Graph()
+        for u, v, data in graph.edges(data=True):
+            if data.get("mode") in ("pathway", "stairs", "elevator"):
+                weight = data.get("length_3d", 1.0)
+                # Accumulate min weight for parallel edges
+                if profile.has_edge(u, v):
+                    profile[u][v]["weight"] = min(profile[u][v]["weight"], weight)
+                else:
+                    profile.add_edge(u, v, weight=weight)
+        return profile
+
+    profile_pre = build_profile_graph(graph_pre)
+    profile_post = build_profile_graph(graph_post)
+
+    # Get components with ≥2 protected nodes
+    rng = random.Random(42)
+    component_pairs = []
+    components_pre = sorted(
+        (
+            sorted(component & protected_nodes)
+            for component in nx.connected_components(profile_pre)
+            if len(component & protected_nodes) >= 2
+        ),
+        key=lambda nodes: nodes[0],
+    )
+    for nodes in components_pre:
+        eligible_pairs = list(combinations(nodes, 2))
+        rng.shuffle(eligible_pairs)
+        component_pairs.append(eligible_pairs)
+
+    pairs = []
+    while len(pairs) < 20 and any(component_pairs):
+        for eligible_pairs in component_pairs:
+            if eligible_pairs and len(pairs) < 20:
+                pairs.append(eligible_pairs.pop())
+
+    if len(pairs) < 20:
+        raise RuntimeError(
+            f"Could not select 20 connected protected-node pairs. "
+            f"Found only {len(pairs)} pairs."
+        )
+
+    # Compare shortest paths
+    max_delta = 0.0
+    mismatches = []
+
+    for src, tgt in pairs:
+        try:
+            dist_pre = nx.shortest_path_length(profile_pre, src, tgt, weight="weight")
+        except nx.NetworkXNoPath as error:
+            raise RuntimeError(
+                f"Pair ({src}, {tgt}) disconnected in pre-contraction graph"
+            ) from error
+
+        try:
+            dist_post = nx.shortest_path_length(profile_post, src, tgt, weight="weight")
+        except nx.NetworkXNoPath as error:
+            raise RuntimeError(
+                f"Pair ({src}, {tgt}) connected pre-contraction but disconnected post-contraction"
+            ) from error
+
+        delta = abs(dist_pre - dist_post)
+        max_delta = max(max_delta, delta)
+
+        if delta > 0.01:  # 1 cm tolerance
+            mismatches.append((src, tgt, dist_pre, dist_post, delta))
+
+    if mismatches:
+        raise RuntimeError(
+            f"Found {len(mismatches)} pairs with distance mismatch >0.01m. "
+            f"Sample: {mismatches[:3]}"
+        )
+
+    return {
+        "pairs_tested": len(pairs),
+        "pairs_matched": len(pairs),
+        "max_delta_m": round(max_delta, 4),
+    }
+
+
+def run_graph_contract(output_dir: Path) -> int:
+    """Run graph-contract ETL step: contract degree-2 pathway chains.
+
+    Loads graph_with_transitions.pkl from DT-006 and wayfinding.gpkg unit_26910
+    layer, contracts pathway chains, and outputs graph_contracted.pkl and
+    graph_contracted_stats.json.
+
+    Args:
+        output_dir: Directory for output artifacts (typically /workspace/build)
+
+    Returns:
+        Exit code (0 = success)
+    """
+    import pickle
+
+    def artifact_entry(path: Path) -> dict[str, str]:
+        relative_path = path.relative_to(output_dir.parent).as_posix()
+        return {
+            "path": relative_path,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+
+    graph_transitions_pkl = output_dir / "graph_with_transitions.pkl"
+    gpkg_path = output_dir / "wayfinding.gpkg"
+
+    # Validate inputs exist
+    if not graph_transitions_pkl.exists():
+        logger.error(f"graph_with_transitions.pkl not found: {graph_transitions_pkl}")
+        logger.error("Run 'make etl-graph-transitions' first.")
+        return 1
+
+    if not gpkg_path.exists():
+        logger.error(f"GeoPackage not found: {gpkg_path}")
+        logger.error("Run 'make etl-extract' and 'make etl-normalise' first.")
+        return 1
+
+    logger.info("=== DT-007: Contract Degree-2 Chains ===")
+    logger.info(f"Inputs: {graph_transitions_pkl}, {gpkg_path}")
+
+    # Load graph
+    logger.info("Loading graph_with_transitions.pkl...")
+    with open(graph_transitions_pkl, "rb") as f:
+        graph = pickle.load(f)
+
+    # Load unit centroids from GeoPackage
+    logger.info("Loading unit centroids from unit_26910 layer...")
+    ds = ogr.Open(str(gpkg_path), 0)  # Read-only
+    if ds is None:
+        logger.error(f"Cannot open GeoPackage: {gpkg_path}")
+        return 1
+
+    layer = ds.GetLayerByName("unit_26910")
+    if layer is None:
+        logger.error("unit_26910 layer not found in GeoPackage")
+        return 1
+
+    unit_centroids = []
+    for feature in layer:
+        centroid_wkt = feature.GetField("centroid_26910")
+        level_id = feature.GetField("level_id")
+        if centroid_wkt and level_id:
+            point = cast(Point, wkt.loads(centroid_wkt))
+            unit_centroids.append((point.x, point.y, level_id))
+
+    ds = None  # Close dataset
+
+    logger.info(f"Loaded {len(unit_centroids)} unit centroids")
+
+    # Contract chains
+    logger.info("Contracting degree-2 pathway chains...")
+    contracted_graph, stats = contract_degree2_chains(graph, unit_centroids)
+
+    # Serialize outputs
+    graph_contracted_pkl = output_dir / "graph_contracted.pkl"
+    stats_json = output_dir / "graph_contracted_stats.json"
+
+    logger.info(f"Writing graph to {graph_contracted_pkl}...")
+    with open(graph_contracted_pkl, "wb") as f:
+        pickle.dump(contracted_graph, f, protocol=5)
+
+    stats["lineage"] = {
+        "inputs": sorted(
+            [artifact_entry(graph_transitions_pkl), artifact_entry(gpkg_path)],
+            key=lambda entry: entry["path"],
+        ),
+        "outputs": [artifact_entry(graph_contracted_pkl)],
+    }
+
+    logger.info(f"Writing stats to {stats_json}...")
+    with open(stats_json, "w") as f:
+        json.dump(stats, f, indent=2)
+
+    logger.info("\n=== Contraction Complete ===")
+    logger.info(f"Nodes: {stats['node_count']:,} (pre: {stats['pre_contraction_node_count']:,})")
+    logger.info(f"Edges: {stats['edge_count']:,} (pre: {stats['pre_contraction_edge_count']:,})")
+    logger.info(
+        f"Pathway arcs: {stats['pathway_arcs']:,} "
+        f"(pre: {stats['pre_contraction_pathway_arcs']:,}, "
+        f"reduction: {stats['pathway_contraction_ratio']:.1%})"
+    )
+    logger.info(f"Mean pathway length: {stats['mean_pathway_length_m']:.2f}m")
+    logger.info(
+        f"Transition arcs preserved: {stats['transition_arcs']} "
+        f"({stats['stairs_arcs']} stairs + {stats['elevator_arcs']} elevator)"
+    )
+    logger.info(
+        f"Default profile: {stats['connectivity_default']['component_count']} components"
+    )
+    logger.info(
+        f"Accessible profile: {stats['connectivity_accessible']['component_count']} components"
+    )
+    logger.info("\nOutputs:")
+    logger.info(f"  {graph_contracted_pkl}")
     logger.info(f"  {stats_json}")
 
     return 0

@@ -20,6 +20,10 @@ build/
 dist/
 *.egg-info/
 
+# CAS-gated Facilities reference files stay local; commit only their usage notes.
+reference/key-plans/*
+!reference/key-plans/README.md
+
 # Local secrets / env
 .env
 .env.local

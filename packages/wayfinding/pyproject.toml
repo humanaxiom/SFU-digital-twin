@@ -29,6 +29,8 @@ where = ["src"]
 testpaths = ["tests"]
 addopts = "--strict-markers --cov=wayfinding --cov-report=term --cov-fail-under=85"
 markers = [
+    "dataqa: durable artifact-only data quality gates",
+    "source_dataqa: data quality gates requiring read-only source GDB access",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
 

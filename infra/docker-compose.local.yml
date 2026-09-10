@@ -1,0 +1,6 @@
+# Local smoke-check override only. Normal targets use docker-compose.yml.
+services:
+  artifact:
+    image: wayfinding-build:local
+  source-etl:
+    image: wayfinding-build:local

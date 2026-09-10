@@ -2,12 +2,13 @@
 
 These tests check:
 1. contract_degree2_chains() function signature with graph and unit_centroids parameters
-2. Contracted edge count: 2,500-4,000 total arcs (provisional; RED captures actual)
+2. Measured contracted baseline: 7,450 nodes and 19,884 total directed arcs
 3. Transition arc preservation: exactly 126 unchanged (84 stairs + 42 elevator)
-4. Mean edge length: 8-15 m for pathway edges (validates micro-segment elimination)
-5. Contraction ratio: ≥90% pathway arc reduction (provisional)
+4. Mean pathway edge length: 2.12-2.14 m
+5. Pathway contraction ratio: 55.91-55.93%
 6. Protected nodes: junctions (≥3 pathway neighbors), transition endpoints (85),
-   unit-proximity (within 0.5m of unit centroids), transition-adjacent
+    unit-proximity (1,817 within 0.5m on the same level), transition-adjacent;
+    exactly 5,501 protected nodes in total
 7. Edge attributes: {length_3d, mode, level_id, geometry, original_feature_ids,
    contracted_segment_count} for all contracted pathway edges
 8. Geometry vertex count: ≥2 for all contracted edges
@@ -39,7 +40,9 @@ topology (mode='pathway', collapse parallel edges, merge bidirectional).
 
 Pinned-fixture measurements per ADR-0005 and DT-006:
 - Pre-contraction: 15,587 nodes, 44,952 edges (44,826 pathway + 126 transition)
-- Post-contraction: 2,500-4,000 total arcs (provisional; RED measures actual)
+- Post-contraction: 7,450 nodes, 19,884 total arcs (19,758 pathway + 126 transition)
+- Pathway reduction: 55.91-55.93%; mean pathway arc length: 2.12-2.14m
+- Protected nodes: 5,501 total, including 1,817 same-level unit-proximity nodes
 - Transition arcs unchanged: 126 (84 stairs + 42 elevator)
 - Protected transition endpoints: 85 nodes
 - Component counts: default=816, elevator-only=840
@@ -48,15 +51,19 @@ Pinned-fixture measurements per ADR-0005 and DT-006:
 # NetworkX documentation conventionally names graph objects G; retain that notation in tests.
 # ruff: noqa: N806
 
+import hashlib
 import inspect
 import json
 import pickle
 import random
-import subprocess
+import re
+from collections import Counter
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 # Guard conditional imports to allow RED test collection before dependencies installed
 try:
@@ -89,21 +96,25 @@ GRAPH_WITH_TRANSITIONS_STATS_JSON = BUILD_DIR / "graph_with_transitions_stats.js
 GRAPH_CONTRACTED_PKL = BUILD_DIR / "graph_contracted.pkl"
 GRAPH_CONTRACTED_STATS_JSON = BUILD_DIR / "graph_contracted_stats.json"
 
-# Expected counts per DT-007 plan (provisional targets)
+# Expected counts per the DT-007 measured-baseline amendment
 EXPECTED_PRE_CONTRACTION_NODES = 15_587
 EXPECTED_PRE_CONTRACTION_EDGES = 44_952
 EXPECTED_PRE_CONTRACTION_PATHWAY_ARCS = 44_826
+EXPECTED_CONTRACTED_NODES = 7_450
+EXPECTED_CONTRACTED_TOTAL_ARCS = 19_884
+EXPECTED_CONTRACTED_PATHWAY_ARCS = 19_758
 EXPECTED_TRANSITION_ARCS = 126  # Must remain unchanged
 EXPECTED_STAIRS_ARCS = 84
 EXPECTED_ELEVATOR_ARCS = 42
 EXPECTED_PROTECTED_TRANSITION_ENDPOINTS = 85
-
-# Provisional contraction targets (RED fixture establishes measured baseline)
-EXPECTED_MIN_CONTRACTED_TOTAL_ARCS = 2_500
-EXPECTED_MAX_CONTRACTED_TOTAL_ARCS = 4_000
-EXPECTED_MIN_MEAN_PATHWAY_LENGTH = 8.0  # meters
-EXPECTED_MAX_MEAN_PATHWAY_LENGTH = 15.0  # meters
-EXPECTED_MIN_CONTRACTION_RATIO = 0.90  # 90% reduction
+EXPECTED_UNIT_PROXIMITY_NODES = 1_817
+EXPECTED_PROTECTED_NODES = 5_501
+EXPECTED_PHYSICAL_PATHWAY_FEATURES = 22_413
+EXPECTED_AMBIGUOUS_DEGREE2_NODES_RETAINED = 77
+EXPECTED_MIN_MEAN_PATHWAY_LENGTH = 2.12  # meters
+EXPECTED_MAX_MEAN_PATHWAY_LENGTH = 2.14  # meters
+EXPECTED_MIN_CONTRACTION_RATIO = 0.5591
+EXPECTED_MAX_CONTRACTION_RATIO = 0.5593
 
 # Connectivity baselines per ADR-0005 and DT-006
 DEFAULT_PROFILE_COMPONENTS = 816
@@ -207,12 +218,12 @@ def compute_physical_pathway_degree(graph: Any, node: tuple) -> int:
         pytest.skip("networkx not available")
 
     pathway_neighbors = set()
-    for u, v, data in graph.edges(node, data=True):
+    for _u, v, data in graph.edges(node, data=True):
         if data.get("mode") == "pathway":
             # Outgoing edge: v is neighbor
             pathway_neighbors.add(v)
 
-    for u, v, data in graph.in_edges(node, data=True):
+    for u, _v, data in graph.in_edges(node, data=True):
         if data.get("mode") == "pathway":
             # Incoming edge: u is neighbor
             pathway_neighbors.add(u)
@@ -277,6 +288,106 @@ def identify_protected_nodes_reference(
     return protected
 
 
+def identify_unit_proximity_nodes_reference(
+    graph: Any,
+    unit_centroids: list[tuple[float, float, str]],
+) -> set[tuple]:
+    """Identify graph nodes within 0.5m of a same-level unit centroid."""
+    unit_proximity_nodes = set()
+    for node, attrs in graph.nodes(data=True):
+        node_x, node_y = node[0], node[1]
+        node_level_ids = attrs.get("level_ids", set())
+        for centroid_x, centroid_y, centroid_level_id in unit_centroids:
+            if centroid_level_id not in node_level_ids:
+                continue
+            distance = ((node_x - centroid_x) ** 2 + (node_y - centroid_y) ** 2) ** 0.5
+            if distance <= UNIT_CENTROID_PROXIMITY_THRESHOLD:
+                unit_proximity_nodes.add(node)
+                break
+    return unit_proximity_nodes
+
+
+def build_profile_graph(graph: Any, modes: set[str], *, weighted: bool = False) -> Any:
+    """Build one undirected routing-profile view, retaining minimum parallel weight."""
+    profile = nx.Graph()
+    for u, v, data in graph.edges(data=True):
+        if data.get("mode") not in modes:
+            continue
+        if not weighted:
+            profile.add_edge(u, v)
+            continue
+        weight = data.get("length_3d", 1.0)
+        if profile.has_edge(u, v):
+            profile[u][v]["weight"] = min(profile[u][v]["weight"], weight)
+        else:
+            profile.add_edge(u, v, weight=weight)
+    return profile
+
+
+def select_component_spanning_pairs(
+    profile: Any,
+    protected_nodes: set[tuple],
+    pair_count: int = SHORTEST_PATH_PAIR_COUNT,
+    seed: int = RANDOM_SEED,
+) -> list[tuple[tuple, tuple]]:
+    """Select reproducible connected pairs round-robin across eligible components."""
+    rng = random.Random(seed)
+    component_pairs = []
+    components = sorted(
+        (
+            sorted(component & protected_nodes)
+            for component in nx.connected_components(profile)
+            if len(component & protected_nodes) >= 2
+        ),
+        key=lambda nodes: nodes[0],
+    )
+    for nodes in components:
+        pairs = list(combinations(nodes, 2))
+        rng.shuffle(pairs)
+        component_pairs.append(pairs)
+
+    selected = []
+    while len(selected) < pair_count and any(component_pairs):
+        for pairs in component_pairs:
+            if pairs and len(selected) < pair_count:
+                selected.append(pairs.pop())
+    assert len(selected) == pair_count, (
+        f"Could not select exactly {pair_count} connected protected-node pairs; "
+        f"found {len(selected)}"
+    )
+    return selected
+
+
+def add_bidirectional_pathway(
+    graph: Any,
+    source: tuple,
+    target: tuple,
+    feature_id: str,
+) -> None:
+    """Add one physical synthetic pathway feature as two directed arcs."""
+    geometry = LineString([source, target])
+    attributes = {
+        "mode": "pathway",
+        "level_id": "L1",
+        "length_3d": 1.0,
+        "feature_id": feature_id,
+    }
+    graph.add_edge(
+        source,
+        target,
+        key=f"PW_{feature_id}",
+        geometry=geometry,
+        **attributes,
+    )
+    graph.add_edge(
+        target,
+        source,
+        key=f"PW_{feature_id}_R",
+        geometry=LineString(list(reversed(geometry.coords))),
+        **attributes,
+    )
+
+
 # ============================================================================
 # Module-Scoped Fixtures
 # ============================================================================
@@ -289,6 +400,14 @@ def graph_with_transitions() -> Any:
 
 
 @pytest.fixture(scope="module")
+def graph_contracted() -> Any:
+    """Load the DT-007 output once; missing output is a data-QA failure, not a skip."""
+    require_file(GRAPH_CONTRACTED_PKL, "DT-007 contracted graph (run make etl-graph-contract)")
+    with open(GRAPH_CONTRACTED_PKL, "rb") as f:
+        return pickle.load(f)
+
+
+@pytest.fixture(scope="module")
 def unit_centroids() -> list[tuple[float, float, str]]:
     """Load unit centroids once for all tests."""
     gpkg_path = load_required_gpkg()
@@ -298,6 +417,82 @@ def unit_centroids() -> list[tuple[float, float, str]]:
         f"found {len(centroids)}. Check GeoPackage layer or parsing logic."
     )
     return centroids
+
+
+@pytest.fixture(scope="module")
+def unit_proximity_nodes(
+    graph_with_transitions,
+    unit_centroids,
+) -> set[tuple]:
+    """Compute the pinned same-level unit-proximity set once."""
+    return identify_unit_proximity_nodes_reference(
+        graph_with_transitions, unit_centroids
+    )
+
+
+@pytest.fixture(scope="module")
+def protected_nodes(graph_with_transitions, unit_centroids) -> set[tuple]:
+    """Compute all protected-node categories once."""
+    return identify_protected_nodes_reference(graph_with_transitions, unit_centroids)
+
+
+@pytest.fixture(scope="module")
+def original_pathway_edge_index(graph_with_transitions) -> dict[Any, dict[str, Any]]:
+    """Index source pathway attributes once, collapsing equivalent reverse arcs."""
+    edge_index = {}
+    for _u, _v, _key, attrs in graph_with_transitions.edges(keys=True, data=True):
+        if attrs.get("mode") != "pathway" or attrs.get("feature_id") is None:
+            continue
+
+        feature_id = attrs["feature_id"]
+        indexed_attrs = {
+            "length_3d": attrs.get("length_3d", 0.0),
+            "level_id": attrs.get("level_id"),
+        }
+        existing_attrs = edge_index.setdefault(feature_id, indexed_attrs)
+        assert existing_attrs == indexed_attrs, (
+            f"Source pathway feature {feature_id} has inconsistent forward/reverse "
+            f"attributes: {existing_attrs} != {indexed_attrs}"
+        )
+    return edge_index
+
+
+@pytest.fixture(scope="module")
+def profile_component_maps(graph_with_transitions, graph_contracted):
+    """Precompute complete pre/post profile component sets once."""
+    profiles = {
+        "default": {"pathway", "stairs", "elevator"},
+        "elevator_only": {"pathway", "elevator"},
+    }
+    maps = {}
+    for name, modes in profiles.items():
+        pre = build_profile_graph(graph_with_transitions, modes)
+        post = build_profile_graph(graph_contracted, modes)
+        maps[name] = {
+            "pre": list(nx.connected_components(pre)),
+            "post": list(nx.connected_components(post)),
+        }
+    return maps
+
+
+@pytest.fixture
+def parallel_chain_graph_factory():
+    """Create a three-node chain with configurable physical edge multiplicities."""
+    def make(left_multiplicity: int, right_multiplicity: int):
+        graph = nx.MultiDiGraph()
+        left = (0.0, 0.0, 1)
+        middle = (1.0, 0.0, 1)
+        right = (2.0, 0.0, 1)
+        graph.add_node(left, level_ids={"L1"}, is_transition_endpoint=True)
+        graph.add_node(middle, level_ids={"L1"})
+        graph.add_node(right, level_ids={"L1"}, is_transition_endpoint=True)
+        for index in range(left_multiplicity):
+            add_bidirectional_pathway(graph, left, middle, f"L{index}")
+        for index in range(right_multiplicity):
+            add_bidirectional_pathway(graph, middle, right, f"R{index}")
+        return graph, left, middle, right
+
+    return make
 
 
 # ============================================================================
@@ -337,42 +532,16 @@ def test_contract_degree2_chains_signature():
     )
 
 
-def test_identify_unit_proximity_nodes_measured(unit_centroids):
-    """AC2: Measure actual unit-proximity protected node count (3D: XY+level)."""
-    if nx is None:
-        pytest.skip("networkx not available")
-
-    graph = load_required_graph_with_transitions()
-
-    # Compute protected nodes within 0.5m of unit centroids on same level
-    unit_proximity_nodes = set()
-    for node, attrs in graph.nodes(data=True):
-        node_x, node_y = node[0], node[1]
-        node_level_ids = attrs.get("level_ids", set())
-        for centroid_x, centroid_y, centroid_level_id in unit_centroids:
-            # Check level match first
-            if centroid_level_id not in node_level_ids:
-                continue
-            # Then check XY distance
-            distance = ((node_x - centroid_x) ** 2 + (node_y - centroid_y) ** 2) ** 0.5
-            if distance <= UNIT_CENTROID_PROXIMITY_THRESHOLD:
-                unit_proximity_nodes.add(node)
-                break
-
-    # Record measured baseline (no upper bound assertion; this is characterization)
-    print(
-        f"\nMeasured unit-proximity protected nodes: {len(unit_proximity_nodes)} "
-        f"(threshold: {UNIT_CENTROID_PROXIMITY_THRESHOLD}m, "
-        f"{len(unit_centroids)} unit centroids, 3D proximity: XY+level)"
-    )
-
-    # Basic sanity check: should be non-zero and less than total node count
-    assert 0 < len(unit_proximity_nodes) < graph.number_of_nodes(), (
-        f"Unit-proximity node count {len(unit_proximity_nodes)} outside sanity bounds "
-        f"(0, {graph.number_of_nodes()}). Check centroid parsing, level matching, or distance calculation."
+def test_identify_unit_proximity_nodes_measured(unit_proximity_nodes):
+    """AC2: Same-level unit proximity matches the pinned measured baseline."""
+    assert len(unit_proximity_nodes) == EXPECTED_UNIT_PROXIMITY_NODES, (
+        f"Found {len(unit_proximity_nodes)} same-level unit-proximity nodes, expected "
+        f"the measured baseline of {EXPECTED_UNIT_PROXIMITY_NODES}. This pinned fixture "
+        f"gate supersedes the original estimate."
     )
 
 
+@pytest.mark.dataqa
 def test_identify_protected_nodes_includes_all_categories(
     graph_with_transitions,
     unit_centroids,
@@ -532,38 +701,42 @@ def test_contracted_length_sums_segments():
 # ============================================================================
 
 
+@pytest.mark.dataqa
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_contracted_edge_count_in_range():
-    """AC1: Output graph has 2,500-4,000 total directed arcs (provisional; RED
-    captures actual)."""
-    if not GRAPH_CONTRACTED_PKL.exists():
-        pytest.skip("graph_contracted.pkl not yet generated (run make etl-graph-contract)")
-
-    with open(GRAPH_CONTRACTED_PKL, "rb") as f:
-        graph_contracted = pickle.load(f)
-
+def test_contracted_edge_count_measured_baseline(graph_contracted):
+    """AC1: Output matches the measured total and pathway arc baseline."""
     total_arcs = graph_contracted.number_of_edges()
+    pathway_arcs = sum(
+        1
+        for _u, _v, _key, attrs in graph_contracted.edges(keys=True, data=True)
+        if attrs.get("mode") == "pathway"
+    )
 
-    # Provisional range; RED characterizes actual value
-    print(f"\nMeasured contracted arc count: {total_arcs}")
-
-    assert EXPECTED_MIN_CONTRACTED_TOTAL_ARCS <= total_arcs <= EXPECTED_MAX_CONTRACTED_TOTAL_ARCS, (
-        f"Contracted graph has {total_arcs} arcs, outside provisional range "
-        f"[{EXPECTED_MIN_CONTRACTED_TOTAL_ARCS}, {EXPECTED_MAX_CONTRACTED_TOTAL_ARCS}]. "
-        f"RED fixture establishes measured baseline; if deterministic output differs "
-        f"materially, trigger plan/ADR review per DT-007 §7."
+    assert total_arcs == EXPECTED_CONTRACTED_TOTAL_ARCS, (
+        f"Contracted graph has {total_arcs} total arcs, expected the measured baseline "
+        f"of {EXPECTED_CONTRACTED_TOTAL_ARCS}; this gate supersedes the original estimate."
+    )
+    assert pathway_arcs == EXPECTED_CONTRACTED_PATHWAY_ARCS, (
+        f"Contracted graph has {pathway_arcs} pathway arcs, expected the measured "
+        f"baseline of {EXPECTED_CONTRACTED_PATHWAY_ARCS}."
     )
 
 
+@pytest.mark.dataqa
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_contracted_transition_arcs_preserved():
+def test_contracted_node_count_measured_baseline(graph_contracted):
+    """AC1: Output has exactly 7,450 nodes for the pinned fixture."""
+    assert graph_contracted.number_of_nodes() == EXPECTED_CONTRACTED_NODES, (
+        f"Contracted graph has {graph_contracted.number_of_nodes()} nodes, expected "
+        f"the measured baseline of {EXPECTED_CONTRACTED_NODES}; this gate supersedes "
+        f"the original compression estimate."
+    )
+
+
+@pytest.mark.dataqa
+@pytest.mark.skipif(nx is None, reason="networkx not available")
+def test_contracted_transition_arcs_preserved(graph_contracted):
     """AC1: Exactly 126 transition arcs unchanged (84 stairs + 42 elevator)."""
-    if not GRAPH_CONTRACTED_PKL.exists():
-        pytest.skip("graph_contracted.pkl not yet generated")
-
-    with open(GRAPH_CONTRACTED_PKL, "rb") as f:
-        graph_contracted = pickle.load(f)
-
     transition_arcs = [
         (u, v, k, d)
         for u, v, k, d in graph_contracted.edges(keys=True, data=True)
@@ -589,7 +762,7 @@ def test_contracted_transition_arcs_preserved():
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
 def test_contracted_mean_edge_length():
-    """AC1: Mean pathway edge length 8-15m (validates micro-segment merging)."""
+    """AC1: Mean pathway arc length matches the measured 2.12-2.14m range."""
     if not GRAPH_CONTRACTED_PKL.exists():
         pytest.skip("graph_contracted.pkl not yet generated")
 
@@ -612,14 +785,13 @@ def test_contracted_mean_edge_length():
     assert EXPECTED_MIN_MEAN_PATHWAY_LENGTH <= mean_length <= EXPECTED_MAX_MEAN_PATHWAY_LENGTH, (
         f"Mean pathway length {mean_length:.2f}m outside expected range "
         f"[{EXPECTED_MIN_MEAN_PATHWAY_LENGTH}, {EXPECTED_MAX_MEAN_PATHWAY_LENGTH}]m. "
-        f"Pre-contraction mean was ~0.94m; contraction should merge micro-segments. "
-        f"RED characterizes actual mean."
+        f"This measured fixture baseline supersedes the original estimate."
     )
 
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_contraction_ratio_minimum():
-    """AC1: Pathway contraction ratio ≥90% (provisional)."""
+def test_contraction_ratio_measured_baseline():
+    """AC1: Pathway contraction ratio matches the measured 55.91-55.93%."""
     if not GRAPH_CONTRACTED_PKL.exists():
         pytest.skip("graph_contracted.pkl not yet generated")
 
@@ -641,10 +813,14 @@ def test_contraction_ratio_minimum():
         f"{pathway_arcs_post} arcs ({contraction_ratio:.1%} reduction)"
     )
 
-    assert contraction_ratio >= EXPECTED_MIN_CONTRACTION_RATIO, (
-        f"Pathway contraction ratio {contraction_ratio:.1%} below provisional minimum "
-        f"{EXPECTED_MIN_CONTRACTION_RATIO:.0%}. This suggests insufficient chain merging. "
-        f"Review protected node identification and chain traversal logic."
+    assert (
+        EXPECTED_MIN_CONTRACTION_RATIO
+        <= contraction_ratio
+        <= EXPECTED_MAX_CONTRACTION_RATIO
+    ), (
+        f"Pathway contraction ratio {contraction_ratio:.2%} outside measured range "
+        f"[{EXPECTED_MIN_CONTRACTION_RATIO:.2%}, {EXPECTED_MAX_CONTRACTION_RATIO:.2%}]. "
+        f"This pinned baseline supersedes the original estimate."
     )
 
 
@@ -709,38 +885,48 @@ def test_transition_endpoints_preserved():
 
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_unit_proximity_nodes_preserved(unit_centroids):
+def test_unit_proximity_nodes_preserved(unit_proximity_nodes):
     """AC2: All nodes within 0.5m of unit centroids on same level exist post-contraction."""
-    graph_pre = load_required_graph_with_transitions()
-
     if not GRAPH_CONTRACTED_PKL.exists():
         pytest.skip("graph_contracted.pkl not yet generated")
 
     with open(GRAPH_CONTRACTED_PKL, "rb") as f:
         graph_post = pickle.load(f)
 
-    # Identify unit-proximity nodes in pre-contraction graph (3D: XY+level)
-    unit_proximity_pre = set()
-    for node, attrs in graph_pre.nodes(data=True):
-        node_x, node_y = node[0], node[1]
-        node_level_ids = attrs.get("level_ids", set())
-        for centroid_x, centroid_y, centroid_level_id in unit_centroids:
-            # Check level match first
-            if centroid_level_id not in node_level_ids:
-                continue
-            # Then check XY distance
-            distance = ((node_x - centroid_x) ** 2 + (node_y - centroid_y) ** 2) ** 0.5
-            if distance <= UNIT_CENTROID_PROXIMITY_THRESHOLD:
-                unit_proximity_pre.add(node)
-                break
+    assert len(unit_proximity_nodes) == EXPECTED_UNIT_PROXIMITY_NODES, (
+        f"Found {len(unit_proximity_nodes)} same-level unit-proximity nodes, expected "
+        f"the measured baseline of {EXPECTED_UNIT_PROXIMITY_NODES}."
+    )
 
     # Check all exist post-contraction
-    missing = unit_proximity_pre - set(graph_post.nodes())
+    missing = unit_proximity_nodes - set(graph_post.nodes())
 
     assert len(missing) == 0, (
-        f"Found {len(missing)} unit-proximity nodes (within {UNIT_CENTROID_PROXIMITY_THRESHOLD}m on same level) "
+        f"Found {len(missing)} unit-proximity nodes (within "
+        f"{UNIT_CENTROID_PROXIMITY_THRESHOLD}m on same level) "
         f"removed during contraction. All must be protected for DT-008 connector attachment. "
-        f"Total unit-proximity nodes: {len(unit_proximity_pre)}, missing: {list(missing)[:5]}"
+        f"Total unit-proximity nodes: {len(unit_proximity_nodes)}, missing: {list(missing)[:5]}"
+    )
+
+
+@pytest.mark.dataqa
+def test_protected_node_count_measured_baseline(protected_nodes):
+    """AC2: All protection categories total 5,501 nodes on the pinned fixture."""
+    assert len(protected_nodes) == EXPECTED_PROTECTED_NODES, (
+        f"Reference protection rules identify {len(protected_nodes)} nodes, expected "
+        f"the measured baseline of {EXPECTED_PROTECTED_NODES}. Do not weaken junction, "
+        f"transition, or unit-proximity protection to alter compression."
+    )
+
+
+@pytest.mark.dataqa
+def test_ambiguous_degree2_node_count_measured_baseline():
+    """Pinned fixture reports every degree-2 node retained for unequal multiplicity."""
+    require_file(GRAPH_CONTRACTED_STATS_JSON, "DT-007 contraction stats")
+    stats = json.loads(GRAPH_CONTRACTED_STATS_JSON.read_text())
+    assert (
+        stats["ambiguous_degree2_nodes_retained"]
+        == EXPECTED_AMBIGUOUS_DEGREE2_NODES_RETAINED
     )
 
 
@@ -808,7 +994,7 @@ def test_contracted_edge_attributes_schema():
 
 
 @pytest.mark.skipif(nx is None or LineString is None, reason="dependencies not available")
-def test_contracted_length_equals_sum():
+def test_contracted_length_equals_sum(original_pathway_edge_index):
     """AC3: Sample 20 contracted edges, recompute length from original segments,
     assert match within 0.001m."""
     if not GRAPH_CONTRACTED_PKL.exists():
@@ -832,9 +1018,6 @@ def test_contracted_length_equals_sum():
     random.seed(RANDOM_SEED)
     sample = random.sample(multi_segment_edges, 20)
 
-    # Load pre-contraction graph to trace original segments
-    graph_pre = load_required_graph_with_transitions()
-
     for u, v, k, data in sample:
         contracted_length = data.get("length_3d", 0.0)
         original_fids = data.get("original_feature_ids", [])
@@ -842,27 +1025,18 @@ def test_contracted_length_equals_sum():
         if not original_fids:
             pytest.fail(f"Edge ({u}, {v}, {k}) has empty original_feature_ids")
 
-        # Sum lengths from original segments in pre-contraction graph
-        # Original FIDs are pathway feature IDs; find edges with matching feature_id
-        original_lengths = []
-        for orig_fid in original_fids:
-            # Find edges in pre-contraction graph with this feature_id
-            matching_edges = [
-                d
-                for u_pre, v_pre, k_pre, d in graph_pre.edges(keys=True, data=True)
-                if d.get("feature_id") == orig_fid and d.get("mode") == "pathway"
-            ]
-            if matching_edges:
-                # Take first match (forward or reverse, length is same)
-                original_lengths.append(matching_edges[0].get("length_3d", 0.0))
-
-        if not original_lengths:
+        missing_fids = [
+            fid for fid in original_fids if fid not in original_pathway_edge_index
+        ]
+        if missing_fids:
             pytest.fail(
-                f"Could not find original segments for contracted edge ({u}, {v}, {k}) "
-                f"with FIDs {original_fids}"
+                f"Could not find source pathway features {missing_fids} for contracted "
+                f"edge ({u}, {v}, {k})"
             )
 
-        expected_sum = sum(original_lengths)
+        expected_sum = sum(
+            original_pathway_edge_index[fid]["length_3d"] for fid in original_fids
+        )
 
         assert abs(contracted_length - expected_sum) < LENGTH_SUM_TOLERANCE, (
             f"Contracted edge ({u}, {v}, {k}) length {contracted_length:.3f}m does not match "
@@ -929,6 +1103,40 @@ def test_contracted_original_fids_nonempty():
     )
 
 
+@pytest.mark.dataqa
+def test_each_physical_source_pathway_feature_appears_once(
+    graph_with_transitions,
+    graph_contracted,
+):
+    """All 22,413 physical source pathway FIDs occur once on canonical output arcs."""
+    source_fids = {
+        str(data["feature_id"])
+        for _u, _v, _key, data in graph_with_transitions.edges(keys=True, data=True)
+        if data.get("mode") == "pathway"
+    }
+    assert len(source_fids) == EXPECTED_PHYSICAL_PATHWAY_FEATURES
+
+    output_fids = Counter(
+        str(feature_id)
+        for _u, _v, key, data in graph_contracted.edges(keys=True, data=True)
+        if data.get("mode") == "pathway" and not str(key).endswith("_R")
+        for feature_id in data.get("original_feature_ids", [])
+    )
+    missing = source_fids - output_fids.keys()
+    unexpected = output_fids.keys() - source_fids
+    duplicates = {fid: count for fid, count in output_fids.items() if count != 1}
+    assert not missing, (
+        f"Canonical contracted edges omit source pathway FIDs: {sorted(missing)[:10]}"
+    )
+    assert not unexpected, (
+        f"Canonical contracted edges contain unknown FIDs: {sorted(unexpected)[:10]}"
+    )
+    assert not duplicates, (
+        "Source pathway FIDs do not occur exactly once: "
+        f"{dict(list(duplicates.items())[:10])}"
+    )
+
+
 @pytest.mark.skipif(nx is None or LineString is None, reason="dependencies not available")
 def test_contracted_reverse_arc_geometry():
     """AC3: For bidirectional pairs, reverse coords are reversed(forward.coords)."""
@@ -988,75 +1196,31 @@ def test_contracted_reverse_arc_geometry():
         )
 
 
+@pytest.mark.dataqa
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_shortest_path_preservation_deterministic(unit_centroids):
+def test_shortest_path_preservation_deterministic(
+    graph_with_transitions,
+    graph_contracted,
+    protected_nodes,
+):
     """AC4: Exactly 20 connected protected-node pairs (seed=42), distances match within
     0.01m pre/post-contraction."""
-    graph_pre = load_required_graph_with_transitions()
-
-    if not GRAPH_CONTRACTED_PKL.exists():
-        pytest.skip("graph_contracted.pkl not yet generated")
-
-    with open(GRAPH_CONTRACTED_PKL, "rb") as f:
-        graph_post = pickle.load(f)
-
-    # Identify protected nodes
-    protected = identify_protected_nodes_reference(graph_pre, unit_centroids)
-
-    # Build default profile graphs (pathway + stairs + elevator)
-    def build_profile_graph(graph):
-        profile = nx.Graph()
-        for u, v, data in graph.edges(data=True):
-            if data.get("mode") in ("pathway", "stairs", "elevator"):
-                weight = data.get("length_3d", 1.0)
-                # Accumulate min weight for parallel edges
-                if profile.has_edge(u, v):
-                    profile[u][v]["weight"] = min(profile[u][v]["weight"], weight)
-                else:
-                    profile.add_edge(u, v, weight=weight)
-        return profile
-
-    profile_pre = build_profile_graph(graph_pre)
-    profile_post = build_profile_graph(graph_post)
-
-    # Get components with ≥2 protected nodes
-    components_pre = [
-        comp
-        for comp in nx.connected_components(profile_pre)
-        if len(comp & protected) >= 2
-    ]
-
-    if not components_pre:
-        pytest.fail("No connected components with ≥2 protected nodes found")
-
-    # Deterministically select 20 connected pairs
-    random.seed(RANDOM_SEED)
-    pairs = []
-
-    for comp in components_pre:
-        protected_in_comp = sorted(comp & protected)
-        if len(protected_in_comp) < 2:
-            continue
-
-        # Generate all pairs in component
-        for i in range(len(protected_in_comp)):
-            for j in range(i + 1, len(protected_in_comp)):
-                pairs.append((protected_in_comp[i], protected_in_comp[j]))
-
-                if len(pairs) >= SHORTEST_PATH_PAIR_COUNT:
-                    break
-            if len(pairs) >= SHORTEST_PATH_PAIR_COUNT:
-                break
-        if len(pairs) >= SHORTEST_PATH_PAIR_COUNT:
-            break
-
-    assert len(pairs) >= SHORTEST_PATH_PAIR_COUNT, (
-        f"Could not select {SHORTEST_PATH_PAIR_COUNT} connected protected-node pairs. "
-        f"Found only {len(pairs)} pairs across {len(components_pre)} components. "
-        f"Check protected node identification or component structure."
+    profile_pre = build_profile_graph(
+        graph_with_transitions,
+        {"pathway", "stairs", "elevator"},
+        weighted=True,
     )
-
-    pairs = pairs[:SHORTEST_PATH_PAIR_COUNT]
+    profile_post = build_profile_graph(
+        graph_contracted,
+        {"pathway", "stairs", "elevator"},
+        weighted=True,
+    )
+    pairs = select_component_spanning_pairs(profile_pre, protected_nodes)
+    assert pairs == select_component_spanning_pairs(profile_pre, protected_nodes)
+    assert len(pairs) == SHORTEST_PATH_PAIR_COUNT, (
+        f"Expected exactly {SHORTEST_PATH_PAIR_COUNT} deterministic path comparisons, "
+        f"selected {len(pairs)}."
+    )
 
     # Compare shortest paths
     mismatches = []
@@ -1088,7 +1252,55 @@ def test_shortest_path_preservation_deterministic(unit_centroids):
         f"Sample mismatches: {mismatches[:3]}"
     )
 
+    component_by_node = {
+        node: index
+        for index, component in enumerate(nx.connected_components(profile_pre))
+        for node in component
+    }
+    eligible_component_count = sum(
+        1
+        for component in nx.connected_components(profile_pre)
+        if len(component & protected_nodes) >= 2
+    )
+    sampled_components = {component_by_node[source] for source, _target in pairs}
+    assert len(sampled_components) == min(
+        eligible_component_count,
+        SHORTEST_PATH_PAIR_COUNT,
+    )
+
     print(f"\nShortest-path validation: {len(pairs)} pairs tested, all matched within 0.01m")
+
+
+def test_shortest_path_validator_samples_across_eligible_components(monkeypatch):
+    """Production validation spans eligible components and is reproducible at seed 42."""
+    from wayfinding.etl.graph import _validate_shortest_paths
+
+    graph = nx.MultiDiGraph()
+    protected = set()
+    for component_index in range(3):
+        nodes = [(component_index * 100.0 + offset, 0.0, 1) for offset in range(10)]
+        protected.update(nodes)
+        for source, target in zip(nodes, nodes[1:], strict=False):
+            graph.add_edge(source, target, mode="pathway", length_3d=1.0)
+
+    original = nx.shortest_path_length
+
+    def capture_run():
+        calls = []
+
+        def capture(profile, source, target, weight):
+            calls.append((source, target))
+            return original(profile, source, target, weight=weight)
+
+        monkeypatch.setattr(nx, "shortest_path_length", capture)
+        stats = _validate_shortest_paths(graph, graph.copy(), protected)
+        return stats, calls[::2]
+
+    first_stats, first_pairs = capture_run()
+    second_stats, second_pairs = capture_run()
+    assert first_stats["pairs_tested"] == SHORTEST_PATH_PAIR_COUNT
+    assert first_pairs == second_pairs
+    assert len({int(source[0] // 100) for source, _target in first_pairs}) == 3
 
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
@@ -1125,46 +1337,81 @@ def test_contracted_bidirectional():
     )
 
 
+@pytest.mark.dataqa
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_contracted_parallel_edges_distinct_keys():
-    """AC5: Parallel edges (multiple contracted chains between same protected nodes)
-    have distinct keys."""
-    if not GRAPH_CONTRACTED_PKL.exists():
-        pytest.skip("graph_contracted.pkl not yet generated")
+def test_contracted_parallel_edges_preserve_topology_and_provenance(graph_contracted):
+    """Parallel canonical chains remain distinct physical routes with paired reverses."""
+    by_topology = {}
+    for u, v, key, data in graph_contracted.edges(keys=True, data=True):
+        if data.get("mode") == "pathway" and not str(key).endswith("_R"):
+            by_topology.setdefault((u, v), []).append((key, data))
+    parallel = {topology: edges for topology, edges in by_topology.items() if len(edges) > 1}
+    assert parallel, "Pinned fixture must exercise parallel contracted pathway topology"
 
-    with open(GRAPH_CONTRACTED_PKL, "rb") as f:
-        graph_contracted = pickle.load(f)
+    for (u, v), edges in parallel.items():
+        provenance_sets = [frozenset(data["original_feature_ids"]) for _key, data in edges]
+        assert all(provenance_sets)
+        assert len(provenance_sets) == len(set(provenance_sets))
+        assert all(left.isdisjoint(right) for left, right in combinations(provenance_sets, 2))
+        for key, data in edges:
+            reverse = graph_contracted.get_edge_data(v, u, f"{key}_R")
+            assert reverse is not None
+            assert reverse["original_feature_ids"] == data["original_feature_ids"]
+            assert reverse["contracted_segment_count"] == data["contracted_segment_count"]
 
-    # Find nodes with multiple pathway edges between them
-    edge_counts = {}
-    for u, v, k, d in graph_contracted.edges(keys=True, data=True):
-        if d.get("mode") == "pathway":
-            pair = (u, v)
-            if pair not in edge_counts:
-                edge_counts[pair] = []
-            edge_counts[pair].append(k)
 
-    parallel_pairs = {pair: keys for pair, keys in edge_counts.items() if len(keys) > 1}
+def test_equal_parallel_multiplicity_contracts_independent_chains(
+    parallel_chain_graph_factory,
+    monkeypatch,
+):
+    """Equal parallel multiplicity contracts without losing physical provenance."""
+    from wayfinding.etl import graph as graph_module
 
-    if not parallel_pairs:
-        print("\nNo parallel edges found (all contracted chains have unique endpoints)")
-        return
-
-    # Check all keys are distinct
-    for pair, keys in parallel_pairs.items():
-        assert len(keys) == len(set(keys)), (
-            f"Parallel edges between {pair} have duplicate keys: {keys}. "
-            f"Each contracted chain must have a distinct edge key."
-        )
-
-    print(
-        f"\nFound {len(parallel_pairs)} node pairs with parallel edges, "
-        f"all have distinct keys"
+    source, left, middle, right = parallel_chain_graph_factory(2, 2)
+    monkeypatch.setattr(
+        graph_module,
+        "_validate_shortest_paths",
+        lambda *_args: {"pairs_tested": 20, "pairs_matched": 20, "max_delta_m": 0.0},
     )
+    contracted, _stats = graph_module.contract_degree2_chains(source, [])
+    canonical = [
+        (u, v, data)
+        for u, v, key, data in contracted.edges(keys=True, data=True)
+        if data.get("mode") == "pathway" and not key.endswith("_R")
+    ]
+    assert middle not in contracted
+    assert {(u, v) for u, v, _data in canonical} == {(left, right)}
+    assert {frozenset(data["original_feature_ids"]) for _u, _v, data in canonical} == {
+        frozenset({"L0", "R0"}),
+        frozenset({"L1", "R1"}),
+    }
+
+
+def test_unequal_parallel_multiplicity_retains_ambiguous_degree2_node(
+    parallel_chain_graph_factory,
+    monkeypatch,
+):
+    """Unequal parallel multiplicity retains the middle node as an ambiguity boundary."""
+    from wayfinding.etl import graph as graph_module
+
+    source, left, middle, right = parallel_chain_graph_factory(2, 1)
+    monkeypatch.setattr(
+        graph_module,
+        "_validate_shortest_paths",
+        lambda *_args: {"pairs_tested": 20, "pairs_matched": 20, "max_delta_m": 0.0},
+    )
+    contracted, _stats = graph_module.contract_degree2_chains(source, [])
+    assert middle in contracted
+    canonical_topologies = {
+        (u, v)
+        for u, v, key, data in contracted.edges(keys=True, data=True)
+        if data.get("mode") == "pathway" and not key.endswith("_R")
+    }
+    assert canonical_topologies == {(left, middle), (middle, right)}
 
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_contracted_level_consistency():
+def test_contracted_level_consistency(original_pathway_edge_index):
     """AC6: Sample 50 contracted edges with contracted_segment_count > 1, trace back to
     original segments, assert all same level_id."""
     if not GRAPH_CONTRACTED_PKL.exists():
@@ -1188,9 +1435,6 @@ def test_contracted_level_consistency():
     random.seed(RANDOM_SEED)
     sample = random.sample(multi_segment_edges, 50)
 
-    # Load pre-contraction graph
-    graph_pre = load_required_graph_with_transitions()
-
     for u, v, k, data in sample:
         contracted_level = data.get("level_id")
         original_fids = data.get("original_feature_ids", [])
@@ -1198,15 +1442,16 @@ def test_contracted_level_consistency():
         if not original_fids:
             pytest.fail(f"Edge ({u}, {v}, {k}) has empty original_feature_ids")
 
-        # Find original segments and check level_id
-        original_levels = set()
-        for orig_fid in original_fids:
-            matching_edges = [
-                d.get("level_id")
-                for u_pre, v_pre, k_pre, d in graph_pre.edges(keys=True, data=True)
-                if d.get("feature_id") == orig_fid and d.get("mode") == "pathway"
-            ]
-            original_levels.update(matching_edges)
+        missing_fids = [
+            fid for fid in original_fids if fid not in original_pathway_edge_index
+        ]
+        assert not missing_fids, (
+            f"Contracted edge ({u}, {v}, {k}) references unknown source pathway "
+            f"features: {missing_fids}"
+        )
+        original_levels = {
+            original_pathway_edge_index[fid]["level_id"] for fid in original_fids
+        }
 
         assert len(original_levels) == 1, (
             f"Contracted edge ({u}, {v}, {k}) spans multiple levels: {original_levels}. "
@@ -1220,7 +1465,7 @@ def test_contracted_level_consistency():
 
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_no_cross_level_pathway_chains():
+def test_no_cross_level_pathway_chains(original_pathway_edge_index):
     """AC6: Explicit check that no contracted edge claims to merge segments from
     different levels."""
     if not GRAPH_CONTRACTED_PKL.exists():
@@ -1228,8 +1473,6 @@ def test_no_cross_level_pathway_chains():
 
     with open(GRAPH_CONTRACTED_PKL, "rb") as f:
         graph_contracted = pickle.load(f)
-
-    graph_pre = load_required_graph_with_transitions()
 
     cross_level_chains = []
 
@@ -1243,15 +1486,16 @@ def test_no_cross_level_pathway_chains():
         if not original_fids:
             continue
 
-        # Collect levels from original segments
-        levels = set()
-        for orig_fid in original_fids:
-            matching_edges = [
-                d.get("level_id")
-                for u_pre, v_pre, k_pre, d in graph_pre.edges(keys=True, data=True)
-                if d.get("feature_id") == orig_fid and d.get("mode") == "pathway"
-            ]
-            levels.update(matching_edges)
+        missing_fids = [
+            fid for fid in original_fids if fid not in original_pathway_edge_index
+        ]
+        assert not missing_fids, (
+            f"Contracted edge ({u}, {v}, {k}) references unknown source pathway "
+            f"features: {missing_fids}"
+        )
+        levels = {
+            original_pathway_edge_index[fid]["level_id"] for fid in original_fids
+        }
 
         if len(levels) > 1:
             cross_level_chains.append((u, v, k, levels, original_fids))
@@ -1372,31 +1616,13 @@ def test_no_isolated_nodes_contracted():
     )
 
 
+@pytest.mark.dataqa
 @pytest.mark.skipif(nx is None, reason="networkx not available")
-def test_connectivity_component_counts_exact():
+def test_connectivity_component_counts_exact(profile_component_maps):
     """AC8: Component counts match DT-006 baseline exactly: default=816,
     elevator-only=840."""
-    if not GRAPH_CONTRACTED_PKL.exists():
-        pytest.skip("graph_contracted.pkl not yet generated")
-
-    with open(GRAPH_CONTRACTED_PKL, "rb") as f:
-        graph_contracted = pickle.load(f)
-
-    # Default profile: pathway + stairs + elevator
-    default_graph = nx.Graph()
-    for u, v, data in graph_contracted.edges(data=True):
-        if data.get("mode") in ("pathway", "stairs", "elevator"):
-            default_graph.add_edge(u, v)
-
-    default_components = nx.number_connected_components(default_graph)
-
-    # Accessible profile: pathway + elevator only
-    accessible_graph = nx.Graph()
-    for u, v, data in graph_contracted.edges(data=True):
-        if data.get("mode") in ("pathway", "elevator"):
-            accessible_graph.add_edge(u, v)
-
-    accessible_components = nx.number_connected_components(accessible_graph)
+    default_components = len(profile_component_maps["default"]["post"])
+    accessible_components = len(profile_component_maps["elevator_only"]["post"])
 
     assert default_components == DEFAULT_PROFILE_COMPONENTS, (
         f"Default profile has {default_components} components, expected "
@@ -1409,6 +1635,60 @@ def test_connectivity_component_counts_exact():
         f"{ACCESSIBLE_PROFILE_COMPONENTS} (DT-006 baseline). Contraction must preserve "
         f"component structure."
     )
+
+
+@pytest.mark.dataqa
+def test_elevator_only_profile_excludes_every_stairs_only_connection(graph_contracted):
+    """Elevator-only means pathways plus elevators, with every stairs-only edge excluded."""
+    elevator_only = build_profile_graph(graph_contracted, {"pathway", "elevator"})
+    stairs_only_connections = {
+        frozenset((u, v))
+        for u, v, data in graph_contracted.edges(data=True)
+        if data.get("mode") == "stairs"
+        and all(
+            parallel.get("mode") == "stairs"
+            for parallel in graph_contracted.get_edge_data(u, v).values()
+        )
+    }
+    assert stairs_only_connections, "Pinned fixture must contain stairs-only connections"
+    assert all(
+        not elevator_only.has_edge(*tuple(connection))
+        for connection in stairs_only_connections
+    )
+
+
+@pytest.mark.dataqa
+@pytest.mark.parametrize("profile_name", ["default", "elevator_only"])
+def test_complete_surviving_and_protected_component_partition_equivalence(
+    profile_name,
+    profile_component_maps,
+    graph_contracted,
+    protected_nodes,
+):
+    """Every surviving/protected node has identical component membership pre and post."""
+    surviving = set(graph_contracted.nodes)
+    pre_components = profile_component_maps[profile_name]["pre"]
+    post_components = profile_component_maps[profile_name]["post"]
+
+    pre_surviving_partition = {
+        frozenset(component & surviving)
+        for component in pre_components
+        if component & surviving
+    }
+    post_surviving_partition = {frozenset(component) for component in post_components}
+    assert pre_surviving_partition == post_surviving_partition
+
+    pre_protected_partition = {
+        frozenset(component & protected_nodes)
+        for component in pre_components
+        if component & protected_nodes
+    }
+    post_protected_partition = {
+        frozenset(component & protected_nodes)
+        for component in post_components
+        if component & protected_nodes
+    }
+    assert pre_protected_partition == post_protected_partition
 
 
 @pytest.mark.skipif(nx is None, reason="networkx not available")
@@ -1478,6 +1758,7 @@ def test_run_graph_contract_writes_artifacts():
 # ============================================================================
 
 
+@pytest.mark.dataqa
 def test_no_gdb_access_during_contraction():
     """Assert GDB file not opened during contraction (operates on pkl/gpkg only)."""
     # This test verifies the container does NOT mount /data (GDB read-only mount)
@@ -1501,6 +1782,7 @@ def test_no_gdb_access_during_contraction():
     )
 
 
+@pytest.mark.dataqa
 def test_contracted_stats_json_schema():
     """All required keys present in graph_contracted_stats.json."""
     if not GRAPH_CONTRACTED_STATS_JSON.exists():
@@ -1531,6 +1813,52 @@ def test_contracted_stats_json_schema():
     )
 
 
+@pytest.mark.dataqa
+def test_contracted_stats_lineage_schema_and_order():
+    """Stats declare only sorted repository-relative immediate inputs and output."""
+    require_file(GRAPH_CONTRACTED_STATS_JSON, "DT-007 contraction stats")
+    stats = json.loads(GRAPH_CONTRACTED_STATS_JSON.read_text())
+    lineage = stats["lineage"]
+    assert lineage.keys() == {"inputs", "outputs"}
+    assert [entry["path"] for entry in lineage["inputs"]] == [
+        "build/graph_with_transitions.pkl",
+        "build/wayfinding.gpkg",
+    ]
+    assert [entry["path"] for entry in lineage["outputs"]] == [
+        "build/graph_contracted.pkl"
+    ]
+    for entry in lineage["inputs"] + lineage["outputs"]:
+        assert entry.keys() == {"path", "sha256"}
+        assert re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])
+        assert not Path(entry["path"]).is_absolute()
+
+
+@pytest.mark.dataqa
+def test_contracted_stats_lineage_hashes_match_artifact_bytes():
+    """Every declared DT-007 lineage digest independently matches artifact bytes."""
+    require_file(GRAPH_CONTRACTED_STATS_JSON, "DT-007 contraction stats")
+    stats = json.loads(GRAPH_CONTRACTED_STATS_JSON.read_text())
+    for entry in stats["lineage"]["inputs"] + stats["lineage"]["outputs"]:
+        artifact = WORKSPACE_ROOT / entry["path"]
+        require_file(artifact, f"declared lineage artifact {entry['path']}")
+        actual = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        assert entry["sha256"] == actual
+
+
+@pytest.mark.dataqa
+def test_contracted_stats_lineage_excludes_sidecar_and_source_gdb():
+    """Immediate lineage has neither a sidecar self-hash nor source-GDB capability."""
+    require_file(GRAPH_CONTRACTED_STATS_JSON, "DT-007 contraction stats")
+    stats = json.loads(GRAPH_CONTRACTED_STATS_JSON.read_text())
+    paths = {
+        entry["path"]
+        for direction in ("inputs", "outputs")
+        for entry in stats["lineage"][direction]
+    }
+    assert "build/graph_contracted_stats.json" not in paths
+    assert all("IndoorWayfinding.gdb" not in path and ".gdb" not in path for path in paths)
+
+
 def test_makefile_has_etl_graph_contract_target():
     """Makefile integration: etl-graph-contract target exists."""
     makefile_path = WORKSPACE_ROOT / "Makefile"
@@ -1546,16 +1874,84 @@ def test_makefile_has_etl_graph_contract_target():
     )
 
 
+@pytest.mark.dataqa
+def test_makefile_dataqa_is_artifact_only_nonempty_gate_without_runtime_installers():
+    """ADR-0006: normal targets use artifact service and preinstalled gate tools."""
+    makefile_content = (WORKSPACE_ROOT / "Makefile").read_text()
+    target_match = re.search(
+        r"(?ms)^dataqa:\s*\n(?P<recipe>(?:\t.*\n)+)",
+        makefile_content,
+    )
+    assert target_match, "Makefile must define a dataqa target"
+    recipe = target_match.group("recipe")
+    assert "docker compose" in recipe, "dataqa must run through Docker Compose"
+    assert "run --rm artifact" in recipe, "dataqa must use the artifact service"
+    assert "pytest" in recipe, "dataqa must invoke pytest"
+    assert re.search(
+        r"(?:^|\s)-m(?:\s+|=)[\"']?dataqa",
+        recipe,
+    ), "dataqa must select the dataqa pytest marker"
+    assert "|| true" not in recipe
+
+    normal_targets = re.sub(
+        r"(?ms)^(?:image-build|image-publish):.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        "",
+        makefile_content,
+    ).lower()
+    assert not re.search(r"\b(?:apt(?:-get)?|pip|uv)\b", normal_targets)
+
+
+@pytest.mark.dataqa
+def test_compose_artifact_has_no_gdb_mount_and_uses_digest_pinned_common_image():
+    """ADR-0006: artifact service is least-privilege and shares one immutable image."""
+    compose_path = WORKSPACE_ROOT / "infra" / "docker-compose.yml"
+    compose = yaml.safe_load(compose_path.read_text())
+    services = compose["services"]
+    assert {"artifact", "source-etl"}.issubset(services)
+    digest_image = re.compile(r"^ghcr\.io/.+@sha256:[0-9a-f]{64}$")
+    artifact = services["artifact"]
+    source_etl = services["source-etl"]
+    assert digest_image.fullmatch(artifact["image"])
+    assert source_etl["image"] == artifact["image"]
+    assert "build" not in artifact, "artifact service must use the pinned image"
+    assert "build" not in source_etl, "source-etl service must use the pinned image"
+    artifact_mounts = "\n".join(map(str, artifact.get("volumes", [])))
+    source_mounts = "\n".join(map(str, source_etl.get("volumes", [])))
+    assert "IndoorWayfinding.gdb" not in artifact_mounts, (
+        "artifact service must not mount IndoorWayfinding.gdb"
+    )
+    assert ".gdb" not in artifact_mounts, "artifact service must not mount any geodatabase"
+    assert "docker.sock" not in artifact_mounts, (
+        "artifact service must not mount the Docker socket"
+    )
+    assert "docker.sock" not in source_mounts, (
+        "source-etl service must not mount the Docker socket"
+    )
+    assert re.search(
+        r"IndoorWayfinding\.gdb:/data/IndoorWayfinding\.gdb:ro",
+        source_mounts,
+    )
+
+
 def test_run_py_has_graph_contract_handler():
     """CLI integration: run.py has graph-contract subcommand handler."""
     try:
         from wayfinding.etl import run
     except ImportError:
         pytest.fail("wayfinding.etl.run module not importable")
+    assert callable(run.run_graph_contract)
 
     # Check main() function dispatches graph-contract
     # Since we can't easily invoke main() in test, check source code
-    run_py_path = WORKSPACE_ROOT / "packages" / "wayfinding" / "src" / "wayfinding" / "etl" / "run.py"
+    run_py_path = (
+        WORKSPACE_ROOT
+        / "packages"
+        / "wayfinding"
+        / "src"
+        / "wayfinding"
+        / "etl"
+        / "run.py"
+    )
 
     if not run_py_path.exists():
         pytest.fail("run.py not found")
@@ -1574,6 +1970,139 @@ def test_run_py_has_graph_contract_handler():
 # ============================================================================
 # Edge-Case and Failure-Mode Tests
 # ============================================================================
+
+
+@pytest.mark.skipif(nx is None or LineString is None, reason="dependencies not available")
+def test_traverse_chains_follows_dead_end_through_degree2_node():
+    """A terminal pathway chain is discovered once and retains traversal order."""
+    from wayfinding.etl.graph import _traverse_chains
+
+    graph = nx.MultiDiGraph()
+    start = (0.0, 0.0, 1)
+    middle = (1.0, 0.0, 1)
+    end = (2.0, 0.0, 1)
+
+    for source, target, feature_id in (
+        (start, middle, "1"),
+        (middle, end, "2"),
+    ):
+        geometry = LineString([source, target])
+        graph.add_edge(
+            source,
+            target,
+            key=f"PW_{feature_id}",
+            mode="pathway",
+            feature_id=feature_id,
+            geometry=geometry,
+        )
+        graph.add_edge(
+            target,
+            source,
+            key=f"PW_{feature_id}_R",
+            mode="pathway",
+            feature_id=feature_id,
+            geometry=LineString(list(reversed(geometry.coords))),
+        )
+
+    chains = _traverse_chains(graph, {start, end})
+
+    assert len(chains) == 1
+    assert chains[0]["nodes"] == [start, middle, end]
+    assert [edge[3]["feature_id"] for edge in chains[0]["edges"]] == ["1", "2"]
+
+
+@pytest.mark.skipif(nx is None, reason="networkx not available")
+def test_protection_category_stats_preserve_overlap_counts():
+    """Category stats report each reason and de-duplicate overlapping protected nodes."""
+    from wayfinding.etl.graph import (
+        _compute_contraction_stats,
+        _identify_protected_node_categories,
+    )
+
+    graph = nx.MultiDiGraph()
+    center = (0.0, 0.0, 1)
+    neighbors = [(-1.0, 0.0, 1), (1.0, 0.0, 1), (0.0, 1.0, 1)]
+    graph.add_node(center, level_ids={"L1"}, is_transition_endpoint=True)
+    for index, neighbor in enumerate(neighbors):
+        graph.add_node(neighbor, level_ids={"L1"})
+        graph.add_edge(center, neighbor, mode="pathway", feature_id=f"P{index}")
+        graph.add_edge(neighbor, center, mode="pathway", feature_id=f"P{index}")
+    graph.add_edge(center, neighbors[0], mode="elevator", length_3d=2.0)
+
+    categories = _identify_protected_node_categories(
+        graph,
+        [(0.25, 0.0, "L1")],
+    )
+    stats = _compute_contraction_stats(graph, graph.copy(), categories, chain_count=3)
+
+    assert categories == {
+        "junctions": {center},
+        "transition_endpoints": {center},
+        "unit_proximity": {center},
+        "transition_adjacent": {center, neighbors[0]},
+    }
+    assert stats["protected_node_counts"] == {
+        "junctions": 1,
+        "transition_endpoints": 1,
+        "unit_proximity": 1,
+        "transition_adjacent": 2,
+        "total": 2,
+    }
+    assert stats["protected_node_count"] == 2
+    assert stats["chains_contracted"] == 3
+
+
+@pytest.mark.skipif(nx is None, reason="networkx not available")
+def test_shortest_path_validation_rejects_insufficient_pairs():
+    """Validation fails deterministically when fewer than 20 protected pairs exist."""
+    from wayfinding.etl.graph import _validate_shortest_paths
+
+    graph = nx.MultiDiGraph()
+    start = (0.0, 0.0, 1)
+    end = (1.0, 0.0, 1)
+    graph.add_edge(start, end, mode="pathway", length_3d=1.0)
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"Could not select 20 connected protected-node pairs\. Found only 1 pairs\.",
+    ):
+        _validate_shortest_paths(graph, graph.copy(), {start, end})
+
+
+@pytest.mark.parametrize(
+    ("graph_input_exists", "expected_message"),
+    [
+        (False, "graph_with_transitions.pkl not found"),
+        (True, "GeoPackage not found"),
+    ],
+)
+def test_run_graph_contract_reports_missing_inputs(
+    tmp_path,
+    caplog,
+    graph_input_exists,
+    expected_message,
+):
+    """The graph-contract step fails clearly before opening absent prerequisites."""
+    from wayfinding.etl.graph import run_graph_contract
+
+    if graph_input_exists:
+        (tmp_path / "graph_with_transitions.pkl").touch()
+
+    assert run_graph_contract(tmp_path) == 1
+    assert expected_message in caplog.text
+
+
+def test_run_graph_contract_cli_translates_step_error(monkeypatch, capsys):
+    """The CLI adapter returns a failure status when the graph step raises."""
+    from wayfinding.etl import graph, run
+
+    def fail_contract(_output_dir):
+        raise RuntimeError("synthetic contraction failure")
+
+    monkeypatch.setattr(graph, "run_graph_contract", fail_contract)
+
+    assert run.run_graph_contract() == 1
+    assert "ERROR: Contraction failed: synthetic contraction failure" in capsys.readouterr().out
 
 
 def test_validate_level_consistency_fails_on_cross_level_chain():
@@ -1634,8 +2163,8 @@ def test_validate_level_consistency_fails_on_cross_level_chain():
     # Empty unit centroids (protected nodes already marked)
     unit_centroids = []
 
-    # Expect ValueError with level diagnostic
-    with pytest.raises(ValueError, match=r"(level|chain|consistency|L1.*L2|L2.*L1)"):
+    # Public contract documents RuntimeError for cross-level validation failures.
+    with pytest.raises(RuntimeError, match=r"(level|chain|consistency|L1.*L2|L2.*L1)"):
         contract_degree2_chains(G, unit_centroids)
 
 

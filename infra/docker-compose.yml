@@ -1,20 +1,26 @@
-services:
-  test:
-    image: python:3.12-slim
-    working_dir: /workspace
-    environment:
-      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    volumes:
-      - ..:/workspace:rw
-      - C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
-      - //var/run/docker.sock:/var/run/docker.sock
-    command: /bin/sh
+x-build-image: &build-image ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:PUBLISHED_DIGEST_REQUIRED
 
-  etl:
-    image: ghcr.io/osgeo/gdal@sha256:3019206fdf42cfd9fb056877248c60230e0e51781e7af3c6f0e15d9756ff9c34
-    working_dir: /workspace
+x-common: &common
+  image: *build-image
+  working_dir: /workspace
+  volumes:
+    - ..:/workspace:rw
+    - ../build:/workspace/build:rw
+  command: ["sleep", "infinity"]
+  healthcheck:
+    test: ["CMD-SHELL", "python --version >/dev/null && ogrinfo --version >/dev/null"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+    start_period: 5s
+
+services:
+  artifact:
+    <<: *common
+
+  source-etl:
+    <<: *common
     volumes:
       - ..:/workspace:rw
       - ../build:/workspace/build:rw
       - C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
-    command: /bin/sh

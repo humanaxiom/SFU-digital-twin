@@ -50,6 +50,8 @@ Every finding in the documentation is reproducible from these scripts.
 | `tools/dump_gdb_domains.ps1` | PowerShell only | `docs/generated/gdb-domains.txt` — coded-value domains |
 | `tools/profile_gdb.sh` | run via the wrapper | the OGR/SQL profiling queries |
 | `tools/run_profile.ps1` | Docker | `docs/generated/gdb-profile.txt` — authoritative schemas, counts, extents, value distributions, null checks |
+| `tools/launch-stack.ps1` / `.sh` | Docker Compose | starts an isolated stack on the first free configurable host-port block |
+| `tools/teardown-stack.ps1` / `.sh` | Docker Compose | destroys one explicitly selected stack project |
 
 ```powershell
 cd C:\repos\sfudt\ghcp
@@ -60,6 +62,54 @@ cd C:\repos\sfudt\ghcp
 
 `run_profile.ps1` executes `tools/profile_gdb.sh` inside `ghcr.io/osgeo/gdal:alpine-small-latest`
 with the data directory mounted read-only. No GDAL, Python or ArcGIS install is required on the host.
+
+## Start and destroy the developer stack
+
+Docker Desktop must be running. From the repository root, build the local image and start the
+Phase 1 developer containers:
+
+```powershell
+.\tools\launch-stack.ps1 -Build
+```
+
+```sh
+./tools/launch-stack.sh --build
+```
+
+The launcher prints the selected Compose project, normally `sfudt-wayfinding-18000`. Keep that exact
+name: if port 18000 is occupied, the launcher advances in blocks of ten and may print a name such as
+`sfudt-wayfinding-18010`. Both `artifact` and `source-etl` remain running and healthy for interactive
+`docker compose exec` use.
+
+To start the containers and then run the test, lint, type, and artifact data-QA gates, add the test
+option:
+
+```powershell
+.\tools\launch-stack.ps1 -Build -Test
+```
+
+```sh
+./tools/launch-stack.sh --build --test
+```
+
+Destroy the stack by passing the required, exact project name printed during startup. Include the local-image
+option because the start commands above use the local Compose override:
+
+```powershell
+.\tools\teardown-stack.ps1 -ProjectName sfudt-wayfinding-18000 -LocalImage
+```
+
+```sh
+./tools/teardown-stack.sh --project-name sfudt-wayfinding-18000 --local-image
+```
+
+Teardown preserves volumes by default. Add `-Volumes` or `--volumes` only when stored Compose data
+should also be deleted. Use `-DryRun` or `--dry-run` to inspect either operation without changing
+container state. `-ComposeFile` or `--compose-file` selects another compatible Compose definition;
+custom starts also support `-BasePort` / `--base-port` and `-ProjectName` / `--project-name`.
+
+The current Phase 1 Compose definition contains build and ETL jobs only. It does not publish the
+reserved PostGIS, Redis, Martin, API, web, or Neo4j ports until runtime services are added later.
 
 The two PowerShell scripts parse the FileGDB binary directly and exist as a no-Docker fallback; where
 they disagree with `ogrinfo`, **`ogrinfo` is authoritative** (see the note in

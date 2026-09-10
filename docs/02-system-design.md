@@ -122,25 +122,44 @@ This is the core of the ETL and the step the data most requires (mean segment le
 3. **Add transition edges.** `Transitions` connect nodes across `VERTICAL_ORDER_FROM/TO`, tagged
    `mode = stairs | elevator` from `TRANSITION_TYPE` (2 / 4).
 4. **Contract degree-2 chains.** Collapse runs of degree-2 nodes into a single edge carrying the full
-   polyline. Expected reduction from ~22k edges to low thousands. Junctions, transition endpoints and
-   unit-entrance connectors are protected from contraction.
+  polyline. The measured topology-preserving result is 7,450 nodes and 19,884 directed arcs
+  (9,942 physical edges): 19,758 pathway arcs (9,879 physical pathway edges) plus 126 unchanged
+  transition arcs (63 physical transitions). This is a 55.92% pathway-arc reduction, with a mean
+  pathway arc length of 2.13 m. The 5,501 protected nodes include physical pathway junctions,
+  transition endpoints and mode boundaries, and 1,817 same-level nodes within 0.5 m of searchable
+  unit centroids for destination attachment. These protections explain why the earlier “low
+  thousands” estimate is unattainable without weakening topology or destination attachment
+  invariants; compression is a measured graph characteristic, not a target that permits required
+  nodes to be removed.
 5. **Connect destinations.** For each `unit`, project its centroid to the nearest pathway node on the
    same `level_id` and add a zero-cost connector edge. Record the connector so instructions can say
    "AQ 3150 is on your left".
 6. **Validate.** Report connected components per profile. The measured pathway baseline is 855
-  components; transitions reduce it to 816 for the default profile and 840 for the elevator-only,
-  stairs-excluded profile ([ADR-0005](adr/0005-measured-connectivity-baseline-and-validation-gates.md)).
-  Reject regressions and no-op transition modes, but do not require global connectivity. A
-  unit-to-component catalog enables explicit query-time no-route results. Topology repair is
-  deferred beyond Phase 1; elevator-only routing is not wheelchair certification.
+  components; contraction preserves the DT-006 profile counts exactly: 816 for the default profile
+  and 840 for the elevator-only, stairs-excluded profile. On the pinned fixture, all 20 deterministic
+  shortest-path comparisons are exact (maximum distance delta 0.0 m). Reject regressions and no-op
+  transition modes, but do not require global connectivity. A unit-to-component catalog enables
+  explicit query-time no-route results. Topology repair is deferred beyond Phase 1; elevator-only,
+  stairs-excluded routing is not wheelchair certification
+  ([ADR-0005](adr/0005-measured-connectivity-baseline-and-validation-gates.md)).
 
 Artifacts: `graph.pkl` (NetworkX), `wayfinding.gpkg`, `search.sqlite`, `basemap.pmtiles`, and a
 `build-report.json` with all validation counts.
 
 ### 3.4 Reproducibility
 
-The ETL is a single container invocation, deterministic, and re-runnable. Every artifact carries the
-source GDB hash and the ETL version so a route can always be traced to the data that produced it.
+The ETL is deterministic and re-runnable in the digest-pinned build image defined by ADR-0006. Gate
+and ETL targets install nothing at runtime. Compose separates the source-capable extraction service,
+which mounts the GDB read-only, from artifact-only transforms such as DT-007 contraction, which have
+no source GDB mount.
+
+Each intermediate stats sidecar records repository-relative paths and SHA-256 hashes for its
+immediate input and output artifacts. It does not copy or recompute the source GDB hash. DT-009
+verifies that chain and emits the authoritative `docs/reports/build-report.json`, containing the
+deterministic source-GDB directory hash, ETL and image versions, final artifact hashes, and validation
+counts. This preserves source-to-route traceability without giving downstream transforms source-data
+access. Generated binary and working artifacts remain ignored under `build/`; only ticket-required,
+reviewable reports are committed under `docs/reports/`.
 
 ## 4. Routing
 
@@ -346,7 +365,7 @@ controlled category vocabulary.
 
 | Layer | Tests |
 | --- | --- |
-| ETL | Feature counts match the profile; graph is connected for the default profile; no orphan units; `vertical_order` mapping matches `docs/01-data-findings.md` §3 |
+| ETL | Feature counts match the profile; measured component counts do not regress; no orphan units; `vertical_order` mapping matches `docs/01-data-findings.md` §3; artifact lineage hashes verify |
 | Routing | Golden route fixtures (same-level, cross-level, cross-building) with expected distance tolerances |
 | Accessibility | **Invariant: no route with `profile=accessible` may contain an edge with `mode=stairs`.** Property-tested across a large sample of origin/destination pairs |
 | Instructions | Snapshot tests on step text; assert no route emits more than ~1 step per 8 m of path |
