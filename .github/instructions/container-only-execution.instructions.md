@@ -1,19 +1,21 @@
 ---
-description: "Use when writing or reviewing any script, test runner, ETL step, or gate command for this repo. Covers the no-local-Python / container-only execution rule."
+description: "Use when writing or reviewing project code, scripts, tests, builds, ETL, gates, or evidence generation for this repo. Covers the Docker-only execution rule."
 applyTo: "tools/**,infra/**,Makefile,packages/**"
 ---
-# Container-only execution
+# Docker-only execution
 
-- Never install or invoke Python, GDAL, `pip`, or a database client directly on the host. This
-  workspace runs everything data- or test-related inside a container — follow the pattern in
-  [tools/run_profile.ps1](../../tools/run_profile.ps1), which shells out to
-  `ghcr.io/osgeo/gdal:alpine-small-latest` and mounts the data directory `:ro`.
-- PowerShell wrapper scripts that only parse files directly (no GDAL/Python needed —
-  e.g. [tools/dump_gdb_schema.ps1](../../tools/dump_gdb_schema.ps1)) are the sole exception; they
-  exist specifically because they need no runtime dependency at all.
-- Once Phase 1 adds `infra/` and a `Makefile`, every gate target (`test`, `lint`, `type`, `dataqa`)
-  must be a thin wrapper around `docker compose run --rm <service> <command>` — never a bare `uv
-  run`/`pytest`/`python` invocation, and never assume `python`, `psql`, or `ogr2ogr` exist on the
-  host.
-- Any new script must be re-runnable from a clean checkout with no network access beyond pulling
-  the pinned container image, and no agent present.
+- All project code, scripts, tests, builds, data processing, and evidence or hash
+  generation must run inside Docker. The host may only inspect or edit repository
+  files, invoke Git or Docker CLI commands, and run thin launcher glue that starts
+  Docker. This applies to every agent tier.
+- Never install or invoke Python, GDAL, `pip`, a database client, a test runner, a
+  project module, a data parser, or an evidence/hash script directly on the host.
+  The direct-file PowerShell parser exception is removed. Data/artifact parsing and
+  hashing belong in a container; ordinary repository inspection/editing remains allowed.
+- Every gate and build target must be a thin wrapper around `docker compose run
+  --rm <service> <command>` (or an equivalent Docker invocation). Never use a bare
+  `uv run`, `pytest`, `python`, `psql`, or `ogr2ogr` invocation on the host.
+- If Docker or the required image is unavailable, stop execution and report the
+  blocker. Do not use a host-runtime fallback.
+- New scripts must be re-runnable from a clean checkout with no network access
+  beyond pulling the pinned container image, and with no agent present.

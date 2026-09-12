@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import threading
+import time
+from collections import OrderedDict, deque
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
@@ -15,7 +20,14 @@ from .assistant import LIMITATIONS_ID, respond
 from .routing import RoutingService
 
 MAX_BODY_BYTES = 4096
+MAX_CONCURRENT_REQUESTS = 16
+REQUEST_TIMEOUT_SECONDS = 5.0
+RATE_WINDOW_SECONDS = 60.0
+READ_REQUESTS_PER_WINDOW = 120
+POST_REQUESTS_PER_WINDOW = 30
+MAX_RATE_CLIENTS = 256
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
+HOSTNAME = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$")
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -28,8 +40,62 @@ class DemoHTTPServer(ThreadingHTTPServer):
     repository: ArtifactRepository
     routing_service: RoutingService | None
 
+    def __init__(self, *args: Any, allowed_host: str | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        configured_host = allowed_host or os.environ.get("DTWIN_DEMO_ALLOWED_HOST", "localhost")
+        if not HOSTNAME.fullmatch(configured_host):
+            self.server_close()
+            raise ValueError("DTWIN_DEMO_ALLOWED_HOST must be a DNS-compatible host name.")
+        self.allowed_hosts = {"localhost", "127.0.0.1", "::1", configured_host.lower()}
+        self.request_semaphore = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
+        self.rate_lock = threading.Lock()
+        self.rate_clients: OrderedDict[str, dict[str, deque[float]]] = OrderedDict()
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        # Admit before ThreadingMixIn creates a worker; never queue unlimited threads.
+        if not self.request_semaphore.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            request.settimeout(REQUEST_TIMEOUT_SECONDS)
+            super().process_request(request, client_address)
+        except Exception:
+            self.request_semaphore.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.request_semaphore.release()
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # socketserver's default dumps exception values and filesystem paths.
+        # Keep unexpected failures observable without disclosing request/artifact data.
+        print("HTTP request terminated; exception details suppressed.", flush=True)
+
+    def rate_limit_allows(self, client: str, category: str) -> bool:
+        now = time.monotonic()
+        limit = POST_REQUESTS_PER_WINDOW if category == "post" else READ_REQUESTS_PER_WINDOW
+        with self.rate_lock:
+            buckets = self.rate_clients.setdefault(
+                client, {"read": deque(), "post": deque()}
+            )
+            self.rate_clients.move_to_end(client)
+            bucket = buckets[category]
+            while bucket and now - bucket[0] >= RATE_WINDOW_SECONDS:
+                bucket.popleft()
+            if len(bucket) >= limit:
+                return False
+            bucket.append(now)
+            while len(self.rate_clients) > MAX_RATE_CLIENTS:
+                self.rate_clients.popitem(last=False)
+            return True
+
 
 class DemoRequestHandler(BaseHTTPRequestHandler):
+    request_started_at: float
+
     @property
     def repository(self) -> ArtifactRepository:
         return cast(DemoHTTPServer, self.server).repository
@@ -38,10 +104,47 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     def routing_service(self) -> RoutingService | None:
         return cast(DemoHTTPServer, self.server).routing_service
 
-    def _headers(self, status: int, content_type: str, length: int) -> None:
+    def handle_one_request(self) -> None:
+        self.request_started_at = time.monotonic()
+        super().handle_one_request()
+
+    def parse_request(self) -> bool:
+        if not super().parse_request():
+            return False
+        if not self._valid_host_header(self.headers.get("Host")):
+            self._error(400, "Invalid Host header.")
+            return False
+        category = "post" if self.command == "POST" else "read"
+        client = self.client_address[0]
+        if not cast(DemoHTTPServer, self.server).rate_limit_allows(client, category):
+            self._headers(429, "application/json", 0, retry_after=int(RATE_WINDOW_SECONDS))
+            return False
+        return True
+
+    def _valid_host_header(self, value: str | None) -> bool:
+        if not value or any(character in value for character in " /\\\t\r\n"):
+            return False
+        host = value
+        if value.startswith("["):
+            match = re.fullmatch(r"\[([^]]+)](?::\d{1,5})?", value)
+            if not match:
+                return False
+            host = match.group(1)
+        elif value.count(":") == 1:
+            host, port = value.rsplit(":", 1)
+            if not port.isdigit() or not 1 <= int(port) <= 65535:
+                return False
+        elif ":" in value:
+            return False
+        return host.lower().rstrip(".") in cast(DemoHTTPServer, self.server).allowed_hosts
+
+    def _headers(
+        self, status: int, content_type: str, length: int, *, retry_after: int | None = None
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(length))
+        self.send_header("Cache-Control", "no-store")
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
@@ -50,7 +153,10 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
+        if retry_after is not None:
+            self.send_header("Retry-After", str(retry_after))
         self.end_headers()
+        self._log_access(status)
 
     def _send_bytes(self, status: int, content_type: str, body: bytes) -> None:
         self._headers(status, content_type, len(body))
@@ -91,6 +197,9 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         try:
             if path in STATIC_FILES and not target.query:
                 self._static(path)
+                return
+            if path == "/demo/v1/route-options":
+                self._get_route_options(target.query)
                 return
             if path == "/demo/v1/health" and not target.query:
                 self._json(
@@ -295,6 +404,33 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     ) -> dict[str, Any]:
         return self._record({name: values, "count": len(values)}, layer)
 
+    def _get_route_options(self, query_string: str) -> None:
+        routing = self.routing_service
+        try:
+            query = parse_qs(
+                query_string, keep_blank_values=True, strict_parsing=True, max_num_fields=4
+            )
+        except ValueError:
+            query = {}
+        valid = (
+            set(query) == {"origin_unit_id", "profile"}
+            and all(len(values) == 1 for values in query.values())
+            and bool(IDENTIFIER.fullmatch(query["origin_unit_id"][0]))
+            and bool(query["profile"][0])
+        )
+        if not valid or routing is None:
+            status = 400 if not valid else 503
+            self._json(status, {
+                "version": "route-options-v1",
+                "status": status,
+                "code": "invalid_request" if not valid else "routing_unavailable",
+                "provenance": dict(routing.provenance) if routing is not None else {},
+                "warnings": [],
+            })
+            return
+        response = routing.route_options(query["origin_unit_id"][0], query["profile"][0])
+        self._json(response["status"], response)
+
     @staticmethod
     def _is_get_route(path: str) -> bool:
         return path in STATIC_FILES or path in {
@@ -302,6 +438,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             "/demo/v1/facilities",
             "/demo/v1/levels",
             "/demo/v1/units",
+            "/demo/v1/route-options",
         } or bool(
             re.fullmatch(r"/demo/v1/levels/[^/]+/scene", path)
             or re.fullmatch(r"/demo/v1/units/[^/]+", path)
@@ -316,7 +453,9 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     def _valid_route_payload(payload: Any) -> bool:
         if not isinstance(payload, dict) or set(payload) != {"origin", "destination", "profile"}:
             return False
-        if payload["profile"] not in {"default", "elevator_only"}:
+        if not isinstance(payload["profile"], str) or payload["profile"] not in {
+            "default", "elevator_only"
+        }:
             return False
         for name in ("origin", "destination"):
             endpoint = payload[name]
@@ -326,6 +465,32 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(identifier, str) or not IDENTIFIER.fullmatch(identifier):
                 return False
         return True
+
+    def _log_access(self, status: int) -> None:
+        try:
+            path = urlsplit(getattr(self, "path", "")).path
+        except ValueError:
+            path = ""
+        if re.fullmatch(r"/demo/v1/levels/[^/]+/scene", path):
+            path = "/demo/v1/levels/{level_id}/scene"
+        elif re.fullmatch(r"/demo/v1/units/[^/]+", path):
+            path = "/demo/v1/units/{unit_id}"
+        elif path not in STATIC_FILES and path not in {
+            "/demo/v1/health", "/demo/v1/facilities", "/demo/v1/levels",
+            "/demo/v1/units", "/demo/v1/route", "/demo/v1/assistant",
+            "/demo/v1/route-options",
+        }:
+            path = "<unmatched>"
+        method = self.command if self.command in {
+            "GET", "POST", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
+        } else "<other>"
+        duration_ms = (time.monotonic() - self.request_started_at) * 1000
+        timestamp = datetime.now(UTC).isoformat(timespec="milliseconds")
+        print(
+            f"{timestamp} client={self.client_address[0]} method={method} "
+            f"route={path} status={status} duration_ms={duration_ms:.1f}",
+            flush=True,
+        )
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         return
@@ -337,8 +502,9 @@ def create_server(
     artifact_path: str | Path,
     graph_path: str | Path | None = None,
     stats_path: str | Path | None = None,
+    allowed_host: str | None = None,
 ) -> DemoHTTPServer:
-    server = DemoHTTPServer((host, port), DemoRequestHandler)
+    server = DemoHTTPServer((host, port), DemoRequestHandler, allowed_host=allowed_host)
     try:
         server.repository = ArtifactRepository(artifact_path)
         server.routing_service = (
@@ -354,7 +520,7 @@ def create_server(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Serve the artifact-backed local demo.")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--graph", type=Path, required=True)

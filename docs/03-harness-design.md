@@ -1,5 +1,37 @@
 # Harness Design — AI-Assisted Delivery Pipeline
 
+> Historical Copilot harness design. Current operating instructions are in
+> [AGENTS.md](../AGENTS.md), with status in [HANDOFF.md](HANDOFF.md).
+> The role pipeline below is optional; gates and final evidence govern completion.
+> The PostToolUse hook is diagnostic and cannot prevent an already-completed write.
+
+## Current collaboration policy
+
+The harness defaults to concurrent bounded independent work under one accountable large-model lead.
+The lead assigns each worker an explicit task scope, file ownership, dependency list, and evidence
+to return. Suitable parallel tasks include separate modules, separate documentation files, and
+read-only reviews. Workers must not edit the same file concurrently or begin work whose inputs are
+still being changed; dependent work is handed off in order. Every worker reports commands, exit
+codes, changed paths, test or gate results, skips, and limitations so the lead can reconcile the
+results.
+
+The lead keeps TDD dependencies sequential: planned failing tests and the RED check precede
+implementation, implementation precedes full gates, and gates precede final review. Smaller
+models handle simple mechanical edits, routine documentation, and established gate execution;
+the large-model lead handles planning, orchestration, architecture, and integration. After
+combining independent results, a large-model judge reviews the final combined diff and evidence.
+All project execution, including tests, builds, data processing, and evidence or hash generation,
+runs inside Docker. Host activity is limited to repository inspection/editing, Git and Docker CLI
+operations, and thin launcher glue.
+
+Current model allocation follows [AGENTS.md](../AGENTS.md): large models own planning,
+orchestration, architecture and judging; smaller workers handle bounded, simpler work.
+Escalate complex research, implementation, debugging, security and GIS decisions to
+the large model rather than assigning by role name alone. Copilot model names below
+retain existing provider identifiers and must be checked for availability when invoked.
+Prompt-file model selection is a legacy Local-agent adapter; Agent Host does not load
+prompt files ([VS Code documentation](https://code.visualstudio.com/docs/agent-customization/prompt-files)).
+
 How this repo is (going to be) built, not what it builds. [01-data-findings.md](01-data-findings.md)
 and [02-system-design.md](02-system-design.md) are the *product* design; this document is the
 *process* design — the agent harness that will deliver phases 1–7 of

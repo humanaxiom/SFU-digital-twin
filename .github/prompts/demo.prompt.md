@@ -1,6 +1,7 @@
 ---
 description: "Bring up the current phase's runnable slice for a stakeholder walkthrough and report exactly what can and cannot be demonstrated yet"
 agent: agent
+model: 'Claude Opus 4.5 (copilot)'
 ---
 Prepare a demo of the current delivery phase
 (see [docs/02-system-design.md §11](../../docs/02-system-design.md#11-delivery-phases) and

@@ -8,6 +8,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if (-not (Test-Path -LiteralPath '/.dockerenv')) {
+    throw 'Docker-only execution: this legacy parser must run in a PowerShell container. Use tools/run_profile.ps1 for the supported Docker/GDAL profile.'
+}
+
 $outDir = Split-Path -Parent $OutFile
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 

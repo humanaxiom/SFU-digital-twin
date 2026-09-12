@@ -2,6 +2,7 @@
 description: "Append a retro note after a ticket or delivery phase closes — what worked, what didn't, what to change in the harness or design"
 argument-hint: "<ticket-id or phase that just closed>"
 agent: agent
+model: 'Claude Opus 4.5 (copilot)'
 ---
 Write a retro for: ${input:scope:Ticket id or phase that just closed}
 

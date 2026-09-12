@@ -550,9 +550,11 @@ class TestErrorHandling:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             bad_output = Path(tmpdir) / "protected" / "output.gpkg"
+            source = Path(tmpdir) / "source.gdb"
+            source.mkdir()
             with patch.object(Path, "mkdir", side_effect=PermissionError("read-only")):
                 with pytest.raises(PermissionError, match="read-only"):
-                    extract_to_gpkg(GDB_PATH, bad_output)
+                    extract_to_gpkg(source, bad_output)
 
     @pytest.mark.slow
     def test_extract_overwrite_false_fails_if_exists(self):
@@ -581,9 +583,10 @@ class TestErrorHandling:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_gpkg = Path(tmpdir) / "test.gpkg"
-
+            source = Path(tmpdir) / "source.gdb"
+            source.mkdir()
             with pytest.raises(RuntimeError, match="ogr2ogr"):
-                extract_to_gpkg(GDB_PATH, tmp_gpkg)
+                extract_to_gpkg(source, tmp_gpkg)
 
     def test_make_etl_extract_target(self):
         """Makefile must define etl-extract target invoking wayfinding.etl.run extract."""

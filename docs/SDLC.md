@@ -2,6 +2,24 @@
 
 How a change moves from idea to merged, in this repo.
 
+## Current collaboration policy
+
+The accountable lead defaults to delegating multiple bounded tasks concurrently when they are independent.
+Examples include separate modules, documentation files, or read-only reviews. Before delegation,
+the lead records each task's scope, owned files, expected evidence, and dependencies. Each worker
+must stay within that ownership and return the commands run, exit codes, relevant findings, and
+any skips or limitations. Workers use smaller models for simple mechanical edits, routine
+documentation, and established gate execution; a large-model lead owns planning, orchestration,
+architecture decisions, and integration.
+
+Dependent TDD stages remain sequential: write the planned failing test, confirm RED, implement,
+run the relevant gates, and then review. Concurrent workers must not edit the same file or any
+dependent output at the same time. The lead integrates the independent results, reviews the
+combined diff, and obtains a large-model judge review of that final diff and its evidence. All
+project code, scripts, tests, builds, data processing, and evidence generation run in Docker;
+the host is limited to repository inspection/editing, Git and Docker CLI operations, and launcher
+glue. A required Docker check that cannot run leaves the change incomplete.
+
 ## 1. Ticket intake
 
 A ticket is a short id + description (e.g. `DT-101 contract degree-2 pathway chains`). Backlog
@@ -10,7 +28,9 @@ decomposition happens via `/sprint-plan` against the phases in
 
 ## 2. The pipeline
 
-Every ticket with product-code impact goes through `/tdd-feature`, which runs:
+Shared workflow: plan -> RED evidence -> implementation -> gates -> documentation -> final review.
+Use [AGENTS.md](../AGENTS.md) with one accountable lead and appropriate specialist review.
+Copilot's optional `/tdd-feature` adapter provides these roles:
 
 `planner` → (`architect` if schema/API/boundary changes) → `test-writer` → `test-runner` (RED) →
 `implementer` → `test-runner` (full gate) → `judge` → `doc-writer` → commit.

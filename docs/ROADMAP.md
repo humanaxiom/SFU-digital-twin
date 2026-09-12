@@ -8,12 +8,14 @@ in sync by `doc-writer` after every `judge` APPROVE; the authoritative narrative
 | Phase | Deliverable | Status |
 | --- | --- | --- |
 | 0 | Data profiling, system design, harness scaffolding | ✅ Complete |
-| 1 | ETL → GeoPackage + contracted graph + build report | In progress (DT-001, DT-002, DT-003, DT-004 ✅ Complete; DT-005 next) |
-| 2 | Routing core: profiles, A*, accessible invariant tests | Not started |
-| 3 | Turn-by-turn instruction generator | Not started |
+| 1 | ETL → GeoPackage + contracted graph + build report | DT-016 isolated rebuild/source review implemented; DT-017 geometry/source reconciliation next; production promotion open |
+| 2 | Routing core: profiles, A*, accessible invariant tests | Bounded DT-014 demo implemented; broader phase deferred |
+| 3 | Turn-by-turn instruction generator | DT-018 local guidance/UI verified with fresh browser E2E; DT-017 geometry-quality correction remains separate |
 | 4 | FastAPI service + search index + tiles | Not started |
 | 5 | MapLibre web client with floor picker and accessible toggle | Not started |
 | 6 | Assistant orchestrator, tool schemas, guardrails, eval suite | Not started |
 | 7 | QR anchor origins; hooks for a future positioning provider | Not started |
 
-Decompose the next phase into tickets with `/sprint-plan`; deliver each ticket with `/tdd-feature`.
+Current plans: [DT-016](plans/DT-016.md), [DT-017](plans/DT-017.md),
+[DT-018 route UI](plans/DT-018.md).
+Follow the shared plan → RED → implementation → gates → review workflow in AGENTS.md.

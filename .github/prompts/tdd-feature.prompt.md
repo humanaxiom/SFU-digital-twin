@@ -2,9 +2,18 @@
 description: "Run the full TDD pipeline for a ticket: plan → (ADR if needed) → red → green → judge → docs → commit"
 argument-hint: "<ticket-id and short description>"
 agent: agent
+model: 'Claude Opus 4.5 (copilot)'
 ---
 Execute the standard feature workflow from
 [.github/copilot-instructions.md](../copilot-instructions.md) for: ${input:ticket:Ticket id and short description}
+
+Keep orchestration, planning and final judging on a large model per root AGENTS.md.
+Use smaller workers for bounded execution; escalate complex implementation or review
+instead of silently downgrading the lead or judge.
+
+Delegate independent tasks to multiple agents concurrently with explicit file ownership.
+Keep the dependent RED/implementation/gate stages below ordered; parallelize independent
+work within those stages. Integrate worker results before the large-model final review.
 
 1. Invoke `planner` for the implementation plan; save it under `docs/plans/<ticket-id>.md`.
 2. If the plan touches schema, API surface, or component boundaries, invoke `architect` for an ADR
@@ -17,7 +26,8 @@ Execute the standard feature workflow from
    [docs/DOD.md](../../docs/DOD.md)).
 7. Invoke `judge`. On `REVISE`, route findings to `implementer` (or `test-writer` if the tests are
    the problem) and repeat steps 5–7.
-8. On `APPROVE`, invoke `doc-writer`, then create a Conventional Commit on a
+8. On `APPROVE`, invoke `doc-writer`, review the final diff including those documentation
+   changes and rerun affected checks, then create a Conventional Commit on a
    `feat/<ticket-id>` branch. Do not push without explicit confirmation.
 
 Report a compact summary at each stage transition; keep full subagent output out of the main

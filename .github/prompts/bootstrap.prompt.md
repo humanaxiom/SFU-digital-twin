@@ -1,6 +1,7 @@
 ---
 description: "Bring the system up from a clean checkout once Phase 1+ containers/services exist (stack up, sample data loaded, gates verified)"
 agent: agent
+model: 'Claude Opus 4.5 (copilot)'
 ---
 Bring the system from zero to running. This command is a no-op until Phase 1 adds `infra/` and a
 container-based gate contract — until then, report that status and stop rather than inventing

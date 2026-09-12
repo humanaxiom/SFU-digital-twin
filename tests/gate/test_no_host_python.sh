@@ -5,8 +5,8 @@
 # every Python/pip/pytest invocation must be prefixed by "docker compose run --rm test"
 # or equivalent, never run directly on the host.
 #
-# Runnable via: sh tests/gate/test_no_host_python.sh
-# Also runnable via Git Bash on Windows.
+# Run only inside Docker:
+# docker compose -f infra/docker-compose.yml run --rm artifact sh tests/gate/test_no_host_python.sh
 
 set -e
 

@@ -2,6 +2,7 @@
 description: "Decompose the backlog across the delivery phases in docs/02-system-design.md §11 into ticket-sized plans"
 argument-hint: "<phase or milestone to plan>"
 agent: agent
+model: 'Claude Opus 4.5 (copilot)'
 ---
 Plan the backlog for: ${input:scope:Which phase or milestone to decompose}
 

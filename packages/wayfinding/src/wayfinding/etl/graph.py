@@ -12,8 +12,8 @@ Edge keys follow convention:
 - Reverse: "PW_{feature_id}_R"
 """
 
-import json
 import hashlib
+import json
 import logging
 import random
 from collections import defaultdict
@@ -27,6 +27,8 @@ import networkx as nx
 from osgeo import ogr  # pyright: ignore[reportMissingImports]
 from shapely import wkt
 from shapely.geometry import LineString, MultiLineString, Point
+
+from wayfinding.etl.topology import ENDPOINT_MODE, EXACT_MODE, TOPOLOGY_MODES, reverse_spans
 
 logger = logging.getLogger(__name__)
 ogr.UseExceptions()
@@ -517,7 +519,7 @@ def compute_graph_stats(
     return stats
 
 
-def run_graph_raw(output_dir: Path) -> int:
+def run_graph_raw(output_dir: Path, *, topology_mode: str = ENDPOINT_MODE) -> int:
     """Run graph-raw ETL step: snap nodes and build raw pathway graph.
 
     Outputs:
@@ -532,6 +534,9 @@ def run_graph_raw(output_dir: Path) -> int:
         Exit code (0 = success)
     """
     import pickle
+
+    if topology_mode not in TOPOLOGY_MODES:
+        raise ValueError("Unsupported topology mode")
 
     gpkg_path = output_dir / "wayfinding.gpkg"
 
@@ -556,6 +561,18 @@ def run_graph_raw(output_dir: Path) -> int:
     graph, stats = build_raw_graph(
         str(gpkg_path), node_map, node_attrs, level_lookup
     )
+
+    if topology_mode == EXACT_MODE:
+        from wayfinding.etl.topology import apply_exact_noding
+
+        graph, audit = apply_exact_noding(
+            graph, str(gpkg_path), node_map, node_attrs, level_lookup
+        )
+        stats = compute_graph_stats(graph, level_lookup, stats["self_loops_removed"],
+                                    stats["self_loop_fids"])
+        stats["topology_mode"] = topology_mode
+        with (output_dir / "topology_audit.json").open("x", encoding="utf-8") as stream:
+            json.dump(audit, stream, indent=2, sort_keys=True, allow_nan=False)
 
     # Serialize outputs
     graph_raw_pkl = output_dir / "graph_raw.pkl"
@@ -1106,6 +1123,7 @@ def contract_degree2_chains(
     # Step 3: Build contracted graph
     logger.info("Step 3/8: Building contracted graph...")
     contracted_graph = nx.MultiDiGraph()
+    contracted_graph.graph.update(graph.graph)
 
     # Add all chain boundaries with attributes. Degree-1 pathway endpoints are
     # boundaries even though they are not part of a protected category.
@@ -1456,7 +1474,16 @@ def _add_contracted_chain(
     # Collect attributes from segments
     length_3d = sum(d.get("length_3d", 0.0) for u, v, k, d in edges)
     level_id = edges[0][3].get("level_id")  # All segments must share level_id
-    original_fids = sorted(str(d["feature_id"]) for u, v, k, d in edges)
+    physical_ids = sorted(str(d["feature_id"]) for u, v, k, d in edges)
+    exact_mode = source_graph.graph.get("topology_mode") == EXACT_MODE
+    original_fids = (
+        sorted({str(d.get("source_feature_id", d["feature_id"])) for u, v, k, d in edges})
+        if exact_mode else physical_ids
+    )
+    source_spans = [span for _u, _v, _k, data in edges for span in data.get("source_spans", [])]
+    extra = ({"source_spans": source_spans, "original_segment_ids": physical_ids,
+              "source_spans_complete": all(data.get("source_spans_complete", False)
+                                           for _u, _v, _k, data in edges)} if exact_mode else {})
     contracted_segment_count = len(edges)
 
     # Merge geometries: concatenate coordinates, drop intermediate duplicates
@@ -1478,7 +1505,7 @@ def _add_contracted_chain(
     # Generate deterministic chain ID
     # Use sorted endpoint nodes + sorted original FIDs
     endpoints_str = f"{sorted([start, end])}"
-    fids_str = f"{sorted(original_fids)}"
+    fids_str = f"{physical_ids}"
     chain_str = f"{endpoints_str}_{fids_str}"
     chain_hash = hashlib.sha256(chain_str.encode()).hexdigest()[:16]
     chain_id = f"CONTRACTED_{chain_hash}"
@@ -1495,11 +1522,13 @@ def _add_contracted_chain(
         geometry=merged_geom,
         original_feature_ids=original_fids,
         contracted_segment_count=contracted_segment_count,
+        **extra,
     )
 
     # Add reverse edge with reversed geometry
     reverse_key = f"PW_{chain_id}_R"
     reverse_geom = LineString(list(reversed(merged_geom.coords)))
+    reverse_extra = {**extra, "source_spans": reverse_spans(source_spans)} if exact_mode else {}
     contracted_graph.add_edge(
         end,
         start,
@@ -1510,6 +1539,7 @@ def _add_contracted_chain(
         geometry=reverse_geom,
         original_feature_ids=original_fids,
         contracted_segment_count=contracted_segment_count,
+        **reverse_extra,
     )
 
     return forward_key, reverse_key
@@ -1532,7 +1562,7 @@ def _validate_level_consistency(
     fid_to_level = {}
     for _u, _v, _k, d in source_graph.edges(keys=True, data=True):
         if d.get("mode") == "pathway":
-            fid = d.get("feature_id")
+            fid = d.get("source_feature_id", d.get("feature_id"))
             level_id = d.get("level_id")
             if fid and level_id:
                 fid_to_level[fid] = level_id

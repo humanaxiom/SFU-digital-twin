@@ -1,5 +1,135 @@
 # Changelog
 
+## Unreleased — DT-022 exact source-vertex topology
+
+- Added an opt-in topology mode that joins exact same-level source vertices while
+  preserving source slices, authoritative lengths and the legacy default behavior.
+- Built and audited isolated same-source baseline/candidate artifacts. The candidate
+  gains 257,108 default and 230,356 elevator-only reachable room pairs with zero losses;
+  AQ6071 reaches 696 destinations, 695 more than the baseline.
+- Clear stale route failures when choosing a new origin and offer explicit named
+  destination actions for small reachable sets.
+- Passed candidate and accepted-artifact browser/API E2E; no accepted artifact was promoted.
+
+## Unreleased — DT-021 route framing and map zoom
+
+- Frame a newly opened route in useful current-floor context, including point-only departure,
+  arrival and transition steps.
+- Add accessible zoom, route-fit and whole-floor reset controls while preserving exact selected-step
+  highlighting, floor changes and mobile layout behavior.
+- Keep camera behavior client-only: route geometry, backend algorithms, source data and accepted
+  artifacts are unchanged.
+
+## Unreleased — DT-020 route availability choices
+
+- Added origin/profile-specific connected-destination choices while preserving the full room catalog
+  and explicit unsupported-route failures.
+- Distinguish directed graph availability from route quality: `same_anchor` rooms have no positive
+  walking segment, and connected availability does not certify guidance geometry, doors, or physical
+  accessibility.
+- Preserve the selected profile, deterministic counts, provenance and warnings; source data and
+  routing edges are unchanged.
+- Keep routing failures beside the map, identify outdated server responses, and preserve native
+  destination selections when swapping rooms or applying assistant results.
+
+## Unreleased — DT-019 rebuild launcher support
+
+- Explain missing/invalid image inspection failures and explicit local-image use,
+  preserving Docker diagnostics and the published-image default.
+- Document the correct PowerShell rebuild command and its legacy-source scope.
+- Docker launcher checks and 3 infrastructure tests passed; a fresh complete
+  PowerShell-to-Docker source/candidate rebuild passed with accepted artifacts unchanged.
+
+## Unreleased — DT-018 route UI
+
+- Wrote a short GIS data request with keyed corrections and connection/verification needs.
+- Added an ordered floor journey, explicit departure/arrival controls, readable
+  directions, and exact blue selected spans with arrows, numbers and keyboard controls.
+- Added deterministic geometry spans and distance reconciliation without changing
+  canonical routing or accepted artifacts. Ambiguous/misaligned geometry refuses
+  guidance; distance disagreement shows a conservative preview with a review notice.
+- Fixed stale selection, loading state and floor controls during rapid navigation
+  and Clear. Added synthetic regressions and expanded real browser/API checks.
+- Fixed fragmented map strokes using a shared local display origin while preserving
+  exact native coordinates; paint all selection halos before the blue segments.
+- Final gate evidence and remaining limitations are recorded in the DT-018 report.
+- Final Docker suite: 572 passed, 16 skipped, 86.88% coverage; post-render client
+  checks: 27 passed. Fresh browser/API E2E and desktop/mobile/320px visual review passed.
+  Refreshed the user's local demo at port 18087; accepted artifacts remain unchanged.
+
+## Unreleased — DT-016 isolated builds
+
+- Require fresh Docker end-to-end evidence before every green judgment, including
+  small and docs-only deliveries. Updated shared instructions, DOD, judge and plans.
+- Reran the full source-to-candidate pipeline and semantic comparison successfully;
+  separately reran the accepted-artifact browser/API gate with all four canonical
+  routes passing at desktop/mobile sizes. Existing delivery blockers remain open.
+
+- Added deterministic seven-layer source comparison, immutable directory identities,
+  explicit per-feature diagnostics and supplemental metadata inventory.
+- Replaced the `make etl` no-op with a full isolated legacy rebuild. Separate Docker
+  capabilities preserve raw extraction, enforce stage/hash/code/image checks and
+  write only new experiment outputs. Added PowerShell/POSIX launchers and fast checks.
+- Added canonical graph, unit, anchor and profile room-pair comparison. Two final
+  independent candidates match semantically; their artifact bytes differ.
+- Exposed eleven inherited multipart storage-order defects, including four accepted
+  chains with non-source joins and cost/geometry disagreement. DT-017 prioritizes
+  their correction before the 141 unassigned revised pathways are integrated.
+- Accepted artifacts, source files and running demo stacks remain unchanged.
+- Final Docker suite: 535 passed, 16 skipped, 86.01% coverage; lint, type, artifact-QA
+  and launcher gates pass. Published-image execution remains unverified.
+
+## Unreleased — Codex takeover
+
+- Verified all three local geodatabases for ECC/AQ/Strand in Docker. The local
+  legacy copy matches the sibling snapshot byte-for-byte. Source-etl and the legacy
+  profiling launcher now default to local `data/`; Compose masks `/workspace/data`
+  to prevent the repository bind exposing raw inputs. Fresh runtime boundary checks
+  and local source QA pass; focused gates pass 90 tests with 2 skips, plus Ruff and
+  launcher/no-host-Python checks. Existing containers require recreation to acquire new mounts.
+- Recorded 141 revised-only pathways with missing facility/level identities;
+  revised rebuild and supplemental entrance/door/ramp ingestion remain separate work.
+
+- Earlier clean local-image suite (before the source-mount repair): 468 passed,
+  16 skipped, 87.50% coverage; lint, types,
+  artifact QA and launcher checks pass. Docker-only Chromium checks pass all four
+  fixtures at desktop/mobile widths. Published-image access, CI activation and
+  physical second-device LAN acceptance remain open.
+
+- Fixed out-of-order floor rendering, manual incomplete-pair correction and stale
+  chat route state. All route entry paths now clear old geometry and synchronize
+  pending/invalid selection state; rejected mobility requests retain the disclosure.
+- Sanitized unmatched access-log paths and unknown methods; rate-denial responses
+  now retain shared security headers and sanitized access logging. Unexpected handler
+  failures emit a generic diagnostic instead of exception values or filesystem traces.
+- Restored DT-015's missing Strand corridor fixture (`SH1001C` → `SH1003`, 21.8 m,
+  12 measured pathway edges) alongside the three AQ fixtures. Added a repeatable
+  Docker-only Chromium gate with isolated networking and screenshot evidence.
+
+- Added shared AGENTS.md, a thin Copilot adapter, reconciled spatial instructions,
+  aggregate/fast container gates and a source-independent PR validation workflow.
+- Recorded the image digest from successful publication run 34501691967; local
+  registry access still returns 403, so local-image validation is explicitly separate.
+- Fixed malformed route profiles, pre-thread HTTP admission, idle socket deadlines,
+  stale profile routes and clear-during-inspection request races with behavioral regressions.
+- Recorded the current model-routing preference: large models for planning, orchestration,
+  architecture and final judging; smaller models for bounded mechanical edits, routine
+  documentation and gate execution; ambiguous, security-sensitive or GIS-logic work escalates
+  to a large model.
+- Recorded the persistent coordination preference for the lead to delegate independent bounded
+  tasks to multiple concurrent agents with clear file ownership; all project execution remains
+  Docker-only for every agent tier.
+- Reconciled obsolete infrastructure tests and source-independent extraction error tests.
+- Added synthetic GDAL round-trip and evidence-regeneration tests; combined full and
+  supplemental coverage reaches 85.38% without lowering the 85% floor.
+- Preserved inherited DT-015 changes. Full DOD and browser/LAN acceptance are tracked
+  in docs/HANDOFF.md and docs/reports/CODEX-TAKEOVER.md; no new approval is implied.
+- Strengthened the repository execution policy: all project code, scripts, tests, builds,
+  data processing, and evidence/hash generation run in Docker for every agent tier. Host
+  activity is limited to repository inspection/editing, Git and Docker CLI operations,
+  and thin Docker launcher glue; Docker unavailability now stops execution rather than
+  permitting a host-runtime fallback. Removed the direct-file PowerShell parser exception.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

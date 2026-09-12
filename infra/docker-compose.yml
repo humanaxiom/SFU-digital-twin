@@ -1,11 +1,15 @@
-x-build-image: &build-image ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:PUBLISHED_DIGEST_REQUIRED
+x-build-image: &build-image ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:26259879732ceffe8405f22d19c423bf14408583e1a752da35a61d3e2825276c
 
 x-common: &common
   image: *build-image
+  network_mode: none
   working_dir: /workspace
   volumes:
     - ..:/workspace:rw
     - ../build:/workspace/build:rw
+  # Raw inputs also live under the repository bind; hide that alternate path.
+  tmpfs:
+    - /workspace/data:ro,noexec,nosuid,size=1m
   command: ["sleep", "infinity"]
   healthcheck:
     test: ["CMD-SHELL", "python --version >/dev/null && ogrinfo --version >/dev/null"]
@@ -23,18 +27,21 @@ services:
     volumes:
       - ..:/workspace:rw
       - ../build:/workspace/build:rw
-      - C:/repos/sfudt/claude/dtwin-harness/data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
+      - ../data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro
 
   demo:
     image: *build-image
     working_dir: /workspace
     environment:
       PYTHONPATH: /workspace/packages/wayfinding/src
+      DTWIN_DEMO_ALLOWED_HOST: ${DTWIN_DEMO_ALLOWED_HOST:-localhost}
     volumes:
       - ..:/workspace:ro
       - ../build/wayfinding.gpkg:/data/wayfinding.gpkg:ro
       - ../build/graph_contracted.pkl:/data/graph_contracted.pkl:ro
       - ../build/graph_contracted_stats.json:/data/graph_contracted_stats.json:ro
+    tmpfs:
+      - /workspace/data:ro,noexec,nosuid,size=1m
     command:
       - python
       - -m
@@ -50,7 +57,12 @@ services:
       - --stats
       - /data/graph_contracted_stats.json
     ports:
-      - "127.0.0.1:${DTWIN_DEMO_HOST_PORT:-18007}:8080"
+      - "${DTWIN_DEMO_BIND_ADDRESS:-0.0.0.0}:${DTWIN_DEMO_HOST_PORT:-18007}:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "3"
     healthcheck:
       test:
         - CMD-SHELL

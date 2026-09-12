@@ -1,0 +1,35 @@
+name: Validate repository
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  fast-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the checked-in image
+        shell: bash
+        run: |
+          image=$(sed -n 's/^x-build-image: &build-image //p' infra/docker-compose.yml)
+          [[ "$image" =~ ^ghcr\.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:[0-9a-f]{64}$ ]]
+          echo "BUILD_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Pull immutable toolchain
+        run: docker pull "$BUILD_IMAGE"
+      - name: Run source-independent gates without external networking
+        run: docker run --rm --network none -v "$PWD:/workspace" -w /workspace "$BUILD_IMAGE" sh tools/check-fast.sh
+      - name: Explain gate scope
+        if: always()
+        run: |
+          echo 'Fast checks exclude private GIS artifacts and source data. Full coverage, artifact QA and LAN/browser acceptance remain required locally; this job alone does not certify DOD.' >> "$GITHUB_STEP_SUMMARY"
