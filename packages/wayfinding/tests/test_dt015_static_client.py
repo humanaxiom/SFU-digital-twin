@@ -95,10 +95,8 @@ def test_endpoint_clear_swap_reselect_and_manual_select_fallback():
     assert re.search(r"routeSwap\.addEventListener|querySelector\([\"']#route-swap", javascript)
     assert re.search(r"routeOrigin\.addEventListener\([\"']change", javascript)
     assert re.search(r"routeDestination\.addEventListener\([\"']change", javascript)
-    assert re.search(
-        r"origin[^\n]*!==[^\n]*destination|destination[^\n]*!==[^\n]*origin",
-        javascript,
-    )
+    # Distinct/incomplete pair behavior is executed by test_takeover_client,
+    # rather than requiring one spelling of the conditional in source text.
     assert re.search(r"(?:generation|requestGeneration)", javascript)
     assert re.search(r"classList\.(?:toggle|add)\([^\n]*(?:origin|destination)", javascript)
 
@@ -140,6 +138,20 @@ def test_assistant_success_renders_same_route_as_direct_request():
     assert re.search(r"(?:else|return)[\s\S]*request\([\"']/demo/v1/assistant", body)
     assert _function_body(javascript, "requestRoute").count('request("/demo/v1/route"') == 1
 
+def test_assistant_room_aliases_resolve_to_full_unit_ids_before_selector_sync():
+    javascript = _asset("app.js")
+    resolver = _function_body(javascript, "resolveRouteUnitId")
+    assistant_submit = re.search(
+        r"assistantForm\.addEventListener\([\"']submit[\"'][\s\S]*?\n\}\);",
+        javascript,
+    )
+
+    assert assistant_submit
+    assert "routeUnits" in resolver
+    assert "unit_id" in resolver
+    assert "room_id" in resolver
+    assert assistant_submit.group(0).count("resolveRouteUnitId(") >= 2
+
 
 def test_assistant_failure_and_mobility_disclosure_match_route_service():
     javascript = _asset("app.js")
@@ -176,15 +188,24 @@ def test_third_and_same_room_activations_are_deterministic_and_synchronized():
 
 def test_client_renders_service_geometry_only_without_synthetic_connectors():
     javascript = _asset("app.js")
-    overlay = _function_body(javascript, "renderRouteOverlay")
-    request_route = _function_body(javascript, "requestRoute")
 
-    assert "activeRoute.geometries" in overlay
-    assert re.search(r"\.filter\(\([^)]*\)\s*=>\s*[^\n]*level_id\s*===\s*levelId", overlay)
-    assert "svgPath(item" in overlay
-    assert not re.search(
-        r"(?:centroid|anchor|connector|node_id|edge_ids).*pathData",
-        javascript,
-        re.I,
-    )
-    assert not re.search(r"(?:geometry|distance|reachability)\s*=", request_route, re.I)
+    # Guidance geometries and their explicit step references are the only
+    # route spans the client should draw.  Keep this as a data-flow contract
+    # rather than coupling the test to renderer helper names.
+    assert "activeRoute?.guidance" in javascript or "activeRoute.guidance" in javascript
+    assert "guidance.geometries" in javascript
+    assert "step.geometry_ids" in javascript
+    assert "item.geometry_id" in javascript
+    assert "svgPath(item" in javascript
+    assert "pathData(geometry)" in javascript
+
+    # Room anchors, graph node IDs, and transitions may be displayed as
+    # labels/disclosures, but must not be used as inputs to path construction.
+    assert not re.search(r"(?:centroid|anchor|node_id|edge_ids).*pathData", javascript, re.I)
+    assert not re.search(r"(?:centroid|anchor|node_id|edge_ids).*svgPath", javascript, re.I)
+
+def test_mobile_route_controls_allow_panels_to_shrink_without_overflow():
+    stylesheet = _asset("styles.css")
+
+    assert re.search(r"\.map-panel,\s*\.side-panel\s*\{[^}]*min-width:\s*0", stylesheet)
+    assert re.search(r"select,\s*input\s*\{[^}]*max-width:\s*100%", stylesheet)

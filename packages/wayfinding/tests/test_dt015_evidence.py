@@ -15,6 +15,20 @@ ARTIFACT_PATHS = {
 UNVERIFIED = {"door_width", "path_width", "slope", "powered_doors", "surface"}
 
 
+def test_dt015_generator_reproduces_checked_in_evidence(tmp_path):
+    """The saved report must remain reproducible from the accepted artifacts."""
+    from wayfinding.demo.evidence import generate
+
+    output = tmp_path / "regenerated.json"
+    generate(
+        ARTIFACT_PATHS["wayfinding.gpkg"],
+        ARTIFACT_PATHS["graph_contracted.pkl"],
+        ARTIFACT_PATHS["graph_contracted_stats.json"],
+        output,
+    )
+    assert json.loads(output.read_text(encoding="utf-8")) == _load_evidence()
+
+
 def _load_evidence() -> dict[str, Any]:
     assert EVIDENCE_PATH.is_file(), "Data QA must check in docs/reports/DT-015-demo-routes.json"
     return json.loads(EVIDENCE_PATH.read_text(encoding="utf-8"))
@@ -23,11 +37,11 @@ def _load_evidence() -> dict[str, Any]:
 def _fixtures(evidence: dict[str, Any]) -> dict[str, dict[str, Any]]:
     fixtures = evidence.get("fixtures")
     assert isinstance(fixtures, dict)
-    assert set(fixtures) == {"strand_corridor", "aq_corridor", "aq_transition"}
+    assert set(fixtures) == {"aq_long_corridor", "aq_stairs", "aq_elevator", "strand_corridor"}
     return fixtures
 
 
-def test_dt015_three_demo_routes_are_real_deterministic_and_replayable():
+def test_dt015_demo_routes_are_real_deterministic_and_replayable():
     evidence = _load_evidence()
     fixtures = _fixtures(evidence)
 
@@ -37,9 +51,13 @@ def test_dt015_three_demo_routes_are_real_deterministic_and_replayable():
         name: hashlib.sha256(path.read_bytes()).hexdigest()
         for name, path in ARTIFACT_PATHS.items()
     }
-    assert fixtures["strand_corridor"]["facility_id"] == "SFU_BURNABY_STRAND"
-    assert fixtures["aq_corridor"]["facility_id"] == "SFU_BURNABY_QUAD"
-    assert fixtures["aq_transition"]["facility_id"] == "SFU_BURNABY_QUAD"
+    for name, fixture in fixtures.items():
+        expected = "SFU_BURNABY_STRAND" if name == "strand_corridor" else "SFU_BURNABY_QUAD"
+        assert fixture["facility_id"] == expected
+    assert evidence["cross_building_disclosure"]["aq_strand_reachable_pairs"] == {
+        "default": 0,
+        "elevator_only": 0,
+    }
     for name, fixture in fixtures.items():
         assert fixture["status"] == 200, name
         assert fixture["origin"]["unit_id"] != fixture["destination"]["unit_id"], name
@@ -52,18 +70,29 @@ def test_dt015_three_demo_routes_are_real_deterministic_and_replayable():
         assert fixture["reachability"], name
         assert fixture["provenance"], name
     assert (
-        fixtures["strand_corridor"]["origin"]["level_id"]
-        == fixtures["strand_corridor"]["destination"]["level_id"]
+        fixtures["aq_long_corridor"]["origin"]["level_id"]
+        == fixtures["aq_long_corridor"]["destination"]["level_id"]
+    )
+    strand = fixtures["strand_corridor"]
+    assert strand["origin"]["level_id"] == strand["destination"]["level_id"]
+    assert strand["profile"] == "default"
+    assert set(strand["edge_modes"]) == {"pathway"}
+    assert {item["level_id"] for item in strand["geometries"]} == {
+        strand["origin"]["level_id"]
+    }
+    assert strand["network_distance_m"] >= 20
+    assert (
+        fixtures["aq_stairs"]["origin"]["level_id"]
+        != fixtures["aq_stairs"]["destination"]["level_id"]
     )
     assert (
-        fixtures["aq_corridor"]["origin"]["level_id"]
-        == fixtures["aq_corridor"]["destination"]["level_id"]
+        fixtures["aq_elevator"]["origin"]["level_id"]
+        != fixtures["aq_elevator"]["destination"]["level_id"]
     )
-    assert (
-        fixtures["aq_transition"]["origin"]["level_id"]
-        != fixtures["aq_transition"]["destination"]["level_id"]
-    )
-    assert {"stairs", "elevator"} & set(fixtures["aq_transition"]["edge_modes"])
+    assert "stairs" in fixtures["aq_stairs"]["edge_modes"]
+    assert fixtures["aq_elevator"]["profile"] == "elevator_only"
+    assert "elevator" in fixtures["aq_elevator"]["edge_modes"]
+    assert "stairs" not in fixtures["aq_elevator"]["edge_modes"]
     canonical = json.dumps(
         {key: value for key, value in evidence.items() if key != "self_sha256"},
         sort_keys=True,

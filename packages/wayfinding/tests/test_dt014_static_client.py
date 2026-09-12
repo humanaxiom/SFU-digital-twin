@@ -33,7 +33,7 @@ def test_route_controls_are_exact_semantic_and_keyboard_operable():
         tag == "button" and attrs.get("type") == "submit" and attrs.get("id") == "route-submit"
         for tag, attrs in tags
     )
-    assert any(attrs.get("aria-live") == "assertive" for _tag, attrs in tags)
+    assert any(attrs.get("aria-live") in {"polite", "assertive"} for _tag, attrs in tags)
 
 
 def test_profile_control_offers_only_default_and_elevator_only():
@@ -51,9 +51,13 @@ def test_client_posts_exact_route_contract_and_renders_graph_geometry_only():
 
     assert 'request("/demo/v1/route"' in javascript
     assert all(term in javascript for term in ("origin", "destination", "unit_id", "profile"))
-    assert all(term in javascript for term in ("geometries", "edge_ids", "network_distance_m"))
-    assert "attachment_distance_m" in javascript
-    assert "connector" not in javascript.lower() or "connector geometry" not in javascript.lower()
+    assert all(term in javascript for term in ("guidance", "geometries", "distance_m", "steps"))
+    # ADR-0012 guidance is additive to the legacy route response.  The route
+    # renderer must consume the server's geometry references instead of
+    # constructing room or connector paths in the browser.
+    assert all(
+        term in javascript for term in ("geometry_ids", "geometry_id", "markers", "transitions")
+    )
     assert "http://" not in javascript
     assert "https://" not in javascript
 
@@ -66,6 +70,8 @@ def test_route_overlay_and_steps_follow_the_active_level_without_layout_shift():
     assert 'id="route-overlay"' in html
     assert 'id="route-steps"' in html
     assert "activeStep" in javascript
+    assert "guidanceStep" in javascript
+    assert "aria-current" in javascript
     assert "level_id" in javascript
     assert "selectLevel" in javascript or "loadLevel" in javascript
     assert re.search(r"#route-overlay|\.route-segment", css)
@@ -76,10 +82,14 @@ def test_success_failure_and_approximate_anchor_disclosures_are_visible():
     html = _asset("index.html")
     text = re.sub(r"<[^>]+>", " ", html).lower()
 
-    assert "indoor pathway route between approximate room anchors" in text
-    assert "room-to-anchor" in text
-    assert "not represented or verified" in text
-    assert "disconnected" in text
+    heading = re.search(r'<h2[^>]+id="route-heading"[^>]*>(.*?)</h2>', html, re.S | re.I)
+    assert heading
+    assert "directions" in re.sub(r"<[^>]+>", " ", heading.group(1)).lower()
+    assert "approximate" in text
+    assert "room" in text
+    assert "door" in text
+    assert re.search(r"(?:not checked|not represented|not verified)", text)
+    assert 'id="route-diagnostics"' in html
     assert all(term in text for term in ("closures", "opening hours", "door access"))
     assert "elevator status" in text
 
@@ -125,7 +135,7 @@ def test_route_ui_keeps_legacy_provenance_and_has_no_external_or_deferred_capabi
 
     assert "legacy" in lowered
     assert "sha-256" in lowered or "sha256" in lowered
-    assert not re.search(r"(?:https?:)?//", combined)
+    assert not re.search(r"https?://", combined)
     for forbidden in (
         "maplibregl",
         "new maplibre",

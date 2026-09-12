@@ -17,7 +17,7 @@ applyTo: "packages/**"
   components (all transitions) and 840 elevator-only components, with at least one component bridged
   by each transition mode. DT-006 rejects regressions and no-op transition modes but does not require
   global connectivity. DT-009 maps every unit to a component for query-time no-route results.
-- Every searchable unit (`SEARCHABLE = 'Y'`) must have a zero-cost connector edge to the nearest
-  pathway node on its own `level_id`; an orphan searchable unit is a data-QA failure.
+- ADR-0008/0009 use disclosed approximate same-level anchors and explicit unattached-unit
+  failures. Do not add zero-cost room connectors: room-to-anchor traversal is unverified.
 - `DELAY` is 99.5% null and must not be used as a cost term; elevator wait is a configuration
   constant, documented as such.

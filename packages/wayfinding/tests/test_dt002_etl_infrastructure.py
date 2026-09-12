@@ -49,20 +49,22 @@ class TestDockerComposeEtlService:
             compose_config = yaml.safe_load(f)
 
         assert "services" in compose_config, "docker-compose.yml missing 'services' key"
-        assert "etl" in compose_config["services"], "docker-compose.yml missing 'etl' service"
+        assert {"artifact", "source-etl"}.issubset(compose_config["services"]), (
+            "Compose must provide ADR-0006 artifact and source-etl capabilities"
+        )
 
     def test_etl_service_has_gdal_image(self):
         """etl service must use Python 3.12+ (GDAL deferred to DT-003)."""
         with open(DOCKER_COMPOSE_PATH) as f:
             compose_config = yaml.safe_load(f)
 
-        etl_service = compose_config["services"]["etl"]
+        etl_service = compose_config["services"]["source-etl"]
         assert "image" in etl_service, "etl service missing 'image' key"
 
         # For DT-002 (infrastructure), require Python 3.12+.
         # GDAL image will be introduced in DT-003 when ogrinfo is needed.
         image = etl_service["image"].lower()
-        assert "python" in image or "gdal" in image or "osgeo" in image, (
+        assert "wayfinding-build@sha256:" in image, (
             f"etl service image '{etl_service['image']}' must have Python 3.12+ "
             "(for DT-002 no-op entry point) or GDAL (for DT-003+ geodata processing)"
         )
@@ -72,7 +74,7 @@ class TestDockerComposeEtlService:
         with open(DOCKER_COMPOSE_PATH) as f:
             compose_config = yaml.safe_load(f)
 
-        etl_service = compose_config["services"]["etl"]
+        etl_service = compose_config["services"]["source-etl"]
         assert "volumes" in etl_service, "etl service missing 'volumes' key"
 
         volumes = etl_service["volumes"]
@@ -94,7 +96,7 @@ class TestDockerComposeEtlService:
         with open(DOCKER_COMPOSE_PATH) as f:
             compose_config = yaml.safe_load(f)
 
-        etl_service = compose_config["services"]["etl"]
+        etl_service = compose_config["services"]["source-etl"]
         volumes = etl_service["volumes"]
 
         build_mount = None

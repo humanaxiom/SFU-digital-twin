@@ -1,0 +1,36 @@
+name: sfudt-rebuild
+
+x-image: &image ${WAYFINDING_REBUILD_IMAGE:-ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:26259879732ceffe8405f22d19c423bf14408583e1a752da35a61d3e2825276c}
+x-common: &common
+  image: *image
+  network_mode: none
+  working_dir: /workspace
+  environment:
+    PYTHONPATH: /workspace/packages/wayfinding/src
+    PYTHONDONTWRITEBYTECODE: "1"
+    WAYFINDING_BUILD_IMAGE_ID: ${WAYFINDING_BUILD_IMAGE_ID:?WAYFINDING_BUILD_IMAGE_ID is required}
+    WAYFINDING_BUILD_IMAGE_REFERENCE: ${WAYFINDING_BUILD_IMAGE_REFERENCE:?WAYFINDING_BUILD_IMAGE_REFERENCE is required}
+  volumes:
+    - ..:/workspace:ro
+    - ../build/experiments:/workspace/build/experiments:rw
+  tmpfs:
+    - /workspace/data:ro,noexec,nosuid,size=1m
+  command: ["sleep", "infinity"]
+
+services:
+  artifact-build:
+    <<: *common
+
+  source-build:
+    <<: *common
+    volumes:
+      - ..:/workspace:ro
+      - ../build/experiments:/workspace/build/experiments:rw
+      - ../data/IndoorWayfinding.gdb:/source/IndoorWayfinding.gdb:ro
+
+  source-review:
+    <<: *common
+    volumes:
+      - ..:/workspace:ro
+      - ../build/experiments:/workspace/build/experiments:rw
+      - ../data:/sources:ro

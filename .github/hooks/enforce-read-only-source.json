@@ -3,7 +3,7 @@
     "PostToolUse": [
       {
         "type": "command",
-        "command": "pwsh -NoProfile -File tools/hooks/check-read-only-boundary.ps1",
+        "command": "docker compose -f infra/docker-compose.yml run --rm --no-deps -T artifact python tools/hooks/check_read_only_boundary.py",
         "timeout": 15
       }
     ]

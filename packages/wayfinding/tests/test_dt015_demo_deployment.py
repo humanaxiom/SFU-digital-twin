@@ -62,13 +62,15 @@ def test_dt015_launchers_report_machine_name_url_and_lan_warning():
         )
         warning = content.lower()
         assert all(term in warning for term in ("trusted lan", "no authentication", "no tls"))
-        assert "stop" in warning and "firewall" in warning
+        assert "stop" in warning
+        assert "firewall" in warning
         assert not re.search(r"\b(?:curl|wget|nslookup|dig|ifconfig|ipconfig)\b", content, re.I)
         assert re.search(r"dry.?run", content, re.I)
 
     readme = _text(README_PATH).lower()
     assert all(term in readme for term in ("trusted lan", "no authentication", "no tls"))
-    assert "stop" in readme and "firewall" in readme
+    assert "stop" in readme
+    assert "firewall" in readme
 
 
 def test_dt015_lan_security_contract():
@@ -76,13 +78,14 @@ def test_dt015_lan_security_contract():
     server = _text(SERVER_PATH)
     rendered_demo = yaml.safe_dump(demo).lower()
 
-    assert "DTWIN_DEMO_ALLOWED_HOST" in rendered_demo
+    assert "dtwin_demo_allowed_host" in rendered_demo
     assert "DTWIN_DEMO_ALLOWED_HOST" in server
     assert re.search(r"host.*(?:allow|valid)|(?:allow|valid).*host", server, re.I | re.S)
     assert "Retry-After" in server
     assert re.search(r"(?:semaphore|concurren|max_concurrent)", server, re.I)
     assert re.search(r"(?:rate.?limit|requests_per|rate_window)", server, re.I)
-    assert "Cache-Control" in server and "no-store" in server
+    assert "Cache-Control" in server
+    assert "no-store" in server
     assert "Access-Control-Allow-Origin" not in server
     assert all(
         header in server
@@ -94,7 +97,8 @@ def test_dt015_lan_security_contract():
         )
     )
     assert re.search(r"logging:\s*\n\s*driver:\s*[\"']?json-file", rendered_demo)
-    assert "max-size" in rendered_demo and "max-file" in rendered_demo
+    assert "max-size" in rendered_demo
+    assert "max-file" in rendered_demo
     assert not re.search(r"(?:/var/log|\.log:|transcript)", rendered_demo)
     assert all(term not in rendered_demo for term in (".gdb", "docker.sock", ":rw"))
 
@@ -107,7 +111,8 @@ def test_dt015_focused_gate_is_container_only_and_selects_dt015_tests():
     recipe = match.group("recipe")
     assert re.search(r"docker\s+compose\b.*\brun\s+--rm\s+artifact\b", recipe)
     assert "PYTHONPATH=/workspace/packages/wayfinding/src" in recipe
-    assert "pytest" in recipe and "--no-cov" in recipe
+    assert "pytest" in recipe
+    assert "--no-cov" in recipe
     assert all(
         test_file in recipe
         for test_file in (

@@ -18,6 +18,8 @@ import networkx as nx
 import rfc8785
 from osgeo import ogr
 
+from wayfinding.demo.guidance import build_guidance, load_level_metadata
+
 ALGORITHM_VERSION = "dt014-v1"
 SOURCE_STATUS = "accepted legacy snapshot; final source-directory lineage pending DT-009"
 ALLOWED_MODES = {
@@ -138,8 +140,11 @@ class RoutingService:
         graph: nx.MultiDiGraph,
         units: list[dict[str, Any]],
         provenance: dict[str, str],
+        *,
+        level_metadata: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.graph = graph
+        self.level_metadata = level_metadata or {}
         self.provenance = MappingProxyType(dict(provenance))
         self.allowed_modes = ALLOWED_MODES
         self.component_ids: dict[str, dict[Any, str]] = {}
@@ -171,8 +176,10 @@ class RoutingService:
         graph: nx.MultiDiGraph,
         units: list[dict[str, Any]],
         provenance: dict[str, str],
+        *,
+        level_metadata: dict[str, dict[str, Any]] | None = None,
     ) -> RoutingService:
-        return cls(graph, units, provenance)
+        return cls(graph, units, provenance, level_metadata=level_metadata)
 
     @classmethod
     def from_artifacts(
@@ -199,6 +206,7 @@ class RoutingService:
             if not isinstance(graph, nx.MultiDiGraph):
                 raise TypeError("The contracted graph has an unexpected type.")
             units = _units_from_gpkg(gpkg)
+            level_metadata = load_level_metadata(gpkg)
         except RouteArtifactError:
             raise
         except Exception as error:
@@ -213,6 +221,7 @@ class RoutingService:
                 "source_status": SOURCE_STATUS,
                 "algorithm_version": ALGORITHM_VERSION,
             },
+            level_metadata=level_metadata,
         )
 
     def component_count(self, profile: str) -> int:
@@ -330,6 +339,58 @@ class RoutingService:
             }
         return payload
 
+    def route_options(self, origin_unit_id: str, profile: str) -> dict[str, Any]:
+        """Classify destinations with one directed, profile-filtered graph traversal.
+
+        This is graph connectivity, not guidance validation or doorway access.
+        Keep same-anchor endpoints distinct from routes containing walking edges.
+        """
+        counts = dict.fromkeys(
+            ("connected", "same_anchor", "disconnected", "endpoint_unavailable"), 0
+        )
+        response = {
+            **self._base(profile),
+            "version": "route-options-v1",
+            "origin_unit_id": origin_unit_id,
+            "availability_basis": "directed_profile_graph",
+            "destinations": [],
+            "counts": counts,
+        }
+        if profile not in self.allowed_modes:
+            return {**response, "status": 400, "code": "invalid_profile"}
+        origin = self.endpoint_catalog.get(origin_unit_id)
+        if origin is None:
+            return {**response, "status": 404, "code": "unknown_endpoint"}
+        if not origin["eligible"]:
+            return {**response, "status": 422, "code": "endpoint_unavailable"}
+
+        anchor = origin["anchor_node"]
+        reached = {anchor}
+        pending = [anchor]
+        allowed = set(self.allowed_modes[profile])
+        while pending:
+            node = pending.pop()
+            for _, target, data in self.graph.out_edges(node, data=True):
+                if data.get("mode") in allowed and target not in reached:
+                    reached.add(target)
+                    pending.append(target)
+
+        destinations = []
+        for unit_id, endpoint in sorted(self.endpoint_catalog.items()):
+            if unit_id == origin_unit_id:
+                continue
+            if not endpoint["eligible"]:
+                availability = "endpoint_unavailable"
+            elif endpoint["anchor_node"] == anchor:
+                availability = "same_anchor"
+            elif endpoint["anchor_node"] in reached:
+                availability = "connected"
+            else:
+                availability = "disconnected"
+            counts[availability] += 1
+            destinations.append({"unit_id": unit_id, "availability": availability})
+        return {**response, "status": 200, "destinations": destinations}
+
     def route(
         self,
         origin_identifier: Any,
@@ -368,6 +429,10 @@ class RoutingService:
                 "network_distance_m": 0,
                 "geometries": [],
                 "steps": self._steps(origin, destination, []),
+                "guidance": build_guidance(
+                    origin, destination, [], level_metadata=self.level_metadata,
+                    node_metadata=self.graph.nodes,
+                ),
             }
 
         nodes, selected_edges = self._shortest_path(
@@ -390,6 +455,10 @@ class RoutingService:
             "network_distance_m": sum(edge["length_3d"] for edge in edges),
             "geometries": self._geometries(selected_edges),
             "steps": self._steps(origin, destination, selected_edges),
+            "guidance": build_guidance(
+                origin, destination, selected_edges, level_metadata=self.level_metadata,
+                node_metadata=self.graph.nodes,
+            ),
         }
 
     @staticmethod

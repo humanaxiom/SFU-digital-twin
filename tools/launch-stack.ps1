@@ -14,6 +14,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$machineName = [Environment]::MachineName
+if ($machineName -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$') {
+    throw 'Local machine name is not a DNS-compatible host label.'
+}
+$bindAddress = if ($env:DTWIN_DEMO_BIND_ADDRESS) { $env:DTWIN_DEMO_BIND_ADDRESS } else { '0.0.0.0' }
 $portBlockSize = 10
 $portOffsets = [ordered]@{
     DTWIN_POSTGIS_HOST_PORT   = 0
@@ -119,6 +124,10 @@ foreach ($entry in $portOffsets.GetEnumerator()) {
         'Process'
     )
 }
+$previousEnvironment['DTWIN_DEMO_BIND_ADDRESS'] = [Environment]::GetEnvironmentVariable('DTWIN_DEMO_BIND_ADDRESS', 'Process')
+$previousEnvironment['DTWIN_DEMO_ALLOWED_HOST'] = [Environment]::GetEnvironmentVariable('DTWIN_DEMO_ALLOWED_HOST', 'Process')
+[Environment]::SetEnvironmentVariable('DTWIN_DEMO_BIND_ADDRESS', $bindAddress, 'Process')
+[Environment]::SetEnvironmentVariable('DTWIN_DEMO_ALLOWED_HOST', $machineName, 'Process')
 
 try {
     $services = @(docker compose @composeArgs config --services)
@@ -131,7 +140,15 @@ try {
     foreach ($entry in $portOffsets.GetEnumerator()) {
         Write-Host ('{0,-28} {1}' -f $entry.Key, ($selectedBase + $entry.Value))
     }
-    Write-Host ('{0,-28} {1}' -f 'Demo URL', "http://127.0.0.1:$($selectedBase + 7)/")
+    Write-Host ('{0,-28} {1}' -f 'DTWIN_DEMO_BIND_ADDRESS', $bindAddress)
+    Write-Host ('{0,-28} {1}' -f 'Local demo URL', "http://127.0.0.1:$($selectedBase + 7)/")
+    Write-Host ('{0,-28} {1}' -f 'LAN machine URL', "http://${machineName}:$($selectedBase + 7)/")
+    if ($bindAddress -eq '127.0.0.1') {
+        Write-Host 'LAN access is disabled by loopback rollback.'
+    }
+    else {
+        Write-Warning 'Trusted LAN demo only. No authentication and no TLS. Restrict the port with the host firewall and stop the stack after use.'
+    }
 
     $upArgs = @('compose') + $composeArgs + @('-p', $selectedProject, 'up', '-d', '--wait')
     if ($Build) {
@@ -198,10 +215,10 @@ try {
     }
 }
 finally {
-    foreach ($entry in $portOffsets.GetEnumerator()) {
+    foreach ($entry in $previousEnvironment.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable(
             $entry.Key,
-            $previousEnvironment[$entry.Key],
+            $entry.Value,
             'Process'
         )
     }

@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SFU Indoor Data Explorer</title>
+  <title>SFU Indoor Directions</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">SFU Burnaby · Phase 1 artifact</p>
-      <h1>Indoor data explorer</h1>
+      <p class="eyebrow">SFU Burnaby</p>
+      <h1>Indoor directions</h1>
     </div>
     <div class="selectors" aria-label="Map controls">
       <label for="facility-select">Building</label>
@@ -25,51 +25,91 @@
     <section class="map-panel" aria-labelledby="map-heading">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Normalized floor geometry</p>
-          <h2 id="map-heading">Floor plan</h2>
+          <p class="eyebrow">Route preview · no live location</p>
+          <h2 id="map-heading"><span id="viewing-floor">Floor plan</span></h2>
         </div>
         <div class="legend" aria-label="Map legend">
           <span><i class="room-key"></i>Room</span>
-          <span><i class="detail-key"></i>Detail</span>
-          <span><i class="landmark-key"></i>Landmark</span>
+          <span><i class="origin-key">A</i>Origin</span>
+          <span><i class="destination-key">B</i>Destination</span>
+          <span><i class="route-key"></i>Route</span>
+          <span><i class="selected-key"></i>Selected step</span>
         </div>
+      </div>
+      <nav id="floor-journey" class="floor-journey" aria-label="Route floor visits"></nav>
+      <div class="map-actions">
+        <button id="zoom-in" type="button" aria-controls="floor-map">Zoom in</button>
+        <button id="zoom-out" type="button" aria-controls="floor-map">Zoom out</button>
+        <button id="fit-route" type="button">Show route on this floor</button>
+        <button id="fit-floor" type="button">Show whole floor</button>
       </div>
       <div class="map-frame">
         <svg id="floor-map" role="img" aria-labelledby="map-title map-description">
           <title id="map-title">Selected SFU floor</title>
-          <desc id="map-description">Real room, architectural detail, and landmark geometry from the selected normalized level.</desc>
+          <desc id="map-description">Floor plan with the mapped route and selected instruction. This preview does not show your location.</desc>
           <g id="route-overlay"></g>
         </svg>
         <p id="map-status" class="map-status" aria-live="polite">Loading artifact geometry…</p>
       </div>
+      <section class="current-step" aria-label="Selected instruction">
+        <div class="step-topline"><p id="step-position">Choose a route</p><span class="preview-label">Preview</span></div>
+        <p id="current-instruction" aria-live="polite">Select a starting room and destination to see directions.</p>
+        <div id="transition-views" class="transition-views" hidden>
+          <button id="transition-departure" type="button">View departure floor</button>
+          <button id="transition-arrival" type="button">View arrival floor</button>
+        </div>
+        <div id="floor-preview" class="floor-preview" hidden>
+          <span id="preview-message"></span>
+          <button id="show-selected-step" type="button">Show selected step</button>
+        </div>
+        <div class="step-navigation">
+          <button id="step-previous" type="button" disabled>Previous</button>
+          <button id="step-next" type="button" disabled>Next</button>
+        </div>
+      </section>
     </section>
 
     <aside class="side-panel">
       <section class="route-panel" aria-labelledby="route-heading">
-        <p class="eyebrow">Measured graph</p>
-        <h2 id="route-heading">Indoor pathway route between approximate room anchors</h2>
+        <h2 id="route-heading">Directions</h2>
         <form id="route-form">
           <div class="route-controls">
-            <label for="route-origin">Origin</label>
+            <label for="route-origin">From</label>
             <select id="route-origin" required></select>
-            <label for="route-destination">Destination</label>
-            <select id="route-destination" required></select>
-            <label for="route-profile">Profile</label>
+            <label for="route-destination">To</label>
+            <select id="route-destination" aria-describedby="route-options-status" required></select>
+            <label for="route-profile">Route option</label>
             <select id="route-profile">
-              <option value="default" selected>Default</option>
+              <option value="default" selected>Stairs or elevators</option>
               <option value="elevator_only">Elevator only</option>
             </select>
           </div>
-          <button id="route-submit" type="submit">Route</button>
+          <p id="route-options-status" class="route-options-status" data-state="empty" aria-live="polite">Choose a starting room to see mapped connections.</p>
+          <div id="reachable-destinations" class="reachable-destinations" role="group" aria-label="Mapped destinations" hidden></div>
+          <div class="route-actions">
+            <button id="route-submit" type="submit">Show directions</button>
+            <button id="route-swap" type="button">Swap A/B</button>
+            <button id="route-clear" type="button">Clear</button>
+          </div>
         </form>
-        <div id="route-status" class="route-status" aria-live="assertive">Choose exact endpoints. Disconnected rooms return an explicit failure.</div>
-        <ol id="route-steps" class="route-steps"></ol>
-        <p class="muted">Room-to-anchor traversal is not represented or verified. Attachment distances are approximate and excluded from route distance.</p>
-        <p id="route-accessibility" class="muted" hidden>Elevators only; stairs excluded. Door width, path width, slope, powered doors, and surface are not verified.</p>
-        <p class="muted">Source status: accepted legacy snapshot; final source-directory lineage pending DT-009.</p>
+        <div id="route-status" class="route-status" data-state="empty" aria-live="polite">Choose two rooms, or select them on the map.</div>
+        <p class="route-qualification">The mapped route starts and ends near the rooms. The connections to the doors have not been checked.</p>
+        <p id="route-accessibility" class="route-qualification" hidden>Elevators only; stairs excluded. Accessibility is not verified.</p>
+        <details id="directions-list" class="directions-list" open>
+          <summary>All directions</summary>
+          <ol id="route-steps" class="route-steps"></ol>
+        </details>
+        <details class="route-details">
+          <summary>Route details and data checks</summary>
+          <p>Indoor pathway route between approximate room anchors. Room-to-anchor traversal is not represented or verified. Attachment distances are excluded from route distance.</p>
+          <p>Source status: accepted legacy snapshot. Known geometry issues are under review; this preview does not verify the source data.</p>
+          <p>Door width, path width, slope, powered doors, surface, closures, door access and elevator status are not verified.</p>
+          <pre id="route-diagnostics">No route requested.</pre>
+        </details>
       </section>
 
-      <section class="facts" aria-labelledby="details-heading">
+      <details class="facts">
+        <summary>Rooms and record details</summary>
         <p class="eyebrow">Selected record</p>
         <h2 id="details-heading">Record details</h2>
         <dl id="unit-details">
@@ -79,9 +119,10 @@
           <h3>Rooms on this floor</h3>
           <div id="room-list" class="room-list" aria-label="Keyboard-selectable rooms"></div>
         </div>
-      </section>
+      </details>
 
-      <section class="assistant" aria-labelledby="assistant-heading">
+      <details class="assistant">
+        <summary>Ask about rooms or request directions</summary>
         <p class="eyebrow">Artifact lookup</p>
         <h2 id="assistant-heading">Deterministic data assistant</h2>
         <p class="muted">This is not an LLM or a general-purpose chatbot. Responses use fixed rules and current artifact records.</p>
@@ -94,7 +135,7 @@
           </div>
         </form>
         <div id="assistant-evidence" class="evidence"></div>
-      </section>
+      </details>
 
       <details class="limitations">
         <summary>Data and limitations</summary>
@@ -108,6 +149,6 @@
     </aside>
   </main>
 
-  <footer>SFU Indoor Wayfinding · Local artifact inspection</footer>
+  <footer>SFU Indoor Wayfinding · Mapped route preview</footer>
 </body>
 </html>

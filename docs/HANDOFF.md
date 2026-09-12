@@ -4,7 +4,241 @@ Read this first every session. Update it when the user asks, and whenever a tick
 decision is made that would leave this file materially stale — it should stay current enough that a
 fresh session can resume cold from it alone.
 
-## Current phase
+## Current status — DT-022 exact source-vertex topology
+
+The AQ6071 failure was an importer defect: exact same-level endpoint-to-interior
+source vertices were not connected. ADR-0015 and `docs/reports/DT-022.md` document
+the opt-in correction and evidence. Final same-source runs are
+`dt022-endpoint-final3` and `dt022-exact-final3`; the candidate gains 257,108
+default and 230,356 elevator-only room pairs with zero losses. AQ6071 reaches 696
+connected destinations instead of one. Source-slice audit and candidate-backed
+browser/API E2E pass. Accepted artifacts remain unchanged and the candidate is not
+promoted. Continue with the 18 audited exclusions and revised-source reconciliation
+only as separately reviewed work.
+
+## Route camera fix — DT-021, 2026-09-11
+
+The user clarified the visible failure with AQ303 → AQ3149: routing succeeds but
+initial step selection framed a single starting marker in a 16m square. DT-021
+under ADR-0014 opens the current-floor route overview, supplies explicit map Zoom
+in/out, retains manual camera on same-floor redraw and resets context on floor
+changes. Point-only instructions use route context; coincident landing markers
+fall back to the whole floor. Marker padding accounts for mobile screen space.
+
+The real-browser RED reproduced the exact screenshot. Final live Docker browser
+E2E passed at **22:28:10 UTC**, including exact-pair viewport/marker containment,
+zoom/reset, express-floor context, canonical routes, mobile/320px and stale-response
+checks. Full suite: **593 passed, 16 skipped, 87.03% coverage**; post-freeze client
+set **27 passed**; Ruff, Pyright and artifact QA passed. See `docs/reports/DT-021.md`.
+No backend or accepted artifact changed.
+Reload **http://127.0.0.1:18087/** to load the mounted client changes.
+
+## Route availability fix — DT-020, 2026-09-11
+
+The port-18087 demo is refreshed with origin/profile-specific destination groups
+under ADR-0013, visible map-adjacent failures, stale availability guards and a
+native-select Swap/assistant fix. Older services returning no structured guidance
+now show an update-needed message. The exact user's failing pair and URL remain
+unprovided; observed recent requests returned 409 while canonical routes worked.
+
+Fresh browser/API E2E against the actual refreshed demo passed at **22:09:05 UTC**:
+desktop/mobile, four canonical fixtures, screenshot AQ route/reverse, ECC, connected
+choices, native Swap both ways, unsupported selection, profile changes, delayed
+availability/Clear, exact selected spans and 320px controls. Independent visual
+review found no blockers. Full Docker regression: **593 passed, 16 skipped,
+87.03% coverage**; Ruff, Pyright and artifact QA (**23 passed, 1 skipped**) passed.
+Commands, evidence and limitations are recorded in `docs/reports/DT-020.md`.
+
+Use **http://127.0.0.1:18087/** and reload. Other older demo stacks were not refreshed.
+Accepted artifacts and route calculation remain unchanged. Most arbitrary room
+pairs still lack a mapped connection; DT-017 source/geometry work remains separate.
+
+## Latest support fix — DT-019, 2026-09-11
+
+If `rebuild.ps1` reports a missing published image, use the existing development
+image explicitly: `.\tools\rebuild.ps1 -RunId 001 -LocalImage` (unused run ID).
+Launcher errors now explain this and preserve Docker diagnostics. `Build` still
+uses legacy `IndoorWayfinding.gdb`; local image selection does not select revised data.
+Fresh full launcher-to-candidate E2E `launcher-local-20260911` completed with source
+reverification and matching artifact hashes. Launcher/boundary checks and 3 focused
+infrastructure tests passed. Accepted artifacts and the running demo are unchanged.
+Read `docs/reports/DT-019.md`. DT-017 remains the next data/importer task.
+
+## Completed route UI — DT-018, 2026-09-11
+
+The user authorized implementation after a short GIS request, now written in
+`docs/requests/GIS-DATA-NEEDED.md`. DT-018 implements structured guidance and the
+route UI under ADR-0012: one active floor, an ordered journey, transition phase
+controls, readable directions and exact blue step highlighting. Shared local SVG
+coordinates fix fragmented strokes while preserving native geometry. Final Docker
+gates passed: **572 tests, 16 skipped, 86.88% coverage**; after the renderer fix,
+**27 affected client/static tests** passed. Fresh browser/API E2E passed at
+**2026-09-11 21:08:37 UTC**, including desktop/mobile/320px and screenshot-route/reverse/ECC
+checks. Independent large-model implementation and visual review approved the local
+scope. Read `docs/reports/DT-018.md` for commands, skips, evidence and limits.
+
+The user's demo was refreshed at **http://127.0.0.1:18087/**; reload the page to get
+the final client. Only that existing demo was recreated. Raw data is now masked in
+its workspace mount. The temporary browser project was removed; other stacks remain
+unchanged. No commit, push or source/artifact promotion was performed.
+
+DT-017 remains separate: the screenshot's AQ1003 → AQ5053.2 route has a known
+geometry/distance disagreement and therefore shows preview-only guidance with
+null walking distances and generic walking text. Floor transitions remain explicit.
+Canonical route fields and accepted artifacts are unchanged. GIS request was written,
+not sent; no source correction or promotion is implied.
+
+Standing user requirement: **always run fresh end-to-end tests in Docker before
+declaring green**, including small or documentation-only deliveries. Assemble the
+final runnable code/configuration/artifacts first; recording results afterward does
+not require a redundant rerun. Follow AGENTS and DOD for scope and evidence.
+
+## Completed DT-016 work — historical evidence
+
+Fresh follow-up verification passed: `dt016-e2e-20260911` completed the full
+source-to-candidate pipeline and matched candidate C semantically. Separately,
+the real demo browser/API gate passed all four canonical fixtures at desktop/mobile
+sizes on the existing accepted artifacts (2026-09-11 08:36:51 UTC). Source/build
+and browser evidence are recorded in `docs/reports/DT-016.md`; no integrated
+candidate-to-browser claim is made. DT-017 must exercise its corrected candidate
+through the isolated demo. Published-image, CI and physical LAN acceptance remain open.
+
+DT-016 implements executable source review and a complete isolated legacy rebuild.
+Read `docs/plans/DT-016.md`, ADR-0011 and `docs/reports/DT-016.md` for the current
+scope. Final clean Docker suite passed **535 tests, 16 skipped, 86.01% coverage**;
+Ruff, Pyright, artifact QA (23 passed, 1 skipped), launcher and no-host-Python
+checks passed. Final real-data build/review checks passed. `make etl` now invokes the isolated pipeline with
+an explicit run ID; it no longer invokes the legacy no-op entry point.
+
+Final candidates `build/experiments/dt016-legacy-c` and `dt016-legacy-d` completed
+extraction, normalization, all graph stages, semantic analysis and source recheck.
+Their graph/unit/anchor signatures and profile reachability match, while artifact
+bytes differ. Each has 7,450 nodes, 19,884 directed edges and 1,017 eligible
+approximate room anchors. Of 516,636 distinct unordered room pairs, the graph connects
+33,361 by default and 29,364 with elevator-only. These are graph-level results,
+not physical navigation or accessibility certification. Candidates are unpromoted.
+
+Final source review is `build/experiments/reviews/dt016-source-review-final.json`.
+All seven indoor layers preserve legacy features; revised adds 141 pathways without
+facility/level IDs. Source quality remains blocked: eleven legacy/revised AQ3000
+pathways also have noncontiguous stored multipart order. Independent GIS review
+confirmed four accepted contracted chains retain 41 non-source join segments and
+cost/geometry disagreements. Reproducing legacy semantics does not validate them.
+
+**Next product task: DT-017**, `docs/plans/DT-017.md`. Correct multipart assembly in
+isolated candidates and verify original-segment preservation and cost/geometry
+consistency; then reconcile revised assignments and compare room reachability.
+During DT-016, no raw source or accepted artifact was modified and no running stack
+was restarted. The later DT-018 demo refresh is recorded above and in its report.
+GHCR access, CI activation and physical LAN acceptance remain separate open items;
+they do not prevent this local source/build work.
+
+Commands: `./tools/rebuild.ps1 -RunId <new-id> -LocalImage`; `-Action Review` creates
+a source report; `-Action Compare -RunId <left> -OtherRunId <right>` compares completed
+runs. POSIX and Make equivalents are documented in README. All execution is Docker-only.
+
+## Previous takeover status — 2026-09-11
+
+Codex is continuing from HEAD `998c477` and the inherited dirty DT-015 working tree.
+The old delivery record below is historical, not current certification.
+
+Local-source clarification: all ECC/AQ/Strand files are present in `data/`.
+Both indoor GDBs contain 3 facilities, 11 levels and 1,210 raw units. Local legacy
+`IndoorWayfinding.gdb` is byte-identical to the previously selected sibling copy.
+Source-etl now selects that local copy read-only. Compose masks `/workspace/data`
+in artifact, source-etl and demo; the old broad workspace bind exposed raw inputs
+despite earlier claims of source exclusion. Fresh-container visibility/read-only
+checks pass for all three services, and local source QA passes (1 test).
+Focused post-repair gates pass: 90 tests, 2 Docker-CLI skips, Ruff, launcher fixtures
+and no-host-Python checks; logs are under `build/local-source-review/`.
+Existing containers retain their old mounts until recreated; none was restarted.
+See `docs/reports/LOCAL-SOURCE-REVIEW.md` for source hashes and exact evidence.
+
+Revised pathways preserve the 22,426 legacy records and add 141 with null facility
+and level IDs. Reconcile those and the renamed pathway layer before an isolated
+rebuild. Supplemental data contains 82 entrances, 82 main doors and 34 ramps;
+it remains profile-only under ADR-0008. Local availability was never the reason
+for deferring revised-source promotion.
+
+Resumed review fixed floor-response ordering, manual correction and chat pending/invalid
+state; unmatched logs, 429 headers/logging and unexpected-handler traces are sanitized.
+The missing Strand requirement is restored in the four-fixture report: `SH1001C` →
+`SH1003`, 21.8 m over 12 measured same-level pathway edges, alongside three AQ examples.
+Large-model review found no remaining blocking issue in these changes.
+
+The Docker-only browser gate now passes on headless Chromium **130.0.6723.31** at
+1440×1000 and 390×844. It checks all four canonical fixtures, exact chat parity,
+returned geometry, cross-floor navigation, actual SVG pointer/Enter/Space activation,
+manual correction, disconnected elevator-only disclosure and delayed scene responses.
+Panel separation and horizontal control bounds passed; route screenshots were inspected.
+Results/screenshots: `build/takeover-browser/`. This uses viewport emulation, not a
+physical second-device LAN test. The temporary internal-network gate stack was removed;
+previously running demo stacks were not changed. The last clean local-image full
+suite passed **468 tests, 16 skipped, 87.50% coverage**. Ruff, Pyright, artifact QA
+(**23 passed, 1 skipped**), launchers and no-host-Python checks passed. Full-run skips
+are 2 unavailable Docker-CLI checks, 12 source-GDB checks, 1 unavailable eligible
+profile-isolated pair and 1 explicit source-QA check. Source QA remains a separate
+source-etl gate; local source verification is recorded above. That full run predates
+the subsequent mount-only repair and its four new configuration regressions.
+
+Execution policy: all project code, scripts, tests, builds, data processing, and
+evidence or hash generation run inside Docker for every agent tier. The host is
+limited to repository inspection/editing, Git and Docker CLI operations, and thin
+Docker launcher glue. Host test runners, direct data parsers, and host evidence or
+hash processing are prohibited; the former direct-file PowerShell parser exception is
+removed. If Docker or the required image is unavailable, stop execution rather than
+falling back to a host runtime.
+
+Docker-only correction verified: evidence hashing/JSON generation and the post-tool
+diagnostic now execute in the artifact container. Legacy direct FileGDB PowerShell
+parsers refuse host execution. The evidence launcher passed end to end with
+`-LocalImage`; the expanded offline fast gate passed **94 tests, 2 skipped**, with
+lint/types/launcher checks clean. Actual Copilot hook-runner integration and the
+published image remain unverified; the post-tool diagnostic cannot prevent writes.
+
+- Shared instructions now live in root `AGENTS.md`; Copilot retains a thin adapter.
+  Active spatial instructions now follow ADR-0005/0008/0009 instead of requiring
+  global connectivity or invented zero-cost room connectors.
+- The published image digest is recorded in Compose from successful GitHub Actions
+  run `34501691967` (commit `7b92a8c7e17dc95da2d798b8abd5c94aec8c689a`).
+  This machine's registry inspection returned HTTP 403. Published-image execution
+  remains unverified here; local checks use existing `wayfinding-build:local`.
+- HTTP fixes reject malformed profiles, bound admission before thread creation,
+  and set a five-second idle socket timeout. Client fixes recompute profile changes,
+  reject stale route responses and cancel routing after clear during room inspection.
+- Current model routing preference: use large models for planning, orchestration,
+  architecture and final judging; use smaller models for bounded mechanical edits,
+  routine documentation and gate execution. Escalate ambiguous, security-sensitive
+  or GIS-logic work to a large model.
+- Coordination preference: the accountable lead should proactively delegate independent,
+  bounded tasks to multiple concurrent agents, with clear file ownership; all agents
+  follow the Docker-only project execution policy above.
+- Obsolete DT-002 service tests now follow ADR-0006. Two DT-003 error-path tests use
+  temporary source directories rather than requiring private GIS data.
+- `make fast` and `make gates` are available. The new PR validation workflow runs
+  source-independent fast checks with external networking disabled. It is not yet
+  pushed/activated or configured as a required branch check.
+- Earlier Docker-only checks: 94 passed, 2 skipped; Ruff, Pyright and launcher checks passed.
+  Artifact QA: 23 passed, 1 skipped. Source layer-count QA: 1 passed in an offline
+  source-ETL container. Both ETL and artifact Compose services disable external networking.
+  New HTTP/client regressions were observed failing before implementation.
+  Earlier full suite: 419 passed, 15 skipped; initial coverage gate failed at 82.77%.
+  Supplemental synthetic extraction and evidence-regeneration tests raised combined
+  coverage to 85.38% with no production changes and the 85% floor unchanged.
+  This is full-plus-supplemental evidence, not a second clean full invocation.
+  Details and limitations: `docs/reports/CODEX-TAKEOVER.md`.
+
+DT-015 is **in progress**, not approved. A real second-device machine-name LAN check
+remains unverified. No source/artifact promotion, data rebuild, existing-stack teardown,
+push or publication was performed.
+
+Next: restore published-image pull access and repeat gates with that exact image;
+activate PR validation/required checks and complete physical LAN acceptance. Then
+resume the revised-source comparison as a separate
+planned ticket. `make etl` remains a legacy no-op; use explicit ETL stage targets
+until an isolated rebuild/promotion workflow is implemented.
+
+## Historical delivery record (superseded by current takeover status above)
 
 **Phase 0 — complete.** Data profiled and documented
 ([docs/01-data-findings.md](01-data-findings.md)), system designed
@@ -25,7 +259,7 @@ fresh session can resume cold from it alone.
 
 ## What changed most recently
 
-- **DT-014 bounded routing integrity passed:** The local demo now routes exact unit pairs over the accepted legacy contracted graph, renders returned per-level graph geometry and geometry-derived steps, and exposes attachment distances, canonical reachability identities, artifact hashes, and limitations. Disconnected, profile-isolated, invalid-edge, and unavailable cases fail closed; elevator-only routes exclude stairs without claiming verified step-free access. Focused DT-014 validation passed 80 tests with one factual skip; GIS data-QA passed. Repository DOD is still blocked only by the unpublished ADR-0006 image digest.
+- **DT-014 bounded routing integrity passed:** The local demo now routes exact unit pairs over the accepted legacy contracted graph, renders returned per-level graph geometry and geometry-derived steps, and exposes attachment distances, canonical reachability identities, artifact hashes, and limitations. Disconnected, profile-isolated, invalid-edge, and unavailable cases fail closed; elevator-only routes exclude stairs without claiming verified step-free access. Focused DT-014 validation passed 80 tests with one factual skip; GIS data-QA passed. Historical gate statement; see current takeover status for fresh evidence.
 
 ## Open questions blocking Phase 1
 
@@ -35,7 +269,7 @@ extracts, room-alias source, elevator-wait/walking-speed constants. None of thes
 Phase 1 ETL, but the accessibility-survey question should be raised with stakeholders before the
 accessible-routing UI copy is finalized.
 
-## Next steps (for fresh session)
+## Historical next steps (superseded)
 
 1. Complete ADR-0006's image publication workflow and replace the `sha256:PUBLISHED_DIGEST_REQUIRED` placeholder with the published digest.
 2. Publish the hermetic build image, replace `PUBLISHED_DIGEST_REQUIRED` with its immutable 64-character digest, and rerun the full DOD gates so `judge` can issue repository-wide `APPROVE`.

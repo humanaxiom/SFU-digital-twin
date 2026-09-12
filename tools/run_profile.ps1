@@ -2,7 +2,7 @@
 # and writes the report to docs/generated/. Requires Docker Desktop.
 [CmdletBinding()]
 param(
-    [string]$DataDir = 'C:\repos\sfudt\claude\dtwin-harness\data',
+    [string]$DataDir = (Join-Path $PSScriptRoot '..\data'),
     [string]$Image = 'ghcr.io/osgeo/gdal:alpine-small-latest',
     [string]$OutFile = (Join-Path $PSScriptRoot '..\docs\generated\gdb-profile.txt')
 )

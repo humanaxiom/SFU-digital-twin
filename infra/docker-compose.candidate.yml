@@ -1,0 +1,54 @@
+name: sfudt-candidate
+
+x-build-image: &build-image ${WAYFINDING_BROWSER_BUILD_IMAGE:-ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:26259879732ceffe8405f22d19c423bf14408583e1a752da35a61d3e2825276c}
+
+services:
+  demo:
+    image: *build-image
+    working_dir: /workspace
+    environment:
+      PYTHONPATH: /workspace/packages/wayfinding/src
+      DTWIN_DEMO_ALLOWED_HOST: demo
+      WAYFINDING_CANDIDATE_RUN: ${WAYFINDING_CANDIDATE_RUN:?WAYFINDING_CANDIDATE_RUN is required}
+    volumes:
+      - ../packages/wayfinding:/workspace/packages/wayfinding:ro
+      - ../build/experiments/${WAYFINDING_CANDIDATE_RUN:?WAYFINDING_CANDIDATE_RUN is required}/derived/wayfinding.gpkg:/data/wayfinding.gpkg:ro
+      - ../build/experiments/${WAYFINDING_CANDIDATE_RUN:?WAYFINDING_CANDIDATE_RUN is required}/derived/graph_contracted.pkl:/data/graph_contracted.pkl:ro
+      - ../build/experiments/${WAYFINDING_CANDIDATE_RUN:?WAYFINDING_CANDIDATE_RUN is required}/derived/graph_contracted_stats.json:/data/graph_contracted_stats.json:ro
+    command: ["python", "-m", "wayfinding.demo.server", "--host", "0.0.0.0", "--port", "8080", "--artifact", "/data/wayfinding.gpkg", "--graph", "/data/graph_contracted.pkl", "--stats", "/data/graph_contracted_stats.json"]
+    ports:
+      - "${WAYFINDING_CANDIDATE_BIND_ADDRESS:-127.0.0.1}:18107:8080"
+    networks:
+      candidate:
+        aliases: [demo]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/demo/v1/health', timeout=2).read()\""]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  browser:
+    image: mcr.microsoft.com/playwright@sha256:7dbbf924428aad5c87a5a3a5bc38f23e110cb1f5427fbbc7dbc3231014a4b0db
+    working_dir: /workspace
+    init: true
+    environment:
+      WAYFINDING_CANDIDATE_RUN: ${WAYFINDING_CANDIDATE_RUN:?WAYFINDING_CANDIDATE_RUN is required}
+      WAYFINDING_CANDIDATE_REPORT: /workspace/build/experiments/evaluations/dt022.json
+      WAYFINDING_BROWSER_RUN_LABEL: ${WAYFINDING_BROWSER_RUN_LABEL:-}
+    shm_size: 1gb
+    depends_on:
+      demo:
+        condition: service_healthy
+    volumes:
+      - ../packages/wayfinding:/workspace/packages/wayfinding:ro
+      - ../tests/browser:/workspace/tests/browser:ro
+      - ../docs/reports/DT-015-demo-routes.json:/workspace/docs/reports/DT-015-demo-routes.json:ro
+      - ../build/experiments/evaluations/${WAYFINDING_CANDIDATE_REPORT_FILE:-dt022.json}:/workspace/build/experiments/evaluations/dt022.json:ro
+      - ../build/takeover-browser:/workspace/build/takeover-browser:rw
+    networks: [candidate]
+    command: ["node", "/workspace/tests/browser/candidate.cjs"]
+
+networks:
+  candidate:
+    internal: true

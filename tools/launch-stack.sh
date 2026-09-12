@@ -11,6 +11,14 @@ BUILD=0
 TEST=0
 DRY_RUN=0
 PORT_BLOCK_SIZE=10
+MACHINE_NAME=$(hostname)
+
+case "$MACHINE_NAME" in
+    ''|*[!A-Za-z0-9-]*|-*|*-) echo "Local machine name is not a DNS-compatible host label." >&2; exit 1 ;;
+esac
+DTWIN_DEMO_BIND_ADDRESS=${DTWIN_DEMO_BIND_ADDRESS:-0.0.0.0}
+DTWIN_DEMO_ALLOWED_HOST=$MACHINE_NAME
+export DTWIN_DEMO_BIND_ADDRESS DTWIN_DEMO_ALLOWED_HOST
 
 usage() {
     cat <<'EOF'
@@ -171,7 +179,15 @@ printf '%-28s %s\n' \
     'DTWIN_NEO4J_HTTP_HOST_PORT' "$DTWIN_NEO4J_HTTP_HOST_PORT" \
     'DTWIN_NEO4J_BOLT_HOST_PORT' "$DTWIN_NEO4J_BOLT_HOST_PORT" \
     'DTWIN_DEMO_HOST_PORT' "$DTWIN_DEMO_HOST_PORT" \
-    'Demo URL' "http://127.0.0.1:$DTWIN_DEMO_HOST_PORT/"
+    'DTWIN_DEMO_BIND_ADDRESS' "$DTWIN_DEMO_BIND_ADDRESS" \
+    'Local demo URL' "http://127.0.0.1:$DTWIN_DEMO_HOST_PORT/" \
+    'LAN machine URL' "http://$MACHINE_NAME:$DTWIN_DEMO_HOST_PORT/"
+
+if [ "$DTWIN_DEMO_BIND_ADDRESS" = "127.0.0.1" ]; then
+    echo 'LAN access is disabled by loopback rollback.'
+else
+    echo 'WARNING: Trusted LAN demo only. No authentication and no TLS. Restrict the port with the host firewall and stop the stack after use.'
+fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$build_local_image" -eq 1 ]; then

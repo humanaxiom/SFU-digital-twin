@@ -2,6 +2,7 @@
 description: "Run or extend the ETL against the read-only source geodatabase, always through checked-in, reproducible scripts — never an ad hoc one-off command"
 argument-hint: "<what changed in the ETL, or which layer/mapping to add>"
 agent: agent
+model: 'Claude Opus 4.5 (copilot)'
 ---
 Handle an ETL change for: ${input:change:What ETL step or mapping is changing}
 

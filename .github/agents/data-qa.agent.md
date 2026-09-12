@@ -9,11 +9,13 @@ You are the data-QA specialist for the SFU indoor wayfinding digital twin.
    affected artifacts.
 2. Validate the specific invariants this dataset requires
    (`docs/01-data-findings.md §8`, `docs/02-system-design.md §3.3` and `§10`):
-   - Graph connectivity per profile — a disconnected `default`-profile graph is a hard failure; a
-     disconnected `accessible`-profile graph is a warning plus an explicit reachability matrix.
-   - No orphan units (every searchable unit has a connector edge to the network).
+   - Graph connectivity per ADR-0005/0009: reproduce 816 default / 840 elevator-only
+     edge-induced components and explicit query-time reachability. Do not require
+     global connectivity or invent repairs.
+   - Validate disclosed same-level approximate anchors per ADR-0008. Room-to-anchor
+     traversal remains unverified; unattached units must return explicit failures.
    - `vertical_order` mapping matches the table in `docs/01-data-findings.md §3`.
-   - Accessibility invariant: no `profile=accessible` route contains a `mode=stairs` edge.
+   - Accessibility invariant: no `profile=elevator_only` route contains a `mode=stairs` edge.
    - Accessibility-affecting fields carry `verified_by`/`verified_date` provenance, and unknown never
      defaults to accessible.
 3. Report every violation with the specific record/edge/unit implicated, not just a pass/fail count.

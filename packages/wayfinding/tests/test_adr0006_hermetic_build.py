@@ -122,6 +122,27 @@ def _mount_is_read_only(entry: Any) -> bool:
     return entry.get("read_only") is True or entry.get("mode") == "ro"
 
 
+def _tmpfs_entries(service: dict[str, Any]) -> list[Any]:
+    entries = service.get("tmpfs", [])
+    if isinstance(entries, dict):
+        return [{"target": target, **(value if isinstance(value, dict) else {})}
+                for target, value in entries.items()]
+    if isinstance(entries, list):
+        return entries
+    return [entries]
+
+
+def _tmpfs_target_and_options(entry: Any) -> tuple[str, str]:
+    if isinstance(entry, str):
+        target, _, options = entry.partition(":")
+        return target.replace("\\", "/"), options
+    target = str(entry.get("target", entry.get("destination", "")))
+    options = entry.get("options", entry.get("mode", ""))
+    if isinstance(options, list):
+        options = ",".join(str(option) for option in options)
+    return target.replace("\\", "/"), str(options)
+
+
 def _make_recipes() -> dict[str, str]:
     content = _read_required(MAKEFILE_PATH, "normal target Makefile")
     return {
@@ -213,6 +234,12 @@ def test_compose_services_share_exact_digest_pinned_image_without_build_fallback
     assert "build" not in source_etl
 
 
+def test_gate_and_etl_capabilities_disable_external_networking():
+    services = _compose_services()
+    for name in ("artifact", "source-etl"):
+        assert services[name].get("network_mode") == "none", name
+
+
 def test_compose_artifact_mounts_repo_and_build_but_no_gdb_or_socket():
     services = _compose_services()
     artifact = services["artifact"]
@@ -234,6 +261,29 @@ def test_compose_source_etl_has_readonly_gdb_and_no_socket():
     assert "docker.sock" not in yaml.safe_dump(_volume_entries(source_etl)).lower()
 
 
+@pytest.mark.parametrize("service_name", ["artifact", "source-etl", "demo"])
+def test_compose_services_mask_workspace_data_with_readonly_tmpfs(service_name: str):
+    services = _compose_services()
+    entries = [_tmpfs_target_and_options(entry) for entry in _tmpfs_entries(services[service_name])]
+    matching = [options for target, options in entries if target == "/workspace/data"]
+    assert matching, f"{service_name} must mask /workspace/data with tmpfs"
+    assert any(re.search(r"(?:^|,)\s*ro(?:\s*,|$)", options) for options in matching), (
+        f"{service_name} /workspace/data tmpfs must include the ro option"
+    )
+
+
+def test_compose_source_etl_uses_repository_local_legacy_gdb_mount():
+    source_etl = _compose_services()["source-etl"]
+    mounts = _mount_targets(source_etl, "/data/IndoorWayfinding.gdb")
+    assert any(
+        isinstance(entry, str)
+        and entry.replace("\\", "/").startswith(
+            "../data/IndoorWayfinding.gdb:/data/IndoorWayfinding.gdb:ro"
+        )
+        for entry in mounts
+    ), "source-etl must explicitly mount ../data/IndoorWayfinding.gdb read-only"
+
+
 @pytest.mark.parametrize(
     ("target", "service"),
     [
@@ -242,7 +292,6 @@ def test_compose_source_etl_has_readonly_gdb_and_no_socket():
         ("type", "artifact"),
         ("dataqa", "artifact"),
         ("dataqa-source", "source-etl"),
-        ("etl", "source-etl"),
         ("etl-extract", "source-etl"),
         ("etl-normalise", "artifact"),
         ("etl-graph-raw", "artifact"),
