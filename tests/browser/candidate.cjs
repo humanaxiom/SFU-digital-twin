@@ -7,6 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 const {verifyGuidance, activateButton, assertSelected, exerciseGuidance, sceneOrigin} = require('./guidance.cjs');
+const {exerciseCampus} = require('./campus.cjs');
 assert.ok(fs.existsSync('/.dockerenv'), 'Run the candidate browser gate in Docker.');
 const label = process.env.WAYFINDING_BROWSER_RUN_LABEL || 'dt022-candidate';
 assert.match(label, /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
@@ -207,10 +208,11 @@ async function run() {
       };
     })()`});
     await cdp.call('Page.navigate',{url:target.origin+'/'});
-    await cdp.wait("document.querySelectorAll('.unit-shape').length>0&&document.querySelectorAll('#route-origin option').length>1");
+    await cdp.wait("document.querySelector('#campus-view') && !document.querySelector('#campus-view').hidden && document.querySelectorAll('#route-origin option').length>1");
     for(const [width,height] of [[1440,1000],[390,844]]){
       const viewportLabel=`${width}x${height}`,viewport=results.viewports[viewportLabel]={fixtures:{}};
       await cdp.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<600});
+      viewport.campus=await exerciseCampus(cdp,screenshot,viewportLabel,width);
       await availability(cdp,report.availability,report.fixtures);
       for(const fixture of report.fixtures){
         const body=await submit(cdp,fixture),record=viewport.fixtures[fixture.name]={status:body.status,
@@ -247,6 +249,7 @@ async function run() {
     const narrow=report.fixtures.find(f=>f.response.status===200&&f.response.guidance?.steps.some(s=>s.kind==='walk'));
     assert.ok(narrow,'candidate evidence must include at least one displayed walking route');
     await cdp.call('Emulation.setDeviceMetricsOverride',{width:320,height:844,deviceScaleFactor:1,mobile:true});
+    results.narrowCampus=await exerciseCampus(cdp,screenshot,'320x844',320);
     const body=await submit(cdp,narrow);await routeFit(cdp,body);
     const walk=body.guidance.steps.find(s=>s.kind==='walk');await activateButton(cdp,`button[data-step-id="${walk.step_id}"]`);await assertSelected(cdp,body,walk);
     assert.ok(await cdp.evaluate('document.documentElement.scrollWidth<=320'),'320px layout overflows');

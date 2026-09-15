@@ -53,6 +53,154 @@ let mapFit = "floor";
 let mapOrigin = [0, 0];
 let availabilityGeneration = 0;
 let routeUiState = "empty";
+const campusView = document.querySelector("#campus-view");
+const floorView = document.querySelector("#floor-view");
+const campusMap = document.querySelector("#campus-map");
+const campusSearch = document.querySelector("#campus-search");
+let campusData = null;
+let campusFacilityId = null;
+let campusCamera = null;
+let campusOrigin = [0, 0];
+
+function showFloorContext() {
+  campusView.hidden = true;
+  floorView.hidden = false;
+  document.querySelector("#map-context").textContent = "Floor";
+}
+
+function showCampus() {
+  // A deliberate context choice wins over any pending floor or route request.
+  sceneGeneration += 1;
+  requestGeneration += 1;
+  if (routeUiState === "pending") {
+    routeSelection = routeOrigin.value ? "origin_selected" : "empty";
+    setRouteState("empty");
+    routeStatus.textContent = "Route preview cancelled. Choose Show directions to try again.";
+  }
+  campusView.hidden = false;
+  floorView.hidden = true;
+  document.querySelector("#map-context").textContent = campusFacilityId ? "Building" : "Campus";
+}
+
+function validCampusBounds(bounds) {
+  return Array.isArray(bounds) && bounds.length === 4 && bounds.every(Number.isFinite)
+    && bounds[2] >= bounds[0] && bounds[3] >= bounds[1];
+}
+
+function frameCampus(bounds) {
+  if (!validCampusBounds(bounds)) return;
+  const width = Math.max(bounds[2] - bounds[0], 1);
+  const height = Math.max(bounds[3] - bounds[1], 1);
+  const padding = Math.max(width, height) * 0.12 + 2;
+  campusCamera = [bounds[0] - campusOrigin[0] - padding,
+    campusOrigin[1] - bounds[3] - padding, width + padding * 2, height + padding * 2];
+  campusMap.setAttribute("viewBox", campusCamera.join(" "));
+}
+
+function resetCampusCamera() {
+  const selected = campusData?.facilities.find(item => item.facility_id === campusFacilityId);
+  frameCampus(selected?.bounds || campusData?.bounds);
+}
+
+function zoomCampus(factor) {
+  if (!campusCamera) return;
+  const [x, y, width, height] = campusCamera;
+  const nextWidth = Math.max(1, Math.min(width * factor, 100000));
+  const nextHeight = nextWidth * height / width;
+  campusCamera = [x + (width - nextWidth) / 2, y + (height - nextHeight) / 2, nextWidth, nextHeight];
+  campusMap.setAttribute("viewBox", campusCamera.join(" "));
+}
+
+function renderCampusBuildings() {
+  const query = campusSearch.value.trim().toLocaleLowerCase();
+  const matches = (campusData?.facilities || []).filter(item =>
+    [item.name, item.code, item.facility_id].some(value => String(value || "").toLocaleLowerCase().includes(query)));
+  document.querySelector("#campus-buildings").replaceChildren(...matches.map(item => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.campusFacilityId = item.facility_id;
+    button.textContent = `${item.code || "Building"} · ${item.name || item.facility_id}`;
+    button.setAttribute("aria-pressed", String(item.facility_id === campusFacilityId));
+    button.addEventListener("click", () => selectCampusBuilding(item.facility_id));
+    return button;
+  }));
+  document.querySelector("#campus-status").textContent = matches.length
+    ? `${matches.length} pilot building${matches.length === 1 ? "" : "s"} found. Visibility does not imply a route connection.`
+    : "No matching building in this three-building pilot. The campus inventory is incomplete.";
+}
+
+function selectCampusBuilding(facilityId) {
+  const item = campusData?.facilities.find(facility => facility.facility_id === facilityId);
+  if (!item) return;
+  const changed = campusFacilityId !== facilityId;
+  campusFacilityId = facilityId;
+  showCampus();
+  const previousOrder = levelSelect.value === "" ? null : Number(levelSelect.value);
+  const recordedLevels = allLevels.filter(level => level.facility_id === facilityId);
+  const selectedLevel = recordedLevels.find(level => level.vertical_order === previousOrder)
+    || recordedLevels.find(level => level.vertical_order === 0) || recordedLevels[0];
+  if (selectedLevel) {
+    selectFloorControls(selectedLevel);
+  } else {
+    levelSelect.replaceChildren();
+    levelSelect.disabled = true;
+    facilitySelect.replaceChildren(option(facilityId, `${item.code || "Building"} · ${item.name || facilityId}`));
+    facilitySelect.value = facilityId;
+  }
+  const heading = document.createElement("h3");
+  heading.textContent = `${item.code || "Building"} · ${item.name || item.facility_id}`;
+  const note = document.createElement("p");
+  note.textContent = item.levels.length ? "Recorded indoor floors · partial indoor coverage. Select a floor to inspect rooms."
+    : "No indoor floors are recorded for this building. Overview only.";
+  const buttons = item.levels.map(level => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.campusLevelId = level.level_id;
+    button.textContent = `Floor ${level.short_name || "not named"}`;
+    button.addEventListener("click", () => previewFloor(level.level_id));
+    return button;
+  });
+  const missing = document.createElement("p");
+  missing.textContent = item.geometry_status === "available" ? "" : "Footprint geometry is unavailable. No location has been inferred.";
+  document.querySelector("#campus-details").replaceChildren(heading, note, ...buttons, missing);
+  document.querySelector("#campus-reset").textContent = "Show whole building";
+  document.querySelectorAll(".campus-shape").forEach(shape =>
+    shape.classList.toggle("selected", shape.dataset.campusFacilityId === facilityId));
+  renderCampusBuildings();
+  if (changed) resetCampusCamera();
+}
+
+function renderCampus() {
+  if (!campusData) return;
+  if (validCampusBounds(campusData.bounds)) campusOrigin = campusData.bounds.slice(0, 2);
+  campusMap.querySelectorAll("g").forEach(node => node.remove());
+  const layer = element("g");
+  for (const item of campusData.facilities) {
+    if (item.geometry_status !== "available" || !item.geometry) continue;
+    const polygons = item.geometry.type === "Polygon" ? [item.geometry.coordinates] : item.geometry.coordinates;
+    const d = polygons.flatMap(polygon => polygon.map(ring => ring.map((point, index) =>
+      `${index ? "L" : "M"}${point[0] - campusOrigin[0]} ${campusOrigin[1] - point[1]}`).join(" ") + " Z")).join(" ");
+    const shape = element("path", {d, class: "campus-shape", tabindex: 0, role: "button",
+      "aria-label": `${item.code} · ${item.name}. Inspect building floors.`, "fill-rule": "evenodd"});
+    shape.dataset.campusFacilityId = item.facility_id;
+    shape.addEventListener("click", () => selectCampusBuilding(item.facility_id));
+    shape.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();selectCampusBuilding(item.facility_id);
+      }
+    });
+    layer.append(shape);
+    if (validCampusBounds(item.bounds)) {
+      const label = element("text", {x: (item.bounds[0] + item.bounds[2]) / 2 - campusOrigin[0],
+        y: campusOrigin[1] - (item.bounds[1] + item.bounds[3]) / 2, class: "campus-label"});
+      label.textContent = item.code || item.name;
+      layer.append(label);
+    }
+  }
+  campusMap.append(layer);
+  if (!campusCamera) resetCampusCamera();
+  renderCampusBuildings();
+}
 
 function element(name, attributes = {}) {
   const node = document.createElementNS(svgNamespace, name);
@@ -308,6 +456,7 @@ function renderScene(scene) {
 }
 
 async function loadScene() {
+  showFloorContext();
   const generation = ++sceneGeneration;
   const level = activeLevel();
   if (!level) return;
@@ -329,6 +478,7 @@ async function loadScene() {
 }
 
 function activeLevel() {
+  if (levelSelect.value === "") return undefined;
   const alignedLevels = levelsByOrder.get(Number(levelSelect.value)) || [];
   return alignedLevels.find((item) => item.facility_id === facilitySelect.value);
 }
@@ -356,6 +506,12 @@ function initializeFloorControls(levels) {
     groups.set(level.vertical_order, values);
     return groups;
   }, new Map());
+  populateFloorOptions();
+  if (levelsByOrder.has(0)) levelSelect.value = "0";
+  updateFacilities();
+}
+
+function populateFloorOptions() {
   const floorOptions = [...levelsByOrder.entries()].map(([verticalOrder, alignedLevels]) => {
     const labels = alignedLevels.map((level) => {
       const facility = facilitiesById.get(level.facility_id);
@@ -364,19 +520,21 @@ function initializeFloorControls(levels) {
     return option(String(verticalOrder), labels.join(" · "));
   });
   levelSelect.replaceChildren(...floorOptions);
-  if (levelsByOrder.has(0)) levelSelect.value = "0";
+  levelSelect.disabled = floorOptions.length === 0;
+}
+
+function selectFloorControls(level) {
+  if (levelSelect.disabled) populateFloorOptions();
+  levelSelect.value = String(level.vertical_order);
   updateFacilities();
+  facilitySelect.value = level.facility_id;
 }
 
 async function selectLevel(levelId) {
   const level = allLevels.find((item) => item.level_id === levelId);
   if (!level) return;
-  const aligned = levelsByOrder.get(level.vertical_order) || [];
-  levelSelect.value = String(level.vertical_order);
-  updateFacilities();
-  if (aligned.some((item) => item.facility_id === level.facility_id)) {
-    facilitySelect.value = level.facility_id;
-  }
+  showFloorContext();
+  selectFloorControls(level);
   if (currentScene?.level.level_id === levelId) {
     sceneGeneration += 1;
     renderRouteOverlay(levelId);
@@ -404,11 +562,8 @@ function restoreRenderedFloor() {
     return;
   }
   const level = allLevels.find((item) => item.level_id === currentScene.level.level_id);
-  if (level) {
-    levelSelect.value = String(level.vertical_order);
-    updateFacilities();
-    facilitySelect.value = level.facility_id;
-  }
+  // Hidden floor cleanup must not replace a newer Building inspection selection.
+  if (level && !floorView.hidden) selectFloorControls(level);
   viewingFloor.textContent = `Viewing ${floorLabel(currentScene.level.level_id)}`;
   viewingFloor.dataset.levelId = currentScene.level.level_id;
   setStatus(`${floorLabel(currentScene.level.level_id)} · ${currentScene.units?.length || 0} rooms`);
@@ -1022,12 +1177,28 @@ levelSelect.addEventListener("change", async () => {
   await previewFloor(activeLevel()?.level_id);
 });
 
+document.querySelector("#show-campus").addEventListener("click", () => {
+  const wasBuilding = campusFacilityId !== null;
+  campusFacilityId = null;
+  document.querySelector("#campus-details").replaceChildren();
+  document.querySelector("#campus-reset").textContent = "Show all buildings";
+  showCampus();
+  renderCampusBuildings();
+  document.querySelectorAll(".campus-shape").forEach(shape => shape.classList.toggle("selected", false));
+  if (wasBuilding) resetCampusCamera();
+});
+campusSearch.addEventListener("input", renderCampusBuildings);
+document.querySelector("#campus-zoom-in").addEventListener("click", () => zoomCampus(1 / 1.5));
+document.querySelector("#campus-zoom-out").addEventListener("click", () => zoomCampus(1.5));
+document.querySelector("#campus-reset").addEventListener("click", resetCampusCamera);
+
 async function initialize() {
   try {
-    const [health, facilities, levels] = await Promise.all([
+    const [health, facilities, levels, campus] = await Promise.all([
       request("/demo/v1/health"),
       request("/demo/v1/facilities"),
       request("/demo/v1/levels"),
+      request("/demo/v1/campus"),
     ]);
     artifactHash.textContent = health.artifact_sha256;
     graphHash.textContent = health.provenance?.graph_sha256 || "Unavailable";
@@ -1035,6 +1206,8 @@ async function initialize() {
       facilities.facilities.map((facility) => [facility.facility_id, facility]),
     );
     initializeFloorControls(levels.levels);
+    campusData = campus;
+    renderCampus();
     const units = await request("/demo/v1/units");
     routeUnits = units.units;
     const routeOptions = units.units.map((unit) => option(
@@ -1043,9 +1216,9 @@ async function initialize() {
     ));
     routeOrigin.replaceChildren(option("", "Select origin A"), ...routeOptions.map((item) => item.cloneNode(true)));
     routeDestination.replaceChildren(option("", "Select destination B"), ...routeOptions);
-    await loadScene();
   } catch (error) {
     setStatus(error.message);
+    document.querySelector("#campus-status").textContent = `Campus pilot unavailable: ${error.message}`;
   }
 }
 

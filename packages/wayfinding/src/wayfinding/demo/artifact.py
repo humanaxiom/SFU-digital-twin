@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,101 @@ class ArtifactRepository:
         records = [_fields(feature, ("facility_id", "code", "name")) for feature in layer]
         dataset = None
         return sorted(records, key=lambda item: (item["name"] or "", item["facility_id"]))
+
+    @staticmethod
+    def _campus_geometry_bounds(geometry: dict[str, Any] | None) -> list[float] | None:
+        """Return bounds only for finite Polygon/MultiPolygon GeoJSON geometry."""
+        if not geometry or geometry.get("type") not in {"Polygon", "MultiPolygon"}:
+            return None
+        coordinates = geometry.get("coordinates")
+        polygons = [coordinates] if geometry["type"] == "Polygon" else coordinates
+        if not isinstance(polygons, list) or not polygons:
+            return None
+        values: list[tuple[float, float]] = []
+
+        for polygon in polygons:
+            if not isinstance(polygon, list) or not polygon:
+                return None
+            for ring in polygon:
+                if not isinstance(ring, list) or len(ring) < 4:
+                    return None
+                if any(
+                    not isinstance(position, list)
+                    or len(position) < 2
+                    or any(
+                        isinstance(item, bool)
+                        or not isinstance(item, (int, float))
+                        or not math.isfinite(item)
+                        for item in position
+                    )
+                    for position in ring
+                ):
+                    return None
+                if ring[0][:2] != ring[-1][:2]:
+                    return None
+                values.extend((float(position[0]), float(position[1])) for position in ring)
+        if not values:
+            return None
+        xs, ys = zip(*values, strict=True)
+        return [min(xs), min(ys), max(xs), max(ys)]
+
+    def campus_overview(self) -> dict[str, Any]:
+        dataset = self._dataset()
+        layer = dataset.GetLayerByName("facility_26910")
+        facilities: list[dict[str, Any]] = []
+        all_bounds: list[list[float]] = []
+        for feature in layer:
+            facility_id = feature.GetField("facility_id")
+            geometry = _geometry(feature)
+            bounds = self._campus_geometry_bounds(geometry)
+            if bounds is not None:
+                ogr_geometry = ogr.CreateGeometryFromJson(json.dumps(geometry))
+                if ogr_geometry is None or not ogr_geometry.IsValid():
+                    bounds = None
+            if bounds is None:
+                geometry = None
+            if bounds is not None:
+                all_bounds.append(bounds)
+            levels = self.levels(facility_id)
+            facilities.append(
+                {
+                    "facility_id": facility_id,
+                    "code": feature.GetField("code"),
+                    "name": feature.GetField("name"),
+                    "geometry": geometry,
+                    "bounds": bounds,
+                    "levels": levels,
+                    "coverage": "partial_indoor" if levels else "overview_only",
+                    "geometry_status": "available" if bounds is not None else "unavailable",
+                    "known_entrances": [],
+                    "verified_building_destination": False,
+                    "outdoor_routing": "unavailable",
+                }
+            )
+        dataset = None
+        campus_bounds = None
+        if all_bounds:
+            campus_bounds = [
+                min(item[0] for item in all_bounds),
+                min(item[1] for item in all_bounds),
+                max(item[2] for item in all_bounds),
+                max(item[3] for item in all_bounds),
+            ]
+        facilities.sort(key=lambda item: (item["name"] or "", item["facility_id"] or ""))
+        return {
+            "version": "campus-overview-v1",
+            "crs": "EPSG:26910",
+            "scope": "three-building-pilot",
+            "campus_inventory_complete": False,
+            "facilities": facilities,
+            "bounds": campus_bounds,
+            "provenance": self.provenance("facility_26910"),
+            "limitations": [
+                "Pilot inventory is incomplete for the Burnaby campus.",
+                "No verified outdoor or building destinations are available.",
+                "Indoor coverage is not full routing coverage.",
+            ],
+        }
 
     def levels(self, facility_id: str | None = None) -> list[dict[str, Any]]:
         dataset = self._dataset()

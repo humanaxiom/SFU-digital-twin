@@ -11,7 +11,7 @@
   <header class="topbar">
     <div>
       <p class="eyebrow">SFU Burnaby</p>
-      <h1>Indoor directions</h1>
+      <h1>Campus &amp; indoor directions</h1>
     </div>
     <div class="selectors" aria-label="Map controls">
       <label for="facility-select">Building</label>
@@ -22,7 +22,33 @@
   </header>
 
   <main>
-    <section class="map-panel" aria-labelledby="map-heading">
+    <section class="map-panel" aria-label="Campus and floor maps">
+      <nav class="map-actions" aria-label="Map context">
+        <button id="show-campus" type="button">Campus overview</button>
+        <span id="map-context" aria-live="polite">Campus</span>
+      </nav>
+      <section id="campus-view" aria-labelledby="campus-heading">
+        <p class="eyebrow">Three-building pilot · incomplete campus inventory</p>
+        <h2 id="campus-heading">Explore the campus pilot</h2>
+        <p class="campus-disclosure">AQ, ECC and Strand Hall are shown. No verified outdoor connections or building destinations are available. Choose a building to inspect its recorded floors.</p>
+        <label for="campus-search">Find a building by name or acronym</label>
+        <input id="campus-search" type="search" autocomplete="off" placeholder="Academic Quadrangle, AQ, Strand…">
+        <div id="campus-buildings" class="campus-buildings" aria-label="Pilot buildings"></div>
+        <div class="map-actions">
+          <button id="campus-zoom-in" type="button" aria-controls="campus-map">Zoom in</button>
+          <button id="campus-zoom-out" type="button" aria-controls="campus-map">Zoom out</button>
+          <button id="campus-reset" type="button" aria-controls="campus-map">Show all buildings</button>
+        </div>
+        <div class="map-frame campus-frame">
+          <svg id="campus-map" role="group" aria-labelledby="campus-map-title campus-map-description">
+            <title id="campus-map-title">Three-building campus pilot</title>
+            <desc id="campus-map-description">Select a source building footprint to inspect its floors. Footprints do not imply route connections.</desc>
+          </svg>
+        </div>
+        <p id="campus-status" aria-live="polite">Loading campus pilot…</p>
+        <section id="campus-details" aria-live="polite" aria-label="Selected building"></section>
+      </section>
+      <div id="floor-view" hidden>
       <div class="section-heading">
         <div>
           <p class="eyebrow">Route preview · no live location</p>
@@ -67,6 +93,7 @@
           <button id="step-next" type="button" disabled>Next</button>
         </div>
       </section>
+      </div>
     </section>
 
     <aside class="side-panel">

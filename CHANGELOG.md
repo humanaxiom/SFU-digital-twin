@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased — building selection and dropdown synchronization
+
+- Synchronize Building/Floor dropdowns when selecting a campus building, retaining
+  a recorded global floor order with deterministic fallback and explicit no-floor state.
+- Preserve Building context and route endpoints/profile; prevent hidden-floor cleanup
+  and late responses from restoring old controls. ADR-0016 records the selection contract.
+- Fresh full Docker gates (617 tests, 16 skips, 86.25% coverage) and
+  candidate/accepted browser/API checks passed at desktop, mobile and 320 px.
+  See `docs/reports/DT-023.md` for exact run ordering, evidence and remaining data gates.
+
+## Unreleased — DT-023 three-building campus pilot
+
+- Repair the dedicated preview's Windows port publication and add a Docker browser
+  gate that sends traffic through the host-published port rather than bypassing it.
+
+- Add a campus overview of the three source buildings, building search and real
+  floor selection, with explicit incomplete-campus and routing coverage limits.
+- Expose the versioned artifact-backed `/demo/v1/campus` view under ADR-0016.
+- Audit ordered building-pair graph coverage and unclassified source contacts in
+  Docker. Outdoor routing, verified entrances and artifact promotion remain gated.
+- Passed fresh Docker regression and candidate/accepted browser/API E2E at desktop,
+  mobile and 320 px. The full campus-routing ticket remains incomplete; see
+  `docs/reports/DT-023.md` for scoped evidence and limitations.
+
 ## Unreleased — DT-022 exact source-vertex topology
 
 - Added an opt-in topology mode that joins exact same-level source vertices while

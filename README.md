@@ -186,6 +186,18 @@ To roll back to loopback-only access, set `DTWIN_DEMO_BIND_ADDRESS=127.0.0.1` be
 stack; the launcher will then report `http://127.0.0.1:<port>/` and LAN access will be disabled.
 Open the reported URL for the real artifact-backed floor explorer and deterministic data assistant.
 
+The demo opens a three-building campus pilot (AQ, ECC and Strand Hall). Search a
+building by its source name or code, select its footprint, then choose a recorded
+floor. Building selection also updates the Building and Floor dropdowns, retaining
+the current global floor order where recorded, or selecting that building's order-0
+or first recorded floor. It stays in Building inspection until you choose a floor.
+Buildings without indoor floors have an empty, disabled Floor dropdown.
+Campus returns to the overview while retaining the room endpoints. Campus
+zoom and reset are separate from floor and route framing. The inventory is incomplete;
+visible buildings do not imply connected routes or verified outdoor entrances.
+`GET /demo/v1/campus` returns the versioned source geometry, coverage and artifact
+identity described in [ADR-0016](docs/adr/0016-campus-overview-and-coverage.md).
+
 The demo renders normalized room, detail, and landmark geometry from `build/wayfinding.gpkg` and
 supports deterministic indoor routes over `build/graph_contracted.pkl`. Routes connect disclosed
 approximate same-level room anchors within measured graph components; room-to-anchor traversal is

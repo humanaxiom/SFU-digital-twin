@@ -76,6 +76,20 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(21rem, 25rem)
 
 .map-frame { position: relative; min-height: 20rem; height: calc(100vh - 26rem); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 8px 20px rgba(24, 35, 33, .06); overflow: hidden; }
 #floor-map { display: block; width: 100%; height: 100%; }
+#campus-map { display: block; width: 100%; height: 100%; }
+#campus-search { width: 100%; margin: .4rem 0 .6rem; }
+.campus-disclosure, #campus-status, #campus-details p { font-size: .85rem; line-height: 1.45; }
+.campus-buildings { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.campus-buildings button, #campus-details button { min-height: 44px; max-width: 100%; padding: .5rem .65rem; border: 1px solid var(--teal); border-radius: 4px; color: var(--teal-dark); background: white; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.campus-buildings button[aria-pressed="true"] { background: #d6e9e2; border-width: 2px; }
+#campus-details button { margin: 0 .4rem .4rem 0; }
+#campus-details { margin-top: .8rem; }
+#campus-status { margin: .6rem 0; }
+#map-context { align-self: center; color: var(--muted); font-size: .85rem; }
+.campus-frame { min-height: 20rem; height: 43vh; }
+.campus-shape { fill: #c7dfd8; stroke: var(--teal-dark); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+.campus-shape:hover, .campus-shape:focus, .campus-shape.selected { fill: #edb19e; stroke: var(--coral); stroke-width: 3; }
+.campus-label { fill: var(--ink); font-size: 10px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; paint-order: stroke; stroke: white; stroke-width: 2px; stroke-linejoin: round; }
 .level-shape { fill: #eef1eb; stroke: #596762; stroke-width: .45; vector-effect: non-scaling-stroke; }
 .detail-shape { fill: none; stroke: #aab1ae; stroke-width: .35; vector-effect: non-scaling-stroke; pointer-events: none; }
 .unit-shape { fill: #c7dfd8; stroke: var(--teal-dark); stroke-width: .45; vector-effect: non-scaling-stroke; cursor: pointer; }
