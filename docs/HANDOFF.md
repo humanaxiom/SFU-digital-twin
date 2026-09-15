@@ -4,6 +4,106 @@ Read this first every session. Update it when the user asks, and whenever a tick
 decision is made that would leave this file materially stale — it should stay current enough that a
 fresh session can resume cold from it alone.
 
+## Current increment — building clicks synchronize dropdowns
+
+The 2026-09-14 Building/Floor synchronization is implemented in
+[PR #2](https://github.com/humanaxiom/SFU-digital-twin/pull/2), targeting `main`;
+**fresh Docker verification passed**. The PR records Git integration status.
+Preserve all inherited working-tree changes. ADR-0016 documents the control contract.
+Clicking a footprint or choosing a building by search/list/keyboard now selects its
+exact facility and valid recorded global floor order together: retain the current
+order, otherwise order 0, otherwise the first recorded level. Overview-only buildings
+keep their facility with an empty, disabled Floor control. Selection stays in Building
+context and preserves route endpoints/profile without requesting a scene or route.
+Clear/route-start cleanup no longer restores controls from a hidden old floor.
+
+Docker actual-client and real host-port Chromium RED evidence preceded the fix.
+Focused client checks passed (4 tests), followed by full gates: **617 passed,
+16 skipped, 86.25% coverage**, lint, types, artifact QA and launcher/boundary checks.
+Fresh candidate host-port and isolated accepted browser/API runs passed desktop,
+mobile and 320 px at **14:22:10 UTC** and **14:22:08 UTC**, respectively. The full
+suite subsequently passed in 935.34 seconds. Independent code/visual review found
+no material blocker. See `docs/reports/DT-023.md` for commands, identities and limits.
+Preview remains **http://127.0.0.1:18117/**; reload to get the mounted client.
+No source, routing topology or accepted artifact changed; no promotion is implied.
+The temporary accepted regression stack was removed. Full-campus inventory,
+outdoor/portal GIS admission and separate DT-017 source reconciliation remain open;
+this UI increment does not remove those data gates.
+
+## Current work — DT-023 three-building overview
+
+Branch `feature/dt-023-campus-routing` preserves the inherited planning changes.
+ADR-0016 implements an explicitly incomplete AQ/ECC/Strand campus pilot with source
+footprints, building search and real floor selection. The `/demo/v1/campus` response
+is derived from the loaded trusted artifact; no source, accepted artifact or routing
+topology changed. Fresh Docker verification passed: **617 tests, 16 expected skips,
+86.25% coverage**, lint, types, artifact QA and launcher/boundary checks. Final
+candidate and accepted browser/API runs passed at desktop, mobile and 320 px;
+independent visual/code review found no blocker for this bounded increment.
+Read `docs/reports/DT-023.md` for commands, identities, skips and remaining gates.
+
+Use the dedicated matching backend/client preview at **http://127.0.0.1:18117/**.
+Publication repair: the internal-only Docker network suppressed this container's
+configured host binding. `docker network connect bridge sfudt-dt023-review` restored
+the loopback port and it survived restart. When recreating this preview with the
+report's Compose command, attach that bridge as well. Prior container-namespace
+browser tests did not prove Windows-port reachability; see the report's follow-up.
+The fresh Docker browser/API run through the published host port passed at
+**04:04:19 UTC on 2026-09-12**, including all 11 candidate fixtures at desktop/mobile
+and 320 px coverage (`build/takeover-browser/dt023-host-port-final/`).
+Older port-18087/18107 instructions below are historical. Those backends were not
+restarted and may not support the new mounted client's campus API.
+
+Fresh Stage 0 evidence is `build/dt023-gis/audit-final3.json` and
+`docs/reports/DT-023-GIS.md`: the unpromoted DT-022 candidate has 8,220 connected
+AQ→ECC and 8,220 ECC→AQ room pairs in each profile, and no Strand cross-building
+pairs. Every count uses authored facility/level IDs and directed reachability;
+same-anchor pairs are counted separately. Revised feature 22562 touches two AQ
+levels at identical XYZ, reinforcing that source coincidence cannot assign a level.
+
+The full DT-023 ticket remains incomplete. Next data work requires authoritative
+campus inventory, classification/grade of the 141 additions and verified portals;
+DT-017 multipart reconciliation is still separate. No candidate promotion is implied.
+
+## DT-023 staged scope and remaining data gates
+
+Start with [`docs/plans/DT-023.md`](plans/DT-023.md). The requested next feature is to
+show all Burnaby campus buildings and calculate routes between them. The first
+three-building overview increment is underway on the branch above. Continue the
+plan's staged delivery without presenting this local pilot as all-campus coverage.
+
+Use multiple parallel agents with non-overlapping ownership. Use large models for
+planning, GIS/topology analysis, architecture, orchestration and final judging; use
+smaller models for bounded implementation, fixtures, documentation and routine gate
+work. All project execution and data inspection remains Docker-only with `data/`
+read-only. The lead must integrate, fix failures and iterate.
+
+The decisive scope split is campus overview versus verified routing. Local indoor data
+contains only AQ, ECC and Strand Hall, while SFU's public inventory lists many Burnaby
+buildings. DT-022's unpromoted candidate has 8,220 reachable AQ↔ECC room pairs in both
+profiles but zero Strand↔AQ/ECC pairs. The revised GDB has 141 unassigned pathways
+(FIDs 22427–22567, 12,800.80 m); a large exact-source component touches AQ and Strand,
+but missing facility/level/grade/access semantics make it review evidence rather than
+an admissible route. Supplemental entrances, doors and ramps also lack authoritative
+facility/path joins and remain excluded under ADR-0008.
+
+The P0 GIS gate is an authoritative campus facility catalog, classification of the 141
+features, a noded pedestrian network with grade/crossing semantics, and stable portals
+joining each public entrance to exact indoor and outdoor endpoints. Accessibility is a
+separate gate. Room Finder and Google Maps may support naming/orientation checks only;
+they are not sources for route topology or accessibility.
+
+Implement in stages: measured coverage and data contract; campus overview; verified
+AQ/ECC/SH pilot; journey guidance/UI; campus expansion. Keep accepted artifacts frozen
+until an isolated baseline/candidate comparison and explicit promotion decision. Do not
+infer crossings, connect nearby geometry or draw centroid routes.
+
+Standing acceptance rule: capture RED evidence, run focused checks, then fresh full
+Docker gates and candidate-backed real-browser/API E2E on the final integrated revision,
+including desktop, mobile and 320 px. Fix and repeat until green. Record commands,
+image/artifact identities, timestamps, screenshots, skips and limitations in the
+DT-023 report. No unit-only or stale-stack result is sufficient.
+
 ## Current status — DT-022 exact source-vertex topology
 
 The AQ6071 failure was an importer defect: exact same-level endpoint-to-interior

@@ -17,5 +17,9 @@ in sync by `doc-writer` after every `judge` APPROVE; the authoritative narrative
 | 7 | QR anchor origins; hooks for a future positioning provider | Not started |
 
 Current plans: [DT-016](plans/DT-016.md), [DT-017](plans/DT-017.md),
-[DT-018 route UI](plans/DT-018.md).
+[DT-018 route UI](plans/DT-018.md), and
+[DT-023 campus overview/interbuilding routing](plans/DT-023.md).
+DT-023 Stage 0 coverage audit and bounded Stage 1 overview passed fresh Docker
+gates and candidate/accepted browser/API E2E. Remaining Stage 0 GIS reconciliation, outdoor
+routing and campus expansion remain open.
 Follow the shared plan → RED → implementation → gates → review workflow in AGENTS.md.

@@ -231,6 +231,9 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                     ),
                 )
                 return
+            if path == "/demo/v1/campus" and not target.query:
+                self._json(200, self.repository.campus_overview())
+                return
             if path == "/demo/v1/levels":
                 query = parse_qs(target.query, keep_blank_values=True)
                 if set(query) - {"facility_id"} or len(query.get("facility_id", [])) > 1:
@@ -435,6 +438,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     def _is_get_route(path: str) -> bool:
         return path in STATIC_FILES or path in {
             "/demo/v1/health",
+            "/demo/v1/campus",
             "/demo/v1/facilities",
             "/demo/v1/levels",
             "/demo/v1/units",
@@ -476,7 +480,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         elif re.fullmatch(r"/demo/v1/units/[^/]+", path):
             path = "/demo/v1/units/{unit_id}"
         elif path not in STATIC_FILES and path not in {
-            "/demo/v1/health", "/demo/v1/facilities", "/demo/v1/levels",
+            "/demo/v1/health", "/demo/v1/campus", "/demo/v1/facilities", "/demo/v1/levels",
             "/demo/v1/units", "/demo/v1/route", "/demo/v1/assistant",
             "/demo/v1/route-options",
         }:

@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { verifyGuidance, activateButton, assertSelected, exerciseGuidance, sceneOrigin } = require('./guidance.cjs');
+const {exerciseCampus} = require('./campus.cjs');
 assert.ok(fs.existsSync("/.dockerenv"), "Run this gate through Docker Compose.");
 const runLabel = process.env.WAYFINDING_BROWSER_RUN_LABEL || "";
 assert.ok(!runLabel || /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(runLabel), "Invalid evidence run label");
@@ -467,11 +468,12 @@ async function run() {
       };
     })();` });
     await cdp.call("Page.navigate", { url: `${targetUrl.origin}/` });
-    await cdp.wait("document.querySelectorAll('.unit-shape').length > 0");
+    await cdp.wait("document.querySelector('#campus-view') && !document.querySelector('#campus-view').hidden && document.querySelectorAll('#route-origin option').length>1");
     for (const [width,height,key] of [[1440,1000,"Enter"],[390,844," "]]) {
       const label=`${width}x${height}`;
       await cdp.call("Emulation.setDeviceMetricsOverride", { width,height,deviceScaleFactor:1,mobile:width<600 });
       const viewport=results.viewports[label]={fixtures:{},interactions:[]};
+      viewport.campus=await exerciseCampus(cdp,screenshot,label,width);
       await routeCamera(cdp,label,viewport);
       for(const [name,fixture] of Object.entries(fixtures)) {
         assert.ok(["default","elevator_only"].includes(fixture.profile));
@@ -584,6 +586,7 @@ async function run() {
     await latestStepWins(cdp);
     await latestOptionsWin(cdp);
     await cdp.call('Emulation.setDeviceMetricsOverride',{width:320,height:844,deviceScaleFactor:1,mobile:true});
+    results.narrowCampus=await exerciseCampus(cdp,screenshot,'320x844',320);
     const narrow=await submit(cdp,fixtures.strand_corridor);
     const step=narrow.guidance.steps.find(s=>s.kind==='walk');
     await activateButton(cdp,`button[data-step-id="${step.step_id}"]`);
