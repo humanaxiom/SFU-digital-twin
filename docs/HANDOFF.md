@@ -6,8 +6,9 @@ fresh session can resume cold from it alone.
 
 ## Current increment — building clicks synchronize dropdowns
 
-The 2026-09-14 Building/Floor synchronization is implemented on
-`feature/dt-023-campus-routing`; **fresh Docker verification passed**.
+The 2026-09-14 Building/Floor synchronization is implemented in
+[PR #2](https://github.com/humanaxiom/SFU-digital-twin/pull/2), targeting `main`;
+**fresh Docker verification passed**. The PR records Git integration status.
 Preserve all inherited working-tree changes. ADR-0016 documents the control contract.
 Clicking a footprint or choosing a building by search/list/keyboard now selects its
 exact facility and valid recorded global floor order together: retain the current
