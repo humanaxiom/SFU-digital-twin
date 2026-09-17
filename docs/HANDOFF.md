@@ -1,5 +1,55 @@
 # Handoff — Living Project State
 
+## Next implementation — DT-024 navigation overhaul (2026-09-17)
+
+User authorized updating and merging plans, documentation and architecture. [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md) now define the next implementation contract; application work has not started. Implementation requires a separate user instruction. When requested, start with Stage A regression RED evidence, then state/floor reliability. Existing legacy topology and DT-017/DT-023 data gates remain unchanged. [Documentation delivery evidence](reports/DT-024-DOCUMENTATION.md) records current verification and review. Earlier preview and verification entries below are historical, not DT-024 acceptance.
+
+## Navigation review — overhaul proposed
+
+The user reported broken cross-level navigation, poor dropdown choices and floor
+clicking. Fresh Docker Chromium/API review reproduced a late route response
+reverting a newer floor selection, a Floor choice silently changing Building, and
+route floor-tab → Next returning to the old instruction's floor. All 11 scene
+endpoints and four recorded routes respond; fragmentation and limited geometry
+remain separate data constraints. See [navigation review and overhaul proposal](reports/NAVIGATION-REVIEW.md)
+for evidence, proposed interaction/state model and staged acceptance. No product
+code, route artifacts or deployment configuration changed; implementation is not
+started. Prior deployment smoke success does not establish usability acceptance.
+
+
+## Local deployment — 2026-09-16
+
+Refreshed main to b7ec7b6697c6ca8d580f087503d308ef73cb60b9. Prior tracked and
+untracked work is preserved in stash `pre-refresh-deploy-2026-09-16` (not reapplied).
+The new AGENTS.md preservation rule arrived with this update, after that stash.
+
+Live URL: http://127.0.0.1:18007/ (localhost only).
+Compose project: `sfudt-wayfinding-18000`; artifact, source-etl and demo are healthy.
+Published image pull returned unauthorized, so this deployment uses the supported
+local override, built from infra/Dockerfile.build with requirements.lock.
+Image: sha256:d7b70c51d54d661d2932aa7c5a2263d4af7f2168c17711bd05a67f4f5ad0851a.
+Demo container: a75cd93b32a524b404a61eca7da99c46222c10ecc4185822eef964d0a35bc292.
+
+Commands (exit 0 unless noted):
+- `docker build -f infra/Dockerfile.build -t wayfinding-build:local .`
+- Set `DTWIN_DEMO_BIND_ADDRESS=127.0.0.1`, then run `powershell -NoProfile -ExecutionPolicy Bypass -File C:\repos\sfudt\ghcp\tools\launch-stack.ps1 -ComposeFile C:\repos\sfudt\ghcp\infra\docker-compose.yml -LocalImage`.
+- Docker curl probe of host.docker.internal:18007/demo/v1/health with Host localhost:18007: status ok, routing true.
+- `docker exec sfudt-wayfinding-18000-artifact-1 env PYTHONPATH=/workspace/packages/wayfinding/src pytest packages/wayfinding/tests/test_dt023_campus.py packages/wayfinding/tests/test_takeover_http.py --no-cov`: 19 passed, no skips, one GDAL future warning.
+- Pinned Playwright image ran tests/browser/demo.cjs in the deployed demo network namespace with WAYFINDING_BROWSER_BASE_URL=http://127.0.0.1:8080 and WAYFINDING_BROWSER_RUN_LABEL=deploy-20260916. Desktop/mobile four route fixtures, campus synchronization, guidance, parity, pointer/keyboard and layout checks passed; 320px checks passed. Evidence: build/takeover-browser/deploy-20260916/results.json and screenshots, completed 2026-09-16T17:31:08.623Z.
+
+Artifacts unchanged; Docker sha256sum and health agree:
+- GeoPackage: f3d3d97e7749d1606739a078195eebc736279b780cd62076e994908652e71f65
+- Graph: ed020258ae8a39410db3f51c5e709b5bb4f8a18755c426c853635b24705d789d
+- Stats: 2a88700a7c829c0146303f258cbbc82e03541c9e8a8ab4b5731c29a300c199e1
+
+This is a local deployment smoke verification, not a new full-suite or source
+rebuild acceptance. Full gates were not rerun. No candidate artifacts promoted.
+Published-image authentication and the launcher's default PSScriptRoot argument
+remain unresolved; explicit ComposeFile avoids the latter. Host-port health was
+verified separately from browser checks inside the deployed container namespace.
+Older preview URLs and validation below are historical for this machine.
+
+
 Read this first every session. Update it when the user asks, and whenever a ticket closes or a
 decision is made that would leave this file materially stale — it should stay current enough that a
 fresh session can resume cold from it alone.

@@ -2,7 +2,20 @@
 
 A Google-Maps-style indoor wayfinding system for SFU Burnaby AQ / SH / ECC, comparable to
 [SFU Room Finder](https://roomfinder.sfu.ca/apps/sfuroomfinder_web/) but adding turn-by-turn
-guidance, an accessible-route mode, and a natural-language assistant.
+guidance, an elevator-only routing profile, and a natural-language assistant.
+
+This document separates the implemented bounded demo from the longer-term product
+design. The current runtime is a standard-library Python HTTP service with an SVG /
+JavaScript client and deterministic assistant. FastAPI, MapLibre, PMTiles, FTS5,
+LLM orchestration and travel-time profiles below are future architecture, not
+deployed capabilities. Accepted ADRs and [HANDOFF](HANDOFF.md) govern current behavior.
+Neither the three-building inventory nor visible geometry establishes connected
+routes or verified accessibility.
+
+The planned navigation overhaul is [DT-024](plans/DT-024.md), governed by
+[ADR-0017](adr/0017-navigation-state-and-journey.md) and motivated by the
+[navigation review](reports/NAVIGATION-REVIEW.md). It changes client interaction and
+state ownership; implementation and fresh delivery verification remain pending.
 
 Read [01-data-findings.md](01-data-findings.md) first — every decision below traces back to a
 specific property of the source geodatabase.
@@ -13,8 +26,10 @@ specific property of the source geodatabase.
 
 **Goals**
 
-- Search for any room, amenity, or building and route to it across three connected buildings and 11 levels.
-- Multi-floor routing with an explicit **accessible** toggle (step-free / elevators only).
+- Discover recorded rooms, amenities and buildings across the three-building pilot and
+  11 levels; offer routes only where the admitted graph supports the selected endpoints.
+- Multi-floor routing with explicit **Stairs or elevators** and **Elevator only**
+  profiles. Elevator-only excludes stairs; door access and wheelchair suitability remain unverified.
 - Google-Maps-style **turn-by-turn** step list synchronised with a 2D floor-plan map and a floor picker.
 - A natural-language assistant ("where's the closest accessible washroom to AQ 3150?") that is *grounded* in the routing engine, not in model recall.
 - Fully reproducible ETL from the read-only geodatabase; the source data is never written to.
@@ -27,6 +42,20 @@ specific property of the source geodatabase.
 - Outdoor campus routing between distant buildings.
 
 ## 2. Architecture
+
+### 2.1 Implemented runtime and planned navigation increment
+
+Docker GDAL/Python ETL produces the dual-CRS GeoPackage and contracted NetworkX
+MultiDiGraph. The artifact-only HTTP service loads trusted, hash-checked artifacts
+and exposes `/demo/v1` campus, facility, level, scene, unit, route-options, route and
+deterministic assistant endpoints. The SVG client renders native EPSG:26910 geometry
+in scene-local coordinates. Runtime services cannot access the raw source bind.
+
+DT-024 retains these endpoints, accepted artifacts and routing/guidance contracts.
+Section 9.2 describes its planned client architecture. Source reconciliation,
+experimental topology promotion and verified outdoor routing remain separate work.
+
+### 2.2 Longer-term product architecture
 
 ```mermaid
 flowchart LR
@@ -55,7 +84,7 @@ flowchart LR
 
     subgraph Web["Web client"]
         W1[MapLibre GL<br/>floor picker]
-        W2[Step list +<br/>accessible toggle]
+        W2[Step list +<br/>routing profile]
         W3[Chat panel]
     end
 
@@ -71,8 +100,8 @@ flowchart LR
 ```
 
 **Key architectural rule: the LLM never computes geometry.** It selects and parameterises calls to
-deterministic services, then narrates their output. This is what makes accessibility claims and
-distances trustworthy.
+deterministic services, then narrates their output. Determinism preserves the evidence
+boundary; it does not establish accessibility or source correctness.
 
 ## 3. ETL pipeline
 
@@ -178,6 +207,10 @@ reviewable reports are committed under `docs/reports/`.
 
 ### 4.1 Cost model
 
+The following time-based model is a future proposal. Current demo routes minimize
+recorded `length_3d` and expose `default` and `elevator_only`; they do not estimate
+travel time or offer `fewest_transfers`.
+
 ```
 edge_cost = length_3d / speed(profile, mode) + penalty(profile, mode)
 ```
@@ -185,42 +218,42 @@ edge_cost = length_3d / speed(profile, mode) + penalty(profile, mode)
 | Profile | Allowed transition modes | Speed | Penalties |
 | --- | --- | --- | --- |
 | `default` | stairs, elevator | 1.35 m/s walk | stairs +2 s/level, elevator +45 s wait |
-| `accessible` | **elevator only** | 1.0 m/s | elevator +45 s wait |
+| `elevator_only` | **elevator only**, accessibility unverified | 1.0 m/s | elevator +45 s wait |
 | `fewest_transfers` | stairs, elevator | 1.35 m/s | +120 s per level change |
 
 `DELAY` is ignored — it is 99.5 % null (gap **G4**). The elevator wait is a configuration constant,
 not a data value, and is documented as such in the API response.
 
-### 4.2 Accessible mode — exactly what it does and does not claim
+### 4.2 Elevator-only mode — exactly what it does and does not claim
 
 The dataset has **no** path-level accessibility attributes (gap **G1**), no ramps and no escalators
-(gap **G2**). So the accessible profile is implemented as a single, honest rule:
+(gap **G2**). The current elevator-only profile applies this rule:
 
 > **Filter out every edge with `mode = stairs`.** Route only over pathways and
 > `TRANSITION_TYPE = 4` (Elevator / Wheelchair Lift) edges.
 
-The API returns this contract explicitly so the UI can state it plainly rather than implying a
-certified accessible route:
-
-```json
-"accessibility": {
-  "step_free": true,
-  "basis": "TRANSITION_TYPE=4 (elevator) only; TRANSITION_TYPE=2 (stairs) excluded",
-  "not_verified": ["door_width", "path_width", "slope", "powered_doors", "surface"]
-}
-```
-
-If no step-free path exists, the API returns `409` with the reachable levels and the nearest elevator
-— never a silent fallback to stairs. This failure mode is realistic: 21 elevator transitions across
-11 levels is thin coverage.
+The UI and response warnings retain unverified door width, path width, slope,
+powered doors and surface. Excluding stairs does not justify `step_free: true` or
+an accessible-route claim. Current routing returns `409 no_elevator_only_route`
+for disconnected elevator-only endpoints, without silently using stairs. It does
+not supply a nearest usable elevator or prove physical traversal to room anchors.
 
 ### 4.3 Algorithm
+
+The following A* speed heuristic and performance expectation belong to the future
+time-based proposal, not a measurement or guarantee for the current demo.
 
 Bidirectional A* over the contracted graph, with a heuristic of 3D Euclidean distance divided by
 profile speed (admissible). At this graph size a route is a sub-millisecond operation; the graph is
 loaded once at process start.
 
 ## 5. Turn-by-turn instruction generation
+
+Current structured guidance follows [ADR-0012](adr/0012-route-guidance-and-floor-preview.md):
+exact directed spans, chronological visits, paired transition phases and explicit
+available/limited/unavailable outcomes. No simplification, invented context or
+unverified building crossing is admitted. The diagram and contextual instruction
+enrichment below remain future proposals requiring source evidence and contract review.
 
 The data carries no instruction hints, so steps are derived geometrically from the contracted route
 polyline.
@@ -279,6 +312,9 @@ distance, not straight-line, since two rooms 5 m apart across a wall can be 100 
 
 ## 7. API surface
 
+This is the future `/v1` API proposal. Current `/demo/v1` contracts do not accept
+arbitrary XY or QR origins, estimate times, expose tile services or implement nearest-place routing.
+
 ```
 GET  /v1/facilities
 GET  /v1/levels?facility_id=&vertical_order=
@@ -299,7 +335,7 @@ is the forward-compatible hook for positioning (gap **G6**).
 
 ```json
 {
-  "profile": "accessible",
+  "profile": "elevator_only",
   "total_distance_m": 214.7,
   "estimated_seconds": 260,
   "levels_traversed": [{"level_id": "SFU_BURNABY_QUAD_3000", "vertical_order": 0}, ...],
@@ -313,6 +349,10 @@ is the forward-compatible hook for positioning (gap **G6**).
 Geometry is split per level so the client can render only the active floor.
 
 ## 8. AI assistant
+
+This section proposes a future LLM orchestrator. Today's assistant is deterministic;
+mobility requests use the unverified elevator-only profile. Any future verified
+accessibility profile requires additional source evidence and a separate decision.
 
 A tool-calling loop with a strict boundary: the model plans, the engine computes.
 
@@ -360,21 +400,83 @@ controlled category vocabulary.
 
 ## 9. Web client
 
+### 9.1 Longer-term MapLibre proposal
+
+The following renderer and sharing features are future work. Its earlier combined
+global-floor interaction is superseded for DT-024 by section 9.2: `vertical_order`
+remains an internal alignment key, while a displayed floor uses its exact `level_id`.
+
 - **MapLibre GL JS** rendering PMTiles: `Details` linework as the floor plan, `Units` as fills,
   `Levels` as the plate outline.
-- **Floor picker keyed on `vertical_order`**, so one control spans all three buildings and selecting
-  "Level 0" reveals AQ 3000, SH 1000 and ECC 3000 together.
+- **Building-scoped floor picker keyed on exact `level_id`**; global `vertical_order`
+  supports internal alignment without merging building-specific floor choices.
 - Route rendered per level: active level solid, other levels dimmed, transition points badged with
   stairs/elevator icons.
-- **Accessible toggle** in the search bar, persisted per session, and always re-run server-side — it
-  is a routing parameter, not a display filter.
+- **Routing profile** in endpoint editing, always validated server-side. Elevator-only
+  excludes stairs without asserting accessible traversal.
 - Step list synced to the map; selecting a step pans the map and switches the floor.
 - Deep links: `/route?from=AQ3150&to=SH227&accessible=1` for sharing and for QR posters.
 - Accessibility of the UI itself: WCAG 2.2 AA, full keyboard navigation, screen-reader-friendly step
   list (each step an `aria-live` region during guidance), and a text-only route view that works
   without the map.
 
-### 9.1 Bounded stakeholder demo exception
+### 9.2 Planned DT-024 navigation state and journey
+
+One explicit state model owns context (Campus, Building, Floor exploration or Route),
+inspected facility, requested and displayed exact floor IDs, scene status, inspected
+room, route draft, committed route/request key, selected visit/step, following versus
+exploration mode and per-floor camera state. DOM controls are derived views, never
+the source of navigation truth. User actions pass through a small transition layer.
+
+All recorded buildings stay selectable. Floor choices belong only to the selected
+building; changing a floor never substitutes another building. Building selection
+uses a valid recorded floor without claiming an entrance or connection. An explicit
+Open floor action works even when that floor is already selected. While a scene
+loads, requested and displayed floors are separately labeled; failure retains the
+correctly labeled last good map and offers Retry.
+
+Accessible searchable From/To comboboxes show exact room identity, building and
+floor, with optional building/floor filters. Connected destinations are prioritized;
+disconnected, same-anchor, endpoint-unavailable, pending and failed availability
+remain distinct. Availability is graph reachability, not guidance certification.
+Endpoint/profile changes and Swap edit a draft. Preview route explicitly submits
+that draft once. The committed route remains labeled with its own endpoints/profile
+while edits are pending or a replacement fails; a new elevator-only draft cannot
+relabel an old stairs route. Room inspection never clears the route; Start here and
+Directions here explicitly edit the draft. Clear route preserves inspection and camera.
+
+The journey renders the API's ordered visits, including repeated visits to one floor,
+and explicit stairs/elevator transitions. Selecting a visit chooses its first
+instruction and synchronizes map, visit, instruction and Next/Previous. Transition
+departure and arrival retain their exact floor/marker references; express elevators
+do not acquire invented intermediate stops. Manual floor exploration exposes an
+Exploring / Return to route strip and replaces route Next/Previous with Return to
+route, preventing movement relative to a hidden selection. Current instruction and
+transition actions stay beside the map on desktop and in a persistent instruction
+panel on mobile; the full journey can expand without hiding the primary controls.
+
+Every async completion must match its resource key and current user intent. Abort
+obsolete requests and still guard results; cancellation alone is insufficient. A late
+route may be stored without navigating away from a newer deliberate floor choice.
+Room details cannot overwrite another selection or floor status. Deduplicate scene
+loads and cache by artifact identity plus exact level ID; lazily preload adjacent
+route visits only after the active scene settles. Measure transfer, JSON parsing and
+SVG rendering separately before considering compression or precomputation. Preserve
+exact route coordinates, selected spans and available/limited/unavailable guidance.
+
+Acceptance requires real pointer and keyboard journeys across all 11 floors and
+every building, opening an already-selected floor, room search/filter/Swap/commit,
+inspection without route loss, draft failure and Clear. Assert displayed building,
+floor, route identity and instruction together through all visits and transition
+phases, express and repeated-floor cases, exploration/return and slow/out-of-order
+scene, room, availability and route responses. Include scene failure/retry, limited
+stairs guidance, available elevator guidance, disconnected, same-anchor and unavailable
+endpoints. Exercise desktop, 390px and 320px layouts, focus and announcements without
+programmatically opening hidden panels or bypassing endpoint entry. Delivery requires
+RED evidence, fresh Docker gates and assembled-app browser/API E2E; documentation
+approval does not establish implementation completion or source/topology approval.
+
+### 9.3 Bounded stakeholder demo exception
 
 DT-015 does not promote the temporary `/demo/v1` SVG explorer to the production web architecture.
 For an attended demonstration on a trusted private LAN, ADR-0010 permits only the demo port to be
@@ -391,6 +493,10 @@ draws only returned per-level graph geometry; approximate room-anchor segments r
 `path_width`, `slope`, `powered_doors`, and `surface` unverified on success and failure.
 
 ## 10. Validation and evaluation
+
+The table below describes longer-term product evaluation. Current delivery follows
+the accepted demo contracts and DT-024 acceptance above; elevator-only tests assert
+stairs exclusion without certifying accessibility. All verification executes in Docker.
 
 | Layer | Tests |
 | --- | --- |
@@ -411,7 +517,7 @@ All tests run in the same container as the ETL.
 | 2 | Routing core: profiles, A*, accessible invariant tests |
 | 3 | Turn-by-turn instruction generator |
 | 4 | FastAPI service + search index + tiles |
-| 5 | MapLibre web client with floor picker and accessible toggle |
+| 5 | Future MapLibre web client with building-scoped floors and routing profiles |
 | 6 | Assistant orchestrator, tool schemas, guardrails, eval suite |
 | 7 | QR anchor origins; hooks for a future positioning provider |
 

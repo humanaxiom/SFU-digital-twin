@@ -1,5 +1,21 @@
 # Changelog
 
+## Planned — DT-024 navigation overhaul
+
+- Accepted the implementation plan and client architecture for building-scoped floors, explicit route drafts/commitment, searchable endpoints, synchronized visits/steps and stale-response protection.
+- Updated system design, roadmap and indexes; documented the limited supersession of earlier client interaction contracts. No runtime behavior, route API, GIS artifact or deployment change is included.
+
+## Navigation review — proposal only
+
+- Recorded reproduced floor-selection/route-state failures, dropdown and mobile usability findings, and a staged navigation overhaul in docs/reports/NAVIGATION-REVIEW.md. No application changes or fixes delivered.
+
+
+## Local deployment — 2026-09-16
+
+- Updated to main b7ec7b6 and deployed at http://127.0.0.1:18007/ using the local Docker image override; published image access returned unauthorized.
+- Passed 19 focused campus/HTTP tests and Docker Chromium route/campus checks at desktop, mobile and 320px. Full suite not rerun. See docs/HANDOFF.md for identities, evidence and preserved local work.
+
+
 ## Unreleased — building selection and dropdown synchronization
 
 - Synchronize Building/Floor dropdowns when selecting a campus building, retaining
