@@ -13,14 +13,14 @@ that the deployed application implements it or has passed its acceptance gates.
 For DT-024, this decision supersedes only these client interaction choices:
 
 - ADR-0016's global-order Floor picker and aligned-building filtering, with a
-  stable Building picker and floors scoped to the selected exact facility.
+  stable Building picker and floors scoped to the selected exact facility; its retained global-order building-selection fallback is replaced by the per-building remembered-level/order-0/first-level fallback below.
 - ADR-0012's route-visit floor preview retaining a different selected instruction,
   with visit selection that selects its first instruction. Independent browsing
   remains possible through the exploration controls described below.
 - ADR-0012's removal of the old route on every endpoint/profile change or failed
   replacement, with separately identified draft and committed route state.
 - ADR-0013's native destination catalog presentation, with searchable destination
-  discovery preserving its full outcome semantics and unsupported selections.
+  discovery preserving its full outcome semantics and unsupported selections. Its connected-destination direction actions (including the DT-022 clarification) now edit the draft and require Preview route, rather than immediately requesting a route.
 
 The earlier documents remain historical descriptions of the current runtime until
 DT-024 is implemented. Their other requirements remain applicable. In particular,

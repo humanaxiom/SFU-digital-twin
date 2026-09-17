@@ -49,8 +49,52 @@ and screenshots. This exercises the existing application, not unimplemented DT-0
 
 ## Results and independent review
 
-Validation is in progress while the documentation PR is prepared. Replace this
-paragraph with final command outcomes and review verdict before merging.
+Fresh browser/API E2E passed (exit 0), completed 2026-09-17T22:32:02.321Z:
+all four canonical fixtures at desktop 1440x1000 and mobile 390x844, campus
+synchronization, guidance/transition controls, pointer/keyboard and layout, plus
+320px checks. It recorded 228 read and 39 POST requests.
+
+Documentation local-link check passed: 11 changed documents, 113 local file links,
+zero missing targets. git diff --check passed.
+
+GitHub fast-gates passed on initial documentation commit 9379896: run 35282449100.
+CI authenticated and pulled the published immutable image successfully; the local
+registry limitation does not apply to that CI run. Final-head CI is required before merge.
+
+Local gates:
+
+| Gate | Result |
+| --- | --- |
+| Full package pytest | 617 passed, 16 skipped, 86.25% coverage; first run 259.70s |
+| Ruff | Exit 0; all checks passed |
+| Pyright | Exit 0; zero errors/warnings/information |
+| Artifact data-QA | Exit 0; 23 passed, 1 skipped, 609 deselected (9.87s) |
+| Launcher collision/port contract | Exit 0 using temporary LF-normalized script copies |
+| Host-Python boundary | Exit 0 |
+| Rebuild launcher | Exit 0 using temporary LF-normalized script copies |
+
+Local capture limitations: the first full pytest completed successfully internally,
+but a PowerShell-expanded shell status variable made its outer log-capture wrapper
+return 1 (`Illegal number`). A corrective capture was started; its final log is
+retained in dt024-test.log: it independently completed with 617 passed, 16 skipped and 86.25% coverage in 252.14s. The first run summary is dt024-test-summary.log. This was a capture error, not a
+failing pytest assertion. Shell launcher tests initially failed on Windows CRLF
+copies; reruns normalized temporary script copies inside Docker without changing
+repository files. Initial failure evidence is retained in dt024-launcher-sh.log.
+GitHub's clean Linux checkout independently passed the unchanged shell gates.
+
+Independent large-model judge reviewed the integrated documentation and requested
+two clarifications: documentation-only authorization, and explicit supersession of
+connected-destination submission/building-floor fallback. Both were applied. The
+judge then APPROVED documentation content with no remaining material findings,
+conditional on recording passing required checks before merge. This verdict does
+not approve an implemented DT-024 UI.
+
+
+Demo container ID: `a75cd93b32a524b404a61eca7da99c46222c10ecc4185822eef964d0a35bc292`.
+Docker-computed accepted artifact SHA-256 values (unchanged):
+- GeoPackage: `f3d3d97e7749d1606739a078195eebc736279b780cd62076e994908652e71f65`
+- Graph: `ed020258ae8a39410db3f51c5e709b5bb4f8a18755c426c853635b24705d789d`
+- Stats: `2a88700a7c829c0146303f258cbbc82e03541c9e8a8ab4b5731c29a300c199e1`
 
 ## Limits
 

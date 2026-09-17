@@ -2,7 +2,7 @@
 
 ## Next implementation — DT-024 navigation overhaul (2026-09-17)
 
-User authorized updating and merging plans, documentation and architecture. [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md) now define the next implementation contract; application work has not started. Begin with Stage A regression RED evidence, then state/floor reliability. Existing legacy topology and DT-017/DT-023 data gates remain unchanged. [Documentation delivery evidence](reports/DT-024-DOCUMENTATION.md) records current verification and review. Earlier preview and verification entries below are historical, not DT-024 acceptance.
+User authorized updating and merging plans, documentation and architecture. [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md) now define the next implementation contract; application work has not started. Implementation requires a separate user instruction. When requested, start with Stage A regression RED evidence, then state/floor reliability. Existing legacy topology and DT-017/DT-023 data gates remain unchanged. [Documentation delivery evidence](reports/DT-024-DOCUMENTATION.md) records current verification and review. Earlier preview and verification entries below are historical, not DT-024 acceptance.
 
 ## Navigation review — overhaul proposed
 
