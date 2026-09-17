@@ -1,5 +1,7 @@
 # 13. Route availability choices
 
+DT-024 planning scope note (2026-09-17): [ADR-0017](0017-navigation-state-and-journey.md) supersedes native destination-catalog presentation with searchable draft endpoint controls for the planned overhaul. Directed availability, complete outcome categories, unsupported selections and manual request fallback remain applicable. The API below is unchanged; the planned interaction model is not yet implemented.
+
 Status: accepted for DT-020 implementation, 2026-09-11.
 
 The route UI offers every room although most room pairs in the accepted graph are

@@ -1,5 +1,7 @@
 # Plans
 
+[DT-024](DT-024.md) is the next client implementation plan: coherent building/floor navigation, searchable endpoints, explicit route commitment and synchronized journeys. Architecture is accepted for implementation; runtime work has not started. DT-017/DT-023 data scope remains independent.
+
 [DT-021](DT-021.md) fixes initial route framing and adds explicit map zoom controls.
 
 [DT-020](DT-020.md) addresses route availability choices and visible route failures.

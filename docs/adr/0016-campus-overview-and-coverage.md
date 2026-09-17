@@ -1,5 +1,7 @@
 # 16. Three-building campus overview and measured coverage
 
+DT-024 planning scope note (2026-09-17): [ADR-0017](0017-navigation-state-and-journey.md) supersedes global-order Floor options, aligned-building filtering and building-floor fallback selection for the planned overhaul with exact building-scoped floor state. The current runtime still follows the historical interaction contract below. Campus API, coverage, artifact/source boundaries and other requirements remain applicable; the new UI is not yet implemented.
+
 Status: accepted for the bounded DT-023 Stage 0/1 implementation, 2026-09-11.
 
 ## Context and delivery boundary

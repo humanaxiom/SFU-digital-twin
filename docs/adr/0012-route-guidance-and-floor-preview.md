@@ -1,5 +1,7 @@
 # 12. Structured guidance, floor previews and ordinary-language directions
 
+DT-024 planning scope note (2026-09-17): [ADR-0017](0017-navigation-state-and-journey.md) supersedes the client journey-visit preview semantics and endpoint/profile-edit or failed-replacement clearing rules for the planned navigation overhaul. Its draft/committed route and exploration/return contracts apply to that implementation. Guidance geometry, validation and other requirements below remain applicable. The historical runtime described here has not yet been replaced.
+
 Status: accepted for DT-018 implementation
 Date: 2026-09-11
 
