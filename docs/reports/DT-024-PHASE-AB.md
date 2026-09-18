@@ -3,9 +3,10 @@
 Date: 2026-09-17. Branch: `feat/dt-024-navigation-foundation`, based on
 `787462a388a47a720811c23ed3e8dabc25988777` (documentation PR #3).
 Status: Stage A/B navigation foundation implemented and locally verified. Remote
-integration is pending explicit approval after automatic review rejected the
-combined commit/push command. The user subsequently authorized a local commit;
-push and merge remain pending approval.
+integration was explicitly authorized after the initial automatic approval block.
+Implementation commit `111ecf1` is pushed; [PR #4](https://github.com/humanaxiom/SFU-digital-twin/pull/4)
+records repository checks and merge status. This delivery-record update does not
+change the runnable state covered by the end-to-end evidence below.
 
 ## Delivered boundary
 

@@ -15,11 +15,11 @@ remain unchanged. Do not call the whole DT-024 ticket complete.
 
 Local validation passed: full suite 630 passed/16 skipped/86.25% coverage,
 final focused 14 navigation regressions, and fresh desktop/mobile/320px browser/API
-checks. Integration is pending: automatic approval review rejected the combined
-commit/push command, requiring explicit approval of the Stage A/B payload to
-`https://github.com/humanaxiom/SFU-digital-twin.git`. The user subsequently authorized
-a local commit of the reviewed changes on the feature branch. Push and merge
-remain pending explicit approval; do not bypass the rejection.
+checks. The user explicitly authorized commit, push and merge after the initial
+automatic approval review block. Implementation commit `111ecf1` is pushed;
+[PR #4](https://github.com/humanaxiom/SFU-digital-twin/pull/4) records repository
+checks and integration status. This entry updates delivery evidence only; the
+verified runnable client and artifacts are unchanged.
 
 ## Historical navigation review — overhaul proposed
 
