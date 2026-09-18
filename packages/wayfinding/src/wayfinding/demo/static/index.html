@@ -18,6 +18,7 @@
       <select id="facility-select"></select>
       <label for="level-select">Floor</label>
       <select id="level-select"></select>
+      <button id="open-floor" type="button" disabled>Open floor</button>
     </div>
   </header>
 
@@ -26,6 +27,7 @@
       <nav class="map-actions" aria-label="Map context">
         <button id="show-campus" type="button">Campus overview</button>
         <span id="map-context" aria-live="polite">Campus</span>
+        <button id="return-to-route" type="button" hidden>Return to route</button>
       </nav>
       <section id="campus-view" aria-labelledby="campus-heading">
         <p class="eyebrow">Three-building pilot · incomplete campus inventory</p>
@@ -64,6 +66,7 @@
       </div>
       <nav id="floor-journey" class="floor-journey" aria-label="Route floor visits"></nav>
       <div class="map-actions">
+        <button id="retry-scene" type="button" hidden>Retry floor</button>
         <button id="zoom-in" type="button" aria-controls="floor-map">Zoom in</button>
         <button id="zoom-out" type="button" aria-controls="floor-map">Zoom out</button>
         <button id="fit-route" type="button">Show route on this floor</button>

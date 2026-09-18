@@ -1,6 +1,6 @@
 # Roadmap
 
-Next client increment: **[DT-024 navigation overhaul](plans/DT-024.md)**, architecture and implementation plan accepted; runtime implementation not started. [ADR-0017](adr/0017-navigation-state-and-journey.md) defines its contract. This improves the existing SVG demo and does not complete the future MapLibre phase or promote routing data.
+Current client increment: **[DT-024 navigation overhaul](plans/DT-024.md)**. Stage A/B implements the navigation foundation; searchable endpoint drafts (C), synchronized journeys/mobile (D) and integrated acceptance (E) remain pending. [ADR-0017](adr/0017-navigation-state-and-journey.md) defines the contract; the [phase report](reports/DT-024-PHASE-AB.md) records verification. This improves the existing SVG demo and does not complete the future MapLibre phase or promote routing data.
 
 Tracks the delivery phases in
 [docs/02-system-design.md §11](02-system-design.md#11-delivery-phases) against actual status. Kept

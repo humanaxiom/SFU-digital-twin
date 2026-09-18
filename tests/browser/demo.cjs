@@ -185,11 +185,13 @@ async function chooseFloor(cdp, levelId) {
   await cdp.evaluate(`(() => {
     const level = window.__requests.find(r=>r.url==='/demo/v1/levels'&&r.done).response.levels.find(l=>l.level_id===${quote(levelId)});
     const floor=document.querySelector('#level-select'), facility=document.querySelector('#facility-select');
-    if (floor.value !== String(level.vertical_order)) {
-      floor.value=String(level.vertical_order); floor.dispatchEvent(new Event('change'));
-    }
     if (facility.value !== level.facility_id) {
       facility.value=level.facility_id; facility.dispatchEvent(new Event('change'));
+    }
+    if (floor.value !== level.level_id) {
+      floor.value=level.level_id; floor.dispatchEvent(new Event('change'));
+    } else {
+      document.querySelector('#open-floor').click();
     }
   })()`);
 }

@@ -65,12 +65,14 @@ def test_client_uses_safe_text_insertion_and_keyboard_room_alternative():
     assert "https://" not in javascript
 
 
-def test_floor_control_groups_real_levels_by_vertical_order():
+def test_floor_control_uses_authoritative_exact_levels_and_explicit_entry():
     javascript = _read_asset("app.js")
 
     assert "vertical_order" in javascript
     assert 'request("/demo/v1/levels")' in javascript
-    assert "levelsByOrder" in javascript
+    assert "navigationState" in javascript
+    assert '"#open-floor"' in javascript
+    assert '"#retry-scene"' in javascript
 
 
 def test_landmarks_support_pointer_keyboard_and_selected_record_details():

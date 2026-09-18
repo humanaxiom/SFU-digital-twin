@@ -1,10 +1,27 @@
 # Handoff — Living Project State
 
-## Next implementation — DT-024 navigation overhaul (2026-09-17)
+## Current implementation — DT-024 Stage A/B (2026-09-17)
 
-User authorized updating and merging plans, documentation and architecture. [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md) now define the next implementation contract; application work has not started. Implementation requires a separate user instruction. When requested, start with Stage A regression RED evidence, then state/floor reliability. Existing legacy topology and DT-017/DT-023 data gates remain unchanged. [Documentation delivery evidence](reports/DT-024-DOCUMENTATION.md) records current verification and review. Earlier preview and verification entries below are historical, not DT-024 acceptance.
+User authorized phased implementation with multiple agents/models and end-to-end
+testing. Branch `feat/dt-024-navigation-foundation` implements the first navigation
+foundation under [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md):
+stable buildings, exact scoped floors, Open floor, requested/displayed scene state,
+stale-response protection, Retry and Return to route. The mounted local demo at
+http://127.0.0.1:18007/ serves the working client. [Phase evidence](reports/DT-024-PHASE-AB.md)
+records current verification; earlier entries below are historical. C endpoint
+search/drafts and D journey synchronization/mobile remain pending, including the
+reported journey-tab/Next mismatch. Legacy topology and DT-017/DT-023 data gates
+remain unchanged. Do not call the whole DT-024 ticket complete.
 
-## Navigation review — overhaul proposed
+Local validation passed: full suite 630 passed/16 skipped/86.25% coverage,
+final focused 14 navigation regressions, and fresh desktop/mobile/320px browser/API
+checks. The user explicitly authorized commit, push and merge after the initial
+automatic approval review block. Implementation commit `111ecf1` is pushed;
+[PR #4](https://github.com/humanaxiom/SFU-digital-twin/pull/4) records repository
+checks and integration status. This entry updates delivery evidence only; the
+verified runnable client and artifacts are unchanged.
+
+## Historical navigation review — overhaul proposed
 
 The user reported broken cross-level navigation, poor dropdown choices and floor
 clicking. Fresh Docker Chromium/API review reproduced a late route response

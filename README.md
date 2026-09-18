@@ -1,6 +1,6 @@
 # SFU Indoor Wayfinding — Design Workspace
 
-Current client work: [DT-024 navigation overhaul plan](docs/plans/DT-024.md) and [ADR-0017](docs/adr/0017-navigation-state-and-journey.md) define building-scoped floors, searchable room selection and synchronized route journeys. These are accepted implementation requirements, **not yet implemented**. See the [navigation review](docs/reports/NAVIGATION-REVIEW.md) for current defects and evidence.
+Current client work: [DT-024](docs/plans/DT-024.md) is being delivered in phases under [ADR-0017](docs/adr/0017-navigation-state-and-journey.md). The first increment implements building-scoped floors, explicit floor entry and protection against stale navigation responses. Searchable endpoint drafts and synchronized journeys remain pending. See the [phase A/B report](docs/reports/DT-024-PHASE-AB.md) for verification and delivery limits.
 
 Design and analysis workspace for an AI-assisted indoor navigation system over the SFU Burnaby
 AQ / Strand Hall / ECC indoor geodatabase.

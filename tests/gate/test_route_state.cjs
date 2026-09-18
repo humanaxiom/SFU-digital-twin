@@ -12,25 +12,30 @@ function client() {
       querySelector(selector) {
         if (!nodes.has(selector)) nodes.set(selector, {
           value: '', hidden: false, textContent: '', handlers: {},
+          dataset: {}, attributes: {}, children: [],
           addEventListener(name, callback) { this.handlers[name] = callback; },
-          replaceChildren() {},
+          replaceChildren(...children) { this.children = children; },
+          setAttribute(key, value) { this.attributes[key] = String(value); },
+          removeAttribute(key) { delete this.attributes[key]; },
+          querySelectorAll() { return []; },
         });
         return nodes.get(selector);
       },
       querySelectorAll: () => [],
+      createElement: () => ({value: '', textContent: ''}),
     },
   });
   vm.runInContext(fs.readFileSync('packages/wayfinding/src/wayfinding/demo/static/app.js', 'utf8'), context);
   vm.runInContext(`
     renderRouteOverlay = () => {};
-    activeLevel = () => null;
     updateEndpointStates = () => {};
     globalThis.requests = [];
     globalThis.rendered = [];
+    globalThis.renderOptions = [];
     request = (path, options) => new Promise(resolve => requests.push({
       payload: JSON.parse(options.body), resolve,
     }));
-    renderRoute = body => rendered.push(body);
+    renderRoute = (body, options) => { rendered.push(body); renderOptions.push(options); };
     routeOrigin.value = 'A'; routeDestination.value = 'B'; routeProfile.value = 'default';
   `, context);
   return {context, nodes, run: code => vm.runInContext(code, context)};
@@ -65,7 +70,7 @@ function client() {
   }
   await check('manual incomplete pair retains origin', async () => {
     const manual = client();
-    manual.run(`routeSelection = 'complete'; routeDestination.value = ''; selectUnit = async () => {};`);
+    manual.run(`routeSelection = 'complete'; routeDestination.value = ''; selectUnit = async () => true;`);
     await manual.run('submitSelectedRoute()');
     const selected = manual.run("activateRouteEndpoint('C')");
     await Promise.resolve();
@@ -98,19 +103,36 @@ function client() {
   await check('newest floor owns the scene', async () => {
     const scene = client();
     scene.run(`
-      globalThis.levelId = 'L1'; globalThis.scenes = [];
-      activeLevel = () => ({level_id: levelId});
+      globalThis.scenes = [];
+      facilitiesById = new Map([['AQ',{facility_id:'AQ',code:'AQ',name:'Academic Quadrangle'}]]);
+      initializeFloorControls([
+        {level_id:'L1',facility_id:'AQ',short_name:'1000',vertical_order:-2},
+        {level_id:'L2',facility_id:'AQ',short_name:'2000',vertical_order:-1},
+      ]);
+      selectFloorControls(allLevels[0]);
       request = path => new Promise((resolve, reject) => requests.push({path, resolve, reject}));
-      renderScene = body => scenes.push(body.level_id);
+      renderScene = body => scenes.push(body.level.level_id);
     `);
     const older = scene.run('loadScene()');
-    scene.run("levelId = 'L2'");
+    scene.run("selectFloorControls(allLevels[1])");
     const newer = scene.run('loadScene()');
-    scene.context.requests[1].resolve({level_id: 'L2'});
+    scene.context.requests[1].resolve({level: {level_id: 'L2'}});
     await newer;
-    scene.context.requests[0].resolve({level_id: 'L1'});
+    scene.context.requests[0].resolve({level: {level_id: 'L1'}});
     await older;
     assert.deepEqual(Array.from(scene.context.scenes), ['L2']);
+  });
+  await check('current route response is accepted without stealing newer campus exploration', async () => {
+    const campus = client();
+    const route = campus.run('submitSelectedRoute()');
+    campus.run('showCampus()');
+    campus.context.requests[0].resolve({status: 200, profile: 'default'});
+    await route;
+    assert.equal(campus.context.rendered.length, 1, 'latest route result remains available');
+    assert.equal(campus.context.renderOptions[0].follow, false, 'acceptance cannot navigate over newer campus intent');
+    assert.equal(campus.nodes.get('#campus-view').hidden, false);
+    assert.equal(campus.nodes.get('#floor-view').hidden, true);
+    assert.equal(campus.run('routeSelection'), 'complete');
   });
   assert.deepEqual(failures, []);
   console.log('Route state regressions passed');

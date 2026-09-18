@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — DT-024 Stage A/B navigation foundation
+
+- Keep buildings stable and scope floors by exact level identity, with remembered
+  per-building selection and an explicit Open floor action.
+- Preserve newer exploration when routes finish late; invalidate stale scenes,
+  room details and assistant searches. Cancel scenes owned by replaced routes.
+- Label requested versus displayed floors, retain scene errors, provide Retry and
+  Return to route, and defer step activation until its floor loads.
+- Add test-first navigation regressions and Docker browser coverage. See
+  docs/reports/DT-024-PHASE-AB.md for verification and limits. Searchable endpoint
+  drafts and synchronized/mobile journeys remain later phases.
+
 ## Planned — DT-024 navigation overhaul
 
 - Accepted the implementation plan and client architecture for building-scoped floors, explicit route drafts/commitment, searchable endpoints, synchronized visits/steps and stale-response protection.
