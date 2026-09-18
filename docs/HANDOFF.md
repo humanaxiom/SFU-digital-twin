@@ -1,10 +1,27 @@
 # Handoff — Living Project State
 
-## Next implementation — DT-024 navigation overhaul (2026-09-17)
+## Current implementation — DT-024 Stage A/B (2026-09-17)
 
-User authorized updating and merging plans, documentation and architecture. [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md) now define the next implementation contract; application work has not started. Implementation requires a separate user instruction. When requested, start with Stage A regression RED evidence, then state/floor reliability. Existing legacy topology and DT-017/DT-023 data gates remain unchanged. [Documentation delivery evidence](reports/DT-024-DOCUMENTATION.md) records current verification and review. Earlier preview and verification entries below are historical, not DT-024 acceptance.
+User authorized phased implementation with multiple agents/models and end-to-end
+testing. Branch `feat/dt-024-navigation-foundation` implements the first navigation
+foundation under [DT-024](plans/DT-024.md) and [ADR-0017](adr/0017-navigation-state-and-journey.md):
+stable buildings, exact scoped floors, Open floor, requested/displayed scene state,
+stale-response protection, Retry and Return to route. The mounted local demo at
+http://127.0.0.1:18007/ serves the working client. [Phase evidence](reports/DT-024-PHASE-AB.md)
+records current verification; earlier entries below are historical. C endpoint
+search/drafts and D journey synchronization/mobile remain pending, including the
+reported journey-tab/Next mismatch. Legacy topology and DT-017/DT-023 data gates
+remain unchanged. Do not call the whole DT-024 ticket complete.
 
-## Navigation review — overhaul proposed
+Local validation passed: full suite 630 passed/16 skipped/86.25% coverage,
+final focused 14 navigation regressions, and fresh desktop/mobile/320px browser/API
+checks. Integration is pending: automatic approval review rejected the combined
+commit/push command, requiring explicit approval of the Stage A/B payload to
+`https://github.com/humanaxiom/SFU-digital-twin.git`. The user subsequently authorized
+a local commit of the reviewed changes on the feature branch. Push and merge
+remain pending explicit approval; do not bypass the rejection.
+
+## Historical navigation review — overhaul proposed
 
 The user reported broken cross-level navigation, poor dropdown choices and floor
 clicking. Fresh Docker Chromium/API review reproduced a late route response

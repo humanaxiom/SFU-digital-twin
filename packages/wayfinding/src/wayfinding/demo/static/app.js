@@ -38,7 +38,16 @@ const routeOptionsStatus = document.querySelector("#route-options-status");
 const reachableDestinations = document.querySelector("#reachable-destinations");
 const unavailableGuidanceMessage = "A directions preview is unavailable for this route. See route details for the data checks.";
 let facilitiesById = new Map();
-let levelsByOrder = new Map();
+// Navigation identity is state-owned; select values are event inputs only.
+const navigationState = {
+  context: "campus", facilityId: null, requestedLevelId: null,
+  displayedLevelId: null, intentRevision: 0, roomRevision: 0, assistantRevision: 0,
+  selectedUnitId: null, sceneStatus: "idle", sceneError: null,
+  rememberedLevels: new Map(), pendingStep: null,
+};
+const openFloor = document.querySelector("#open-floor");
+const retryScene = document.querySelector("#retry-scene");
+const returnToRoute = document.querySelector("#return-to-route");
 let allLevels = [];
 let routeUnits = [];
 let activeRoute = null;
@@ -62,6 +71,18 @@ let campusFacilityId = null;
 let campusCamera = null;
 let campusOrigin = [0, 0];
 
+function beginNavigation(context) {
+  navigationState.context = context;
+  navigationState.intentRevision += 1;
+  navigationState.roomRevision += 1;
+  navigationState.pendingStep = null;
+  navigationState.sceneStatus = "idle";
+  navigationState.sceneError = null;
+  sceneGeneration += 1;
+  retryScene.hidden = true;
+  floorMap.setAttribute("aria-busy", "false");
+}
+
 function showFloorContext() {
   campusView.hidden = true;
   floorView.hidden = false;
@@ -69,17 +90,12 @@ function showFloorContext() {
 }
 
 function showCampus() {
-  // A deliberate context choice wins over any pending floor or route request.
-  sceneGeneration += 1;
-  requestGeneration += 1;
-  if (routeUiState === "pending") {
-    routeSelection = routeOrigin.value ? "origin_selected" : "empty";
-    setRouteState("empty");
-    routeStatus.textContent = "Route preview cancelled. Choose Show directions to try again.";
-  }
+  beginNavigation(campusFacilityId ? "building" : "campus");
   campusView.hidden = false;
   floorView.hidden = true;
   document.querySelector("#map-context").textContent = campusFacilityId ? "Building" : "Campus";
+  manualPreview = Boolean(guidanceStep());
+  updateGuidanceControls();
 }
 
 function validCampusBounds(bounds) {
@@ -135,18 +151,7 @@ function selectCampusBuilding(facilityId) {
   const changed = campusFacilityId !== facilityId;
   campusFacilityId = facilityId;
   showCampus();
-  const previousOrder = levelSelect.value === "" ? null : Number(levelSelect.value);
-  const recordedLevels = allLevels.filter(level => level.facility_id === facilityId);
-  const selectedLevel = recordedLevels.find(level => level.vertical_order === previousOrder)
-    || recordedLevels.find(level => level.vertical_order === 0) || recordedLevels[0];
-  if (selectedLevel) {
-    selectFloorControls(selectedLevel);
-  } else {
-    levelSelect.replaceChildren();
-    levelSelect.disabled = true;
-    facilitySelect.replaceChildren(option(facilityId, `${item.code || "Building"} · ${item.name || facilityId}`));
-    facilitySelect.value = facilityId;
-  }
+  selectBuildingControls(facilityId);
   const heading = document.createElement("h3");
   heading.textContent = `${item.code || "Building"} · ${item.name || item.facility_id}`;
   const note = document.createElement("p");
@@ -254,32 +259,42 @@ function svgPath(record, className) {
   return node;
 }
 
-function setStatus(message) {
+function setStatus(message, sceneMessage = false) {
+  if (!sceneMessage && ["loading", "error"].includes(navigationState.sceneStatus)) return;
   mapStatus.textContent = message;
 }
 
 async function selectUnit(unitId, focusMap = false) {
-  const body = await request(`/demo/v1/units/${encodeURIComponent(unitId)}`);
-  document.querySelectorAll(".unit-shape").forEach((node) => node.classList.toggle("selected", node.dataset.unitId === unitId));
-  const rows = [
-    ["Room", body.room_id || "Not assigned"],
-    ["Category", body.category || "Not recorded"],
-    ["Use type", body.use_type || "Not recorded"],
-    ["Destination tag", body.accessible === null ? "Unknown" : String(body.accessible)],
-    ["Verified by", body.verified_by || "Not recorded"],
-    ["Verified date", body.verified_date || "Not recorded"],
-  ];
-  unitDetails.replaceChildren(...rows.map(([term, value]) => {
-    const row = document.createElement("div");
-    const label = document.createElement("dt");
-    const detail = document.createElement("dd");
-    label.textContent = term;
-    detail.textContent = value;
-    row.append(label, detail);
-    return row;
-  }));
-  setStatus(`Selected room ${body.room_id || body.unit_id}. Destination metadata does not describe path accessibility.`);
-  if (focusMap) document.querySelector(`[data-unit-id="${CSS.escape(unitId)}"]`)?.focus();
+  const revision = ++navigationState.roomRevision;
+  const intent = navigationState.intentRevision;
+  const levelId = currentScene?.level.level_id;
+  navigationState.selectedUnitId = unitId;
+  const isCurrent = () => revision === navigationState.roomRevision
+    && intent === navigationState.intentRevision
+    && navigationState.selectedUnitId === unitId
+    && currentScene?.level.level_id === levelId;
+  try {
+    const body = await request(`/demo/v1/units/${encodeURIComponent(unitId)}`);
+    if (!isCurrent()) return false;
+    document.querySelectorAll(".unit-shape").forEach((node) => node.classList.toggle("selected", node.dataset.unitId === unitId));
+    const rows = [
+      ["Room", body.room_id || "Not assigned"], ["Category", body.category || "Not recorded"],
+      ["Use type", body.use_type || "Not recorded"],
+      ["Destination tag", body.accessible === null ? "Unknown" : String(body.accessible)],
+      ["Verified by", body.verified_by || "Not recorded"], ["Verified date", body.verified_date || "Not recorded"],
+    ];
+    unitDetails.replaceChildren(...rows.map(([term, value]) => {
+      const row = document.createElement("div"), label = document.createElement("dt"), detail = document.createElement("dd");
+      label.textContent = term; detail.textContent = value;
+      row.append(label, detail); return row;
+    }));
+    setStatus(`Selected room ${body.room_id || body.unit_id}. Destination metadata does not describe path accessibility.`);
+    if (focusMap) document.querySelector(`[data-unit-id="${CSS.escape(unitId)}"]`)?.focus();
+    return true;
+  } catch (error) {
+    if (isCurrent()) setStatus(`Could not load room details: ${error.message}`);
+    return false;
+  }
 }
 
 function updateEndpointStates() {
@@ -294,9 +309,18 @@ function updateEndpointStates() {
   });
 }
 
+function cancelPendingRouteScene() {
+  if (navigationState.pendingStep) {
+    beginNavigation("floor");
+    const displayed = allLevels.find(level => level.level_id === currentScene?.level.level_id);
+    if (displayed) selectFloorControls(displayed);
+  }
+}
+
 function clearRoute(clearEndpoints = true) {
   requestGeneration += 1;
-  sceneGeneration += 1;
+  navigationState.roomRevision += 1;
+  cancelPendingRouteScene();
   activeRoute = null;
   activeStep = 0;
   manualPreview = false;
@@ -308,8 +332,8 @@ function clearRoute(clearEndpoints = true) {
   setRouteState("empty");
   routeStatus.textContent = "Choose two rooms, or select them on the map.";
   updateGuidanceControls();
-  restoreRenderedFloor();
-  renderRouteOverlay(activeLevel()?.level_id);
+  if (navigationState.sceneStatus !== "loading") restoreRenderedFloor();
+  renderRouteOverlay(currentScene?.level.level_id);
   if (clearEndpoints) {
     routeOrigin.value = "";
     routeDestination.value = "";
@@ -347,13 +371,14 @@ async function activateRouteEndpoint(unitId, focusMap = false) {
     const generation = ++requestGeneration;
     const origin = routeOrigin.value;
     const profile = routeProfile.value;
-    await selectUnit(unitId, focusMap);
-    if (generation !== requestGeneration) return;
+    const inspected = await selectUnit(unitId, focusMap);
+    if (!inspected || generation !== requestGeneration) return;
     await requestRoute(origin, unitId, profile, generation);
   }
 }
 
 function selectLandmark(item, marker) {
+  navigationState.roomRevision += 1;
   document.querySelectorAll(".unit-shape, .landmark-shape").forEach((node) => {
     node.classList.toggle("selected", node === marker);
   });
@@ -380,6 +405,7 @@ function renderScene(scene) {
   const previousOrigin = mapOrigin;
   if (mapFit === "manual" && !retainedCamera) mapFit = activeRoute?.guidance ? "route" : "floor";
   currentScene = scene;
+  navigationState.displayedLevelId = scene.level.level_id;
   floorMap.querySelectorAll("g").forEach((node) => node.remove());
   const points = coordinates(scene.level.geometry);
   const xs = points.map((point) => point[0]);
@@ -456,94 +482,110 @@ function renderScene(scene) {
 }
 
 async function loadScene() {
+  const level = activeLevel();
+  if (!level) return false;
   showFloorContext();
   const generation = ++sceneGeneration;
-  const level = activeLevel();
-  if (!level) return;
-  setStatus(`Loading ${floorLabel(level.level_id)}…`);
+  navigationState.sceneStatus = "loading";
+  navigationState.sceneError = null;
+  retryScene.hidden = true;
+  floorMap.setAttribute("aria-busy", "true");
+  const retained = currentScene ? ` Showing ${floorLabel(currentScene.level.level_id)} until ready.` : "";
+  setStatus(`Loading ${floorLabel(level.level_id)}…${retained}`, true);
+  updateGuidanceControls();
   try {
     const scene = await request(`/demo/v1/levels/${encodeURIComponent(level.level_id)}/scene`);
-    if (generation !== sceneGeneration) return;
+    if (generation !== sceneGeneration) return false;
+    if (scene.level?.level_id !== level.level_id) throw new Error("The returned floor does not match the requested floor");
+    navigationState.sceneStatus = "ready";
+    navigationState.displayedLevelId = level.level_id;
+    floorMap.setAttribute("aria-busy", "false");
     renderScene(scene);
+    return true;
   } catch (error) {
-    if (generation !== sceneGeneration) return;
-    restoreRenderedFloor();
+    if (generation !== sceneGeneration) return false;
+    navigationState.sceneStatus = "error";
+    navigationState.sceneError = error.message;
+    navigationState.pendingStep = null;
+    floorMap.setAttribute("aria-busy", "false");
+    retryScene.hidden = false;
+    retryScene.textContent = `Retry ${floorLabel(level.level_id)}`;
     manualPreview = Boolean(guidanceStep());
     previewVisitId = null;
     updateGuidanceControls();
     renderRouteOverlay(currentScene?.level.level_id);
-    const retained = currentScene ? ` Showing ${floorLabel(currentScene.level.level_id)}.` : "";
-    setStatus(`Could not load ${floorLabel(level.level_id)}: ${error.message}.${retained}`);
+    const showing = currentScene ? ` Still showing ${floorLabel(currentScene.level.level_id)}.` : " No floor is displayed.";
+    setStatus(`Could not load ${floorLabel(level.level_id)}: ${error.message}.${showing}`, true);
+    return false;
   }
 }
 
 function activeLevel() {
-  if (levelSelect.value === "") return undefined;
-  const alignedLevels = levelsByOrder.get(Number(levelSelect.value)) || [];
-  return alignedLevels.find((item) => item.facility_id === facilitySelect.value);
+  return allLevels.find(level => level.level_id === navigationState.requestedLevelId
+    && level.facility_id === navigationState.facilityId);
 }
 
 function updateFacilities() {
-  const previousFacility = facilitySelect.value;
-  const alignedLevels = levelsByOrder.get(Number(levelSelect.value)) || [];
-  const availableFacilities = alignedLevels.map((level) => facilitiesById.get(level.facility_id));
-  facilitySelect.replaceChildren(
-    ...availableFacilities.map((facility) => option(
-      facility.facility_id,
-      `${facility.code} · ${facility.name}`,
-    )),
-  );
-  if (availableFacilities.some((facility) => facility.facility_id === previousFacility)) {
-    facilitySelect.value = previousFacility;
-  }
+  facilitySelect.replaceChildren(...[...facilitiesById.values()].map(facility => option(
+    facility.facility_id, `${facility.code || "Building"} · ${facility.name || facility.facility_id}`,
+  )));
+  facilitySelect.value = navigationState.facilityId || "";
+}
+
+function populateFloorOptions() {
+  const levels = allLevels.filter(level => level.facility_id === navigationState.facilityId);
+  levelSelect.replaceChildren(...levels.map(level => option(level.level_id, `Floor ${level.short_name || "not named"}`)));
+  levelSelect.value = navigationState.requestedLevelId || "";
+  levelSelect.disabled = levels.length === 0;
+  openFloor.disabled = levels.length === 0;
+}
+
+function selectBuildingControls(facilityId) {
+  if (!facilitiesById.has(facilityId)) return;
+  const levels = allLevels.filter(level => level.facility_id === facilityId);
+  const remembered = navigationState.rememberedLevels.get(facilityId);
+  const level = levels.find(item => item.level_id === remembered)
+    || levels.find(item => item.vertical_order === 0) || levels[0];
+  navigationState.facilityId = facilityId;
+  navigationState.requestedLevelId = level?.level_id || null;
+  if (level) navigationState.rememberedLevels.set(facilityId, level.level_id);
+  updateFacilities();
+  populateFloorOptions();
 }
 
 function initializeFloorControls(levels) {
   allLevels = levels;
-  levelsByOrder = levels.reduce((groups, level) => {
-    const values = groups.get(level.vertical_order) || [];
-    values.push(level);
-    groups.set(level.vertical_order, values);
-    return groups;
-  }, new Map());
-  populateFloorOptions();
-  if (levelsByOrder.has(0)) levelSelect.value = "0";
-  updateFacilities();
-}
-
-function populateFloorOptions() {
-  const floorOptions = [...levelsByOrder.entries()].map(([verticalOrder, alignedLevels]) => {
-    const labels = alignedLevels.map((level) => {
-      const facility = facilitiesById.get(level.facility_id);
-      return `${facility.code} ${level.short_name}`;
-    });
-    return option(String(verticalOrder), labels.join(" · "));
-  });
-  levelSelect.replaceChildren(...floorOptions);
-  levelSelect.disabled = floorOptions.length === 0;
+  const first = levels.find(level => level.vertical_order === 0) || levels[0];
+  selectBuildingControls(first?.facility_id || facilitiesById.keys().next().value);
 }
 
 function selectFloorControls(level) {
-  if (levelSelect.disabled) populateFloorOptions();
-  levelSelect.value = String(level.vertical_order);
+  navigationState.facilityId = level.facility_id;
+  navigationState.requestedLevelId = level.level_id;
+  navigationState.rememberedLevels.set(level.facility_id, level.level_id);
   updateFacilities();
-  facilitySelect.value = level.facility_id;
+  populateFloorOptions();
 }
 
 async function selectLevel(levelId) {
-  const level = allLevels.find((item) => item.level_id === levelId);
-  if (!level) return;
+  const level = allLevels.find(item => item.level_id === levelId);
+  if (!level) return false;
   showFloorContext();
   selectFloorControls(level);
   if (currentScene?.level.level_id === levelId) {
     sceneGeneration += 1;
+    navigationState.displayedLevelId = levelId;
+    navigationState.sceneStatus = "ready";
+    navigationState.sceneError = null;
+    retryScene.hidden = true;
+    floorMap.setAttribute("aria-busy", "false");
     renderRouteOverlay(levelId);
     updateGuidanceControls();
     fitMap(mapFit);
     setStatus(`${floorLabel(levelId)} · ${currentScene.units?.length || 0} rooms`);
-    return;
+    return true;
   }
-  await loadScene();
+  return loadScene();
 }
 
 function floorLabel(levelId) {
@@ -554,20 +596,16 @@ function floorLabel(levelId) {
 }
 
 function restoreRenderedFloor() {
-  mapFit = "floor";
   if (!currentScene) {
     viewingFloor.textContent = "Floor plan not loaded";
     if (viewingFloor.dataset) delete viewingFloor.dataset.levelId;
     setStatus("Choose a floor to load its map.");
     return;
   }
-  const level = allLevels.find((item) => item.level_id === currentScene.level.level_id);
-  // Hidden floor cleanup must not replace a newer Building inspection selection.
-  if (level && !floorView.hidden) selectFloorControls(level);
+  navigationState.displayedLevelId = currentScene.level.level_id;
   viewingFloor.textContent = `Viewing ${floorLabel(currentScene.level.level_id)}`;
   viewingFloor.dataset.levelId = currentScene.level.level_id;
   setStatus(`${floorLabel(currentScene.level.level_id)} · ${currentScene.units?.length || 0} rooms`);
-  fitMap("floor");
 }
 
 function roomLabel(unitId) {
@@ -592,16 +630,26 @@ function stepIsVisible(step = guidanceStep()) {
 function updateGuidanceControls() {
   const guidance = activeRoute?.guidance;
   const step = guidanceStep();
-  stepPrevious.disabled = !step || activeStep === 0;
-  stepNext.disabled = !step || activeStep === guidance.steps.length - 1;
+  const pending = Boolean(navigationState.pendingStep) || navigationState.sceneStatus === "loading";
+  stepPrevious.disabled = pending || !step || activeStep === 0;
+  stepNext.disabled = pending || !step || activeStep === guidance.steps.length - 1;
+  returnToRoute.hidden = !step || (!manualPreview && !floorView.hidden);
   stepPosition.textContent = step ? `Step ${activeStep + 1} of ${guidance.steps.length} · ${floorLabel(step.level_id)}` : "Choose a route";
   currentInstruction.textContent = step?.instruction || (activeRoute?.guidance && !activeRoute.guidance.steps.length
     ? unavailableGuidanceMessage : ["error", "pending"].includes(routeUiState)
       ? routeStatus.textContent : "Select a starting room and destination to see directions.");
+  if (step?.level_id && step.level_id !== navigationState.displayedLevelId) {
+    if (navigationState.pendingStep?.index === activeStep) {
+      currentInstruction.textContent = `Loading ${floorLabel(step.level_id)} for the selected instruction…`;
+      stepPosition.textContent = `Loading route floor · ${floorLabel(step.level_id)}`;
+    } else if (navigationState.sceneStatus === "error") {
+      currentInstruction.textContent = `Route floor not loaded. Preview only: ${step.instruction}`;
+    }
+  }
   floorPreview.hidden = !step || !manualPreview;
   transitionViews.hidden = !step?.transition_id;
   if (!step) return;
-  previewMessage.textContent = `You are previewing ${floorLabel(activeLevel()?.level_id)}. Selected step: ${floorLabel(step.level_id)}.`;
+  previewMessage.textContent = `You are previewing ${floorLabel(currentScene?.level.level_id)}. Selected step: ${floorLabel(step.level_id)}.`;
   routeSteps.querySelectorAll("button").forEach((node) => {
     const selected = node.dataset.stepId === step.step_id;
     node.classList.toggle("active", selected);
@@ -611,7 +659,7 @@ function updateGuidanceControls() {
   floorJourney.querySelectorAll("button").forEach((node) => {
     const visit = guidance.visits.find((item) => item.visit_id === node.dataset.visitId);
     const selected = visit?.visit_id === (previewVisitId || step.visit_id)
-      && visit?.level_id === activeLevel()?.level_id;
+      && visit?.level_id === currentScene?.level.level_id;
     if (selected) node.setAttribute("aria-current", "location");
     else node.removeAttribute("aria-current");
   });
@@ -625,27 +673,36 @@ function updateGuidanceControls() {
 }
 
 async function selectGuidanceStep(stepId, cameraMode = "step") {
-  const index = activeRoute?.guidance?.steps.findIndex((step) => step.step_id === stepId);
+  const route = activeRoute;
+  const index = route?.guidance?.steps.findIndex((step) => step.step_id === stepId);
   if (index === undefined || index < 0) return;
-  activeStep = index;
-  manualPreview = false;
-  previewVisitId = null;
-  const step = guidanceStep();
+  beginNavigation("route");
+  const intent = navigationState.intentRevision;
+  const step = route.guidance.steps[index];
+  navigationState.pendingStep = { route, index, intent };
   // A marker alone gives no useful walking context. Initial directions also
   // retain the full floor route while selecting the first instruction.
   mapFit = cameraMode === "step" && step.geometry_ids.length ? "step" : "route";
   updateGuidanceControls();
-  renderRouteOverlay(currentScene?.level.level_id);
-  if (step.level_id) await selectLevel(step.level_id);
-  else {
-    sceneGeneration += 1;
+  if (!step.level_id) {
+    const displayed = allLevels.find(level => level.level_id === currentScene?.level.level_id);
+    if (displayed) selectFloorControls(displayed);
     restoreRenderedFloor();
-    updateGuidanceControls();
-    renderRouteOverlay(currentScene?.level.level_id);
   }
+  const loaded = step.level_id ? await selectLevel(step.level_id) : true;
+  if (!loaded || activeRoute !== route || intent !== navigationState.intentRevision) return;
+  navigationState.pendingStep = null;
+  activeStep = index;
+  manualPreview = false;
+  previewVisitId = null;
+  updateGuidanceControls();
+  renderRouteOverlay(currentScene?.level.level_id);
+  fitMap(mapFit);
 }
 
 async function previewFloor(levelId, visitId = null) {
+  if (!allLevels.some(level => level.level_id === levelId)) return;
+  beginNavigation("floor");
   manualPreview = Boolean(guidanceStep());
   previewVisitId = visitId;
   mapFit = "route";
@@ -808,7 +865,7 @@ function zoomMap(factor) {
   resizeMarkers();
 }
 
-function renderRoute(body) {
+function renderRoute(body, { follow = true } = {}) {
   activeRoute = body.status === 200 ? body : null;
   activeStep = 0;
   routeAccessibility.hidden = body.profile !== "elevator_only";
@@ -897,20 +954,26 @@ function renderRoute(body) {
     button.addEventListener("click", () => previewFloor(visit.level_id, visit.visit_id));
     floorJourney.append(button);
   });
-  selectGuidanceStep(guidance.steps[0].step_id, "route");
+  if (follow) selectGuidanceStep(guidance.steps[0].step_id, "route");
+  else {
+    manualPreview = true;
+    updateGuidanceControls();
+    renderRouteOverlay(currentScene?.level.level_id);
+  }
 }
 
 async function requestRoute(origin, destination, profile, generation) {
+  cancelPendingRouteScene();
+  const navigationIntent = navigationState.intentRevision;
   activeRoute = null;
-  sceneGeneration += 1;
   manualPreview = false;
   previewVisitId = null;
   routeSteps.replaceChildren();
   floorJourney.replaceChildren();
   routeDiagnostics.textContent = "Route request in progress.";
   updateGuidanceControls();
-  restoreRenderedFloor();
-  renderRouteOverlay(activeLevel()?.level_id);
+  if (navigationState.sceneStatus !== "loading") restoreRenderedFloor();
+  renderRouteOverlay(currentScene?.level.level_id);
   routeAccessibility.hidden = profile !== "elevator_only";
   refreshRouteOptions(origin, profile);
   if (!origin || !destination || origin === destination) {
@@ -935,13 +998,13 @@ async function requestRoute(origin, destination, profile, generation) {
       }),
     });
     if (generation !== requestGeneration) return;
-    renderRoute(body);
+    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
     routeSelection = "complete";
   } catch (error) {
     if (generation !== requestGeneration) return;
     const body = error.payload || { status: 500, code: error.message, profile: profile };
     if (!body.profile) body.profile = profile;
-    renderRoute(body);
+    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
     routeSelection = "failed";
   }
 }
@@ -1119,6 +1182,7 @@ routeProfile.addEventListener("change", () => {
 
 assistantForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const assistantRevision = ++navigationState.assistantRevision;
   assistantResponse.textContent = "Checking normalized artifact records…";
   assistantEvidence.textContent = "";
   const directionRequest = parseExactDirections(assistantInput.value);
@@ -1133,22 +1197,25 @@ assistantForm.addEventListener("submit", async (event) => {
     await requestRoute(origin, destination, directionRequest.profile, ++requestGeneration);
     return;
   }
+  const assistantIntent = navigationState.intentRevision;
+  const assistantRoomRevision = navigationState.roomRevision;
   try {
     const body = await request("/demo/v1/assistant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: assistantInput.value,
-        facility_id: facilitySelect.value,
+        facility_id: navigationState.facilityId,
         level_id: activeLevel()?.level_id,
       }),
     });
+    if (assistantRevision !== navigationState.assistantRevision || assistantIntent !== navigationState.intentRevision || assistantRoomRevision !== navigationState.roomRevision) return;
     assistantResponse.textContent = body.text;
     assistantEvidence.textContent = body.evidence?.length ? `Evidence: ${body.evidence.map((item) => `${item.layer} · ${item.feature_id}`).join("; ")}` : "No artifact record cited.";
     const unit = body.entities?.find((item) => item.type === "unit");
-    if (unit && unit.level_id === activeLevel()?.level_id) await selectUnit(unit.unit_id, true);
+    if (unit && unit.level_id === currentScene?.level.level_id) await selectUnit(unit.unit_id, true);
   } catch (error) {
-    assistantResponse.textContent = error.message;
+    if (assistantRevision === navigationState.assistantRevision && assistantIntent === navigationState.intentRevision && assistantRoomRevision === navigationState.roomRevision) assistantResponse.textContent = error.message;
   }
 });
 
@@ -1171,10 +1238,25 @@ document.querySelector("#fit-floor").addEventListener("click", () => fitMap("flo
 document.querySelector("#zoom-in").addEventListener("click", () => zoomMap(1 / 1.5));
 document.querySelector("#zoom-out").addEventListener("click", () => zoomMap(1.5));
 
-facilitySelect.addEventListener("change", () => previewFloor(activeLevel()?.level_id));
-levelSelect.addEventListener("change", async () => {
-  updateFacilities();
-  await previewFloor(activeLevel()?.level_id);
+facilitySelect.addEventListener("change", () => {
+  const facilityId = facilitySelect.value;
+  if (!facilitiesById.has(facilityId)) return;
+  if (floorView.hidden) selectCampusBuilding(facilityId);
+  else {
+    selectBuildingControls(facilityId);
+    if (activeLevel()) return previewFloor(activeLevel().level_id);
+    selectCampusBuilding(facilityId);
+  }
+});
+levelSelect.addEventListener("change", () => {
+  const levelId = levelSelect.value;
+  if (allLevels.some(level => level.level_id === levelId && level.facility_id === navigationState.facilityId)) return previewFloor(levelId);
+});
+openFloor.addEventListener("click", () => previewFloor(navigationState.requestedLevelId));
+retryScene.addEventListener("click", () => previewFloor(navigationState.requestedLevelId));
+returnToRoute.addEventListener("click", () => {
+  const step = guidanceStep();
+  if (step) return selectGuidanceStep(step.step_id, "route");
 });
 
 document.querySelector("#show-campus").addEventListener("click", () => {

@@ -1,6 +1,8 @@
 # 17. Navigation state, route drafts and synchronized journeys
 
-Status: accepted for DT-024 implementation planning; runtime not implemented.
+Status: accepted; Stage A/B navigation foundation implemented, delivery validation
+recorded in [the phase report](../reports/DT-024-PHASE-AB.md). Endpoint drafts,
+synchronized journeys and cache/mobile work remain pending.
 Date: 2026-09-17.
 
 ## Scope and supersession
@@ -22,8 +24,9 @@ For DT-024, this decision supersedes only these client interaction choices:
 - ADR-0013's native destination catalog presentation, with searchable destination
   discovery preserving its full outcome semantics and unsupported selections. Its connected-destination direction actions (including the DT-022 clarification) now edit the draft and require Preview route, rather than immediately requesting a route.
 
-The earlier documents remain historical descriptions of the current runtime until
-DT-024 is implemented. Their other requirements remain applicable. In particular,
+The earlier documents describe runtime behavior except where a delivered DT-024
+stage supersedes it. Stage B supersedes the global-order picker and stale-response
+behavior; draft/commit and journey changes remain pending. Their other requirements remain applicable. In particular,
 ADR-0012 guidance geometry, chronological visits, validation and limitations;
 ADR-0013 directed availability; ADR-0014 camera semantics; and ADR-0016 artifact-only
 campus coverage remain authoritative. No HTTP API, guidance schema, source,

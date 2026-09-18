@@ -53,6 +53,8 @@ h3 { font-size: 1rem; }
 }
 
 .selectors { display: grid; grid-template-columns: auto minmax(9rem, 1fr); gap: .35rem .7rem; align-items: center; font-family: "Trebuchet MS", sans-serif; }
+.selectors #open-floor { grid-column: 2; min-height: 44px; padding: .5rem .7rem; border: 1px solid #59716b; border-radius: 4px; color: white; background: #263b37; cursor: pointer; }
+.selectors #open-floor:disabled { opacity: .6; cursor: default; }
 select, input { min-height: 2.65rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink); }
 select, input { min-width: 0; max-width: 100%; }
 .topbar select { color: white; background: #263b37; border-color: #59716b; }

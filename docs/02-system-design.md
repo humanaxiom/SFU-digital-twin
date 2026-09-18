@@ -12,10 +12,12 @@ deployed capabilities. Accepted ADRs and [HANDOFF](HANDOFF.md) govern current be
 Neither the three-building inventory nor visible geometry establishes connected
 routes or verified accessibility.
 
-The planned navigation overhaul is [DT-024](plans/DT-024.md), governed by
+The phased navigation overhaul is [DT-024](plans/DT-024.md), governed by
 [ADR-0017](adr/0017-navigation-state-and-journey.md) and motivated by the
 [navigation review](reports/NAVIGATION-REVIEW.md). It changes client interaction and
-state ownership; implementation and fresh delivery verification remain pending.
+state ownership. Stage A/B implements exact floor identity and asynchronous
+navigation ownership; [delivery evidence](reports/DT-024-PHASE-AB.md) records its
+verification. Endpoint drafts and synchronized journeys remain pending.
 
 Read [01-data-findings.md](01-data-findings.md) first — every decision below traces back to a
 specific property of the source geodatabase.
@@ -420,7 +422,14 @@ remains an internal alignment key, while a displayed floor uses its exact `level
   list (each step an `aria-live` region during guidance), and a text-only route view that works
   without the map.
 
-### 9.2 Planned DT-024 navigation state and journey
+### 9.2 DT-024 navigation state and journey
+
+Stage B implements context, facility, requested/displayed floor, room and request
+revisions in the existing client. Its pending route step commits only after scene
+success; route replacement cancels route-owned scene work while Clear preserves
+independent floor browsing. Scene loading/errors retain priority over room status.
+The remaining draft/commit, journey, cache and responsive requirements below are
+the C/D contract, not a claim that the first increment implements them.
 
 One explicit state model owns context (Campus, Building, Floor exploration or Route),
 inspected facility, requested and displayed exact floor IDs, scene status, inspected

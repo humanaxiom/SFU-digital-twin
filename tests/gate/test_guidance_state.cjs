@@ -52,7 +52,7 @@ function client() {
       {level_id:'L2',facility_id:'AQ',short_name:'2000',vertical_order:-1},
     ];
     initializeFloorControls(allLevels);
-    facilitySelect.value='AQ'; levelSelect.value='-2';
+    selectFloorControls(allLevels[0]);
   `);
   const fixture = {
     status: 200, profile: 'default', origin: {unit_id: 'A'}, destination: {unit_id: 'B'}, network_distance_m: 12345,
@@ -88,7 +88,7 @@ function client() {
   };
   context.fixture = fixture;
   run(`routeUnits=[{unit_id:'A',room_id:'AQ1003'},{unit_id:'B',room_id:'AQ1004'}];
-    currentScene={level:{level_id:'L1',geometry:{type:'LineString',coordinates:[[0,0],[20,20]]}}};
+    renderScene({level:{level_id:'L1',geometry:{type:'LineString',coordinates:[[0,0],[20,20]]}},units:[],details:[],landmarks:[]});
     floorMap.setAttribute('viewBox','-4 -24 28 28');
     request=async path=>({level:{level_id:path.includes('L2')?'L2':'L1',geometry:{type:'LineString',coordinates:[[0,0],[20,20]]}},units:[],details:[],landmarks:[]});`);
   return {run, context, nodes};
@@ -181,16 +181,17 @@ function client() {
   });
   await check('floor names expose source labels without order jargon', async () => {
     const c = client();
-    assert.deepEqual(c.nodes.get('#level-select').children.map(n => n.textContent), ['AQ 1000','AQ 2000']);
+    assert.deepEqual(c.nodes.get('#level-select').children.map(n => n.textContent), ['Floor 1000','Floor 2000']);
+    assert.deepEqual(c.nodes.get('#level-select').children.map(n => n.value), ['L1','L2']);
   });
-  await check('clear invalidates pending floor response', async () => {
+  await check('clear preserves an independently requested exploration floor', async () => {
     const c = client();
-    c.run(`globalThis.scenes=[]; activeLevel=()=>({level_id:'L1'});
+    c.run(`globalThis.scenes=[];
       renderRouteOverlay=()=>{}; updateEndpointStates=()=>{};
       renderScene=body=>scenes.push(body); request=()=>new Promise(resolve=>globalThis.finishScene=resolve);`);
     const pending = c.run('loadScene()');
     c.run('clearRoute()'); c.context.finishScene({level: {level_id:'L1'}}); await pending;
-    assert.equal(c.context.scenes.length, 0, 'a cleared route must not restore a requested route scene');
+    assert.equal(c.context.scenes.length, 1, 'Clear must not cancel independent floor exploration');
   });
   await check('walking selection paints exact spans and retains base route', async () => {
     const c = client(); c.run('renderRoute(fixture)');
@@ -258,11 +259,17 @@ function client() {
     assert.equal(c.nodes.get('#step-next').disabled, true);
     assert.equal(c.nodes.get('#route-status').attributes['data-state'], 'empty');
   });
-  await check('rapid step changes remove the old highlight while loading and settle on latest scene', async () => {
+  await check('pending step retains mapped instruction and spans until latest scene succeeds', async () => {
     const c = client(); c.run('renderRoute(fixture)'); await c.run("selectGuidanceStep('s1')");
     c.run('globalThis.pendingScenes=[]; request=path=>new Promise(resolve=>pendingScenes.push({path,resolve}));');
     const slow = c.run("selectGuidanceStep('s4')");
-    assert.equal(c.nodes.get('#route-overlay').querySelectorAll('.route-selected').length, 0, 'old step highlight must disappear immediately');
+    assert.deepEqual(c.nodes.get('#route-overlay').querySelectorAll('.route-selected').map(n=>n.dataset.geometryId), ['g1','g2'],
+      'the old displayed floor retains only its mapped instruction spans while the new floor is pending');
+    assert.equal(c.run('guidanceStep().step_id'), 's1');
+    assert.equal(c.nodes.get('#viewing-floor').dataset.levelId, 'L1');
+    assert.equal(c.nodes.get('#level-select').value, 'L2');
+    assert.equal(c.nodes.get('#step-next').disabled, true, 'advancement is serialized while a scene is pending');
+    assert.match(c.nodes.get('#map-status').textContent, /Loading.*AQ 2000/);
     await c.run("selectGuidanceStep('s1')");
     c.context.pendingScenes[0].resolve({level:{level_id:'L2',geometry:{type:'LineString',coordinates:[[0,0],[20,20]]}},units:[],details:[],landmarks:[]});
     await slow;
@@ -272,17 +279,18 @@ function client() {
     assert.doesNotMatch(c.nodes.get('#map-status').textContent, /Loading/);
     assert.match(c.nodes.get('#map-status').textContent, /AQ 1000/);
   });
-  await check('clear during floor loading restores visible floor controls status and full extent', async () => {
+  await check('clear cancels route-owned floor loading and preserves the displayed camera', async () => {
     const c = client(); c.run('renderRoute(fixture)'); await c.run("selectGuidanceStep('s1')");
+    const camera = c.nodes.get('#floor-map').attributes.viewBox;
     c.run('globalThis.pendingScenes=[]; request=path=>new Promise(resolve=>pendingScenes.push({path,resolve}));');
     const pending = c.run("selectGuidanceStep('s4')");
     c.run('clearRoute()');
-    assert.equal(c.nodes.get('#level-select').value, '-2');
+    assert.equal(c.nodes.get('#level-select').value, 'L1');
     assert.equal(c.nodes.get('#facility-select').value, 'AQ');
     assert.equal(c.nodes.get('#viewing-floor').dataset.levelId, 'L1');
     assert.match(c.nodes.get('#map-status').textContent, /AQ 1000/);
     assert.doesNotMatch(c.nodes.get('#map-status').textContent, /Loading/);
-    assert.equal(c.nodes.get('#floor-map').attributes.viewBox, '-4 -24 28 28');
+    assert.equal(c.nodes.get('#floor-map').attributes.viewBox, camera);
     c.context.pendingScenes[0].resolve({level:{level_id:'L2',geometry:{type:'LineString',coordinates:[[0,0],[20,20]]}},units:[],details:[],landmarks:[]});
     await pending;
     assert.equal(c.run('currentScene.level.level_id'), 'L1');
@@ -293,7 +301,7 @@ function client() {
     c.run("fixture.guidance.steps[5].level_id=null;globalThis.pendingScenes=[];request=path=>new Promise(resolve=>pendingScenes.push({path,resolve}));");
     const pending = c.run("selectGuidanceStep('s4')");
     await c.run("selectGuidanceStep('s5')");
-    assert.equal(c.nodes.get('#level-select').value, '-2');
+    assert.equal(c.nodes.get('#level-select').value, 'L1');
     assert.equal(c.nodes.get('#viewing-floor').dataset.levelId, 'L1');
     assert.doesNotMatch(c.nodes.get('#map-status').textContent, /Loading/);
     assert.match(c.nodes.get('#step-position').textContent, /Floor not recorded/);
@@ -302,17 +310,17 @@ function client() {
     assert.equal(c.run('currentScene.level.level_id'), 'L1');
     assert.equal(c.run('guidanceStep().step_id'), 's5');
   });
-  await check('scene failure restores actual floor and retains a useful load error', async () => {
+  await check('scene failure retains requested controls and truthfully labels displayed floor', async () => {
     const c = client(); c.run('renderRoute(fixture)');
     c.run("request=async()=>{throw new Error('Scene unavailable');};");
     await c.run("selectGuidanceStep('s4')");
-    assert.equal(c.nodes.get('#level-select').value, '-2');
+    assert.equal(c.nodes.get('#level-select').value, 'L2');
     assert.equal(c.nodes.get('#viewing-floor').dataset.levelId, 'L1');
     assert.match(c.nodes.get('#map-status').textContent, /Scene unavailable/);
     assert.match(c.nodes.get('#map-status').textContent, /AQ 2000/);
     assert.doesNotMatch(c.nodes.get('#map-status').textContent, /Loading/);
-    assert.equal(c.run('guidanceStep().step_id'), 's4');
-    assert.equal(c.nodes.get('#floor-preview').hidden, false);
+    assert.equal(c.run('guidanceStep().step_id'), 's0', 'failed pending instruction must not replace the mapped instruction');
+    assert.equal(c.nodes.get('#retry-scene').hidden, false);
   });
   await check('route decorations cannot intercept room activation', async () => {
     const c = client(); c.run('renderRoute(fixture)'); await c.run("selectGuidanceStep('s1')");

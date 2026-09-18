@@ -33,7 +33,7 @@ run(`campusData={bounds:[500000,5400000,500300,5400200],facilities:[
  {facility_id:'SH',code:'SH',name:'Strand Hall',geometry:null,levels:[],coverage:'overview_only'}]};
 facilitiesById = new Map(campusData.facilities.map(item => [item.facility_id, item]));
 initializeFloorControls(campusData.facilities.flatMap(item => item.levels));
-levelSelect.value='2'; updateFacilities(); facilitySelect.value='AQ';
+selectFloorControls(allLevels.find(level => level.level_id === 'AQ2'));
 activeRoute={fixture:'retained'};routeOrigin.value='roomA';routeDestination.value='roomB';
 routeProfile.value='elevator_only';
 renderCampus();showCampus();`);
@@ -58,20 +58,20 @@ assert.equal(run('activeRoute.fixture'),'retained');
 assert.equal(run('routeOrigin.value'),'roomA');
 assert.equal(run('routeDestination.value'),'roomB');
 assert.equal(run('routeProfile.value'),'elevator_only');
-// Shared global vertical order is retained when the destination building has it.
-run("selectCampusBuilding('AQ'); levelSelect.value='2'; facilitySelect.value='AQ'; selectCampusBuilding('ECC')");
+// A building uses its own remembered exact floor, initially its recorded order zero.
+run("selectCampusBuilding('AQ'); selectFloorControls(allLevels.find(level => level.level_id === 'AQ2')); selectCampusBuilding('ECC')");
 assert.equal(nodes.get('#facility-select').value,'ECC');
-assert.equal(nodes.get('#level-select').value,'2');
+assert.equal(nodes.get('#level-select').value,'ECC0');
 assert.equal(nodes.get('#level-select').disabled,false);
-// An AQ-only order falls back to recorded order 0 in ECC, then to first deterministic level.
-run("selectCampusBuilding('AQ'); levelSelect.value='5'; facilitySelect.value='AQ'; selectCampusBuilding('ECC')");
+// Another building uses its own fallback; a building without order zero uses its first level.
+run("selectCampusBuilding('AQ'); selectFloorControls(allLevels.find(level => level.level_id === 'AQ5')); selectCampusBuilding('ECC')");
 assert.equal(nodes.get('#facility-select').value,'ECC');
-assert.equal(nodes.get('#level-select').value,'0');
-run("selectCampusBuilding('AQ'); levelSelect.value='5'; facilitySelect.value='AQ'; selectCampusBuilding('LIB')");
+assert.equal(nodes.get('#level-select').value,'ECC0');
+run("selectCampusBuilding('AQ'); selectFloorControls(allLevels.find(level => level.level_id === 'AQ5')); selectCampusBuilding('LIB')");
 assert.equal(nodes.get('#facility-select').value,'LIB');
-assert.equal(nodes.get('#level-select').value,'7');
+assert.equal(nodes.get('#level-select').value,'LIB7');
 run("selectCampusBuilding('SH');selectCampusBuilding('LIB')");
-assert.equal(nodes.get('#level-select').value,'7','no-level selection has no retained global order');
+assert.equal(nodes.get('#level-select').value,'LIB7','remember the building exact level across overview-only selection');
 // The rendered search/list control follows the same path as a footprint click.
 run("campusSearch.value='ecc';renderCampusBuildings()");
 nodes.get('#campus-buildings').children[0].handlers.click();
@@ -96,15 +96,15 @@ assert.ok(box.every(Number.isFinite)&&box[2]>=300&&box[3]>=200);
  assert.equal(run('rendered'),0,'late scene must not paint over campus');
  assert.equal(nodes.get('#campus-view').hidden,false);
  assert.equal(nodes.get('#facility-select').value,'ECC','late scene must not restore an older building');
- assert.equal(nodes.get('#level-select').value,'0','late scene must not restore an older floor');
+ assert.equal(nodes.get('#level-select').value,'ECC0','late scene must not restore an older floor');
  run("selectCampusBuilding('SH');request=async()=>({level:{level_id:'AQ0'},units:[]});renderScene=()=>{};");
  await run("selectLevel('AQ0')");
  assert.equal(nodes.get('#facility-select').value,'AQ');
- assert.equal(nodes.get('#level-select').value,'0');
+ assert.equal(nodes.get('#level-select').value,'AQ0');
  assert.equal(nodes.get('#level-select').disabled,false,'explicit floor navigation restores Floor control');
- assert.ok(nodes.get('#level-select').children.some(n=>n.value==='5'),'normal global floor options restored');
- run("levelSelect.value='5';restoreRenderedFloor()");
- assert.equal(nodes.get('#level-select').value,'0','visible Floor failure cleanup restores rendered floor');
+ assert.ok(nodes.get('#level-select').children.some(n=>n.value==='AQ5'),'exact building floor options restored');
+ run("restoreRenderedFloor()");
+ assert.equal(nodes.get('#level-select').value,'AQ0','cleanup renders authoritative floor selection');
  run(`selectCampusBuilding('ECC');
    globalThis.pendingRoute=null;globalThis.routeRendered=0;
    request=()=>new Promise(resolve=>pendingRoute=resolve);renderRoute=()=>routeRendered++`);
@@ -116,11 +116,11 @@ assert.ok(box.every(Number.isFinite)&&box[2]>=300&&box[3]>=200);
  assert.equal(nodes.get('#facility-select').value,'ECC','pending route must not restore hidden AQ controls');
  run("selectCampusBuilding('AQ');selectCampusBuilding('LIB');selectCampusBuilding('ECC');pendingRoute({status:200})");
  await route;
- assert.equal(run('routeUiState'),'empty','cancelled route must not leave pending UI');
- assert.equal(run('routeRendered'),0,'late route must not return to floor context');
+ // Valid route completion may be retained, but it must not change map context.
+ assert.equal(run('routeRendered'),1,'latest valid route is accepted without stealing exploration');
  assert.equal(nodes.get('#campus-view').hidden,false);
  assert.equal(nodes.get('#facility-select').value,'ECC');
- assert.equal(nodes.get('#level-select').value,'0');
+ assert.equal(nodes.get('#level-select').value,'ECC0');
  assert.equal(nodes.get('#map-context').textContent,'Building');
  assert.equal(run('routeOrigin.value'),'roomA');
  assert.equal(run('routeDestination.value'),'roomB');

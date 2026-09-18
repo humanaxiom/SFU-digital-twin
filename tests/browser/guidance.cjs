@@ -165,6 +165,7 @@ async function exerciseGuidance(cdp,body,record){
   }
   const middle=g.steps[Math.min(2,g.steps.length-2)];
   await activateButton(cdp,`button[data-step-id="${middle.step_id}"]`);
+  await assertSelected(cdp,body,middle);
   await activateButton(cdp,'#step-next','Enter');
   await assertSelected(cdp,body,g.steps[g.steps.indexOf(middle)+1]);
   await activateButton(cdp,'#step-previous',' ');
