@@ -89,16 +89,16 @@ async function main() {
   await check("all three buildings expose every recorded level through exact scoped controls", async () => {
     for (const facility of data.campus.facilities) {
       if (await cdp.evaluate("document.querySelector('#campus-view').hidden")) await pointerClick("#show-campus");
-      const button = `#campus-buildings [data-campus-facility-id="${facility.facility_id}"]`;
+      const button = `#building-buttons [data-building-id="${facility.facility_id}"]`;
       await pointerClick(button); await cdp.wait(`document.querySelector('#facility-select').value===${quote(facility.facility_id)}`);
-      const visibleLevels = await cdp.evaluate("[...document.querySelectorAll('#campus-details [data-campus-level-id]')].map(n=>n.dataset.campusLevelId)");
+      const visibleLevels = await cdp.evaluate("[...document.querySelectorAll('#floor-buttons [data-level-id]')].map(n=>n.dataset.levelId)");
       assert.deepEqual([...visibleLevels].sort(), facility.levels.map(level => level.level_id).sort());
       for (const [index, level] of facility.levels.entries()) {
         if (index) {
           await pointerClick("#show-campus");
-          await pointerClick(`#campus-buildings [data-campus-facility-id=\"${facility.facility_id}\"]`);
+          await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
         }
-        await keyboardActivate(`#campus-details [data-campus-level-id=\"${level.level_id}\"]`);
+        await keyboardActivate(`#floor-buttons [data-level-id=\"${level.level_id}\"]`);
         await sceneReady(level.level_id);
         assert.equal(await cdp.evaluate("document.querySelector('#facility-select').value"), facility.facility_id);
         assert.equal(await cdp.evaluate("document.querySelector('#viewing-floor').dataset.levelId"), level.level_id);
@@ -109,7 +109,10 @@ async function main() {
   await check("explicit Open floor action opens an already-selected floor", async () => {
     if (!(await cdp.evaluate("!document.querySelector('#campus-view').hidden"))) await pointerClick("#show-campus");
     const facility = data.campus.facilities[0];
-    await pointerClick(`#campus-buildings [data-campus-facility-id=\"${facility.facility_id}\"]`);
+    await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
+    await pointerClick("#show-campus");
+    if (!(await cdp.evaluate("document.querySelector('#navigation-options').open"))) await pointerClick("#navigation-options summary");
+    assert.ok(await cdp.evaluate("['#facility-select','#level-select','#open-floor'].every(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1;})"), "expanded optional navigation controls must fit the viewport");
     const selectedLevel = await cdp.evaluate("document.querySelector('#level-select').value");
     assert.ok(selectedLevel && facility.levels.some(level => level.level_id === selectedLevel));
     assert.ok(await cdp.evaluate("document.querySelector('#open-floor').getBoundingClientRect().height>=44"), "Open floor must meet the 44px touch target");
@@ -122,13 +125,14 @@ async function main() {
   await check("native Floor picker responds to keyboard ArrowDown and Enter", async () => {
     await pointerClick("#show-campus");
     const facility = data.campus.facilities[0];
-    await pointerClick(`#campus-buildings [data-campus-facility-id=\"${facility.facility_id}\"]`);
+    await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
     const firstLevel = facility.levels[0];
-    await pointerClick(`#campus-details [data-campus-level-id=\"${firstLevel.level_id}\"]`);
+    await pointerClick(`#floor-buttons [data-level-id=\"${firstLevel.level_id}\"]`);
     await sceneReady(firstLevel.level_id);
     await pointerClick("#show-campus");
-    await pointerClick(`#campus-buildings [data-campus-facility-id=\"${facility.facility_id}\"]`);
+    await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
     const before = await cdp.evaluate("document.querySelector('#level-select').value");
+    if (!(await cdp.evaluate("document.querySelector('#navigation-options').open"))) await pointerClick("#navigation-options summary");
     await keyboardActivate("#level-select", "ArrowDown");
     const after = await cdp.evaluate("document.querySelector('#level-select').value");
     assert.notEqual(after, before, "ArrowDown must select a different recorded floor");
@@ -142,11 +146,20 @@ async function main() {
 
   await check("late route completion cannot steal a deliberately selected floor", async () => {
     const fixture = JSON.parse(fs.readFileSync("/workspace/docs/reports/DT-015-demo-routes.json")).fixtures.aq_elevator;
+    const originLevel = data.levels.find(level => level.level_id === fixture.origin.level_id);
+    assert.ok(originLevel, "route origin floor must exist in campus navigation");
+    await pointerClick(`#building-buttons [data-building-id=\"${originLevel.facility_id}\"]`);
+    await pointerClick(`#floor-buttons [data-level-id=\"${originLevel.level_id}\"]`);
+    await sceneReady(originLevel.level_id);
+    await pointerClick(`#room-list [data-unit-id=\"${fixture.origin.unit_id}\"]`);
+    await cdp.wait(`document.querySelector('#route-origin').value===${quote(fixture.origin.unit_id)}&&document.querySelector('#route-options-status').dataset.state==='ready'`);
+    assert.ok(await cdp.evaluate(`!!document.querySelector('#route-destination option[value=${quote(fixture.destination.unit_id)}]')`), "mapped destination must be selectable");
     await cdp.evaluate(`window.__holdRoute=true;window.__releaseRoute=null;window.__routeOriginalFetch=window.fetch;window.fetch=async(...args)=>{const response=await window.__routeOriginalFetch(...args);if(String(args[0])==='/demo/v1/route'){await new Promise(resolve=>window.__releaseRoute=resolve);}return response;}`);
-    await cdp.evaluate(`document.querySelector('#route-origin').value=${quote(fixture.origin.unit_id)};document.querySelector('#route-destination').value=${quote(fixture.destination.unit_id)};document.querySelector('#route-profile').value=${quote(fixture.profile)};document.querySelector('#route-form').requestSubmit()`);
+    await cdp.evaluate(`document.querySelector('#route-profile').value=${quote(fixture.profile)};const destination=document.querySelector('#route-destination');destination.value=${quote(fixture.destination.unit_id)};destination.dispatchEvent(new Event('change',{bubbles:true}))`);
     await cdp.wait("typeof window.__releaseRoute==='function'");
     const target = data.levels.find(level => level.level_id !== fixture.origin.level_id);
-    await cdp.evaluate(`document.querySelector('#facility-select').value=${quote(target.facility_id)};document.querySelector('#facility-select').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#level-select').value=${quote(target.level_id)};document.querySelector('#level-select').dispatchEvent(new Event('change',{bubbles:true}))`);
+    await pointerClick(`#building-buttons [data-building-id=\"${target.facility_id}\"]`);
+    await pointerClick(`#floor-buttons [data-level-id=\"${target.level_id}\"]`);
     await sceneReady(target.level_id); await cdp.evaluate("window.__releaseRoute()");
     await cdp.wait("document.querySelector('#route-status')?.dataset.state && document.querySelector('#route-status').dataset.state!=='pending'");
     assert.equal(await cdp.evaluate("document.querySelector('#route-status').dataset.state"), "success");
@@ -160,16 +173,16 @@ async function main() {
   await check("scene failure retains a labeled scene and offers Retry", async () => {
     await pointerClick("#show-campus");
     const facility = data.campus.facilities[0];
-    await pointerClick(`#campus-buildings [data-campus-facility-id=\"${facility.facility_id}\"]`);
+    await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
     const base = facility.levels[0];
-    await pointerClick(`#campus-details [data-campus-level-id=\"${base.level_id}\"]`);
+    await pointerClick(`#floor-buttons [data-level-id=\"${base.level_id}\"]`);
     await sceneReady(base.level_id);
     await pointerClick("#show-campus");
-    await pointerClick(`#campus-buildings [data-campus-facility-id=\"${facility.facility_id}\"]`);
+    await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
     const target = facility.levels.find(level => level.level_id !== base.level_id);
     assert.ok(target, "fixture needs two floors for Retry coverage");
     await cdp.evaluate(`window.__sceneFailOnce=${quote(target.level_id)};window.__sceneOriginalFetch=window.fetch;window.fetch=async(...args)=>{if(String(args[0])===${quote(`/demo/v1/levels/${target.level_id}/scene`)}&&window.__sceneFailOnce){window.__sceneFailOnce=null;return new Response('forced failure',{status:503});}return window.__sceneOriginalFetch(...args);}`);
-    await pointerClick(`#campus-details [data-campus-level-id=\"${target.level_id}\"]`);
+    await pointerClick(`#floor-buttons [data-level-id=\"${target.level_id}\"]`);
     await cdp.wait("document.querySelector('#retry-scene')?.hidden===false");
     assert.match(await cdp.evaluate("document.querySelector('#map-status').textContent"), /Could not load/);
     assert.match(await cdp.evaluate("document.querySelector('#map-status').textContent"), /Still showing/);

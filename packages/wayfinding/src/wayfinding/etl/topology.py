@@ -1,4 +1,4 @@
-"""Opt-in exact source-vertex noding; source geometry is never modified."""
+"""Exact source-vertex noding for new builds; source geometry is never modified."""
 
 import math
 from collections import defaultdict
@@ -11,6 +11,7 @@ from shapely.geometry import LineString, MultiLineString
 
 ENDPOINT_MODE = "endpoint-v1"
 EXACT_MODE = "exact-shared-vertices-v1"
+DEFAULT_MODE = EXACT_MODE
 TOPOLOGY_MODES = (ENDPOINT_MODE, EXACT_MODE)
 
 

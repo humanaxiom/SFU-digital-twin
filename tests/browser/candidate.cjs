@@ -148,16 +148,11 @@ async function waitOptions(cdp,origin,profile,allowError=false) {
   const body=await cdp.evaluate(`__requests.filter(r=>r.done&&r.url===${quote(optionsPath)}).at(-1).response`);
   if(body.status!==200){
     assert.ok(allowError,'expected availability must be usable');
-    assert.equal(await cdp.evaluate("document.querySelectorAll('#reachable-destinations button').length"),0);
     return body;
   }
   const connected=body.destinations.filter(d=>d.availability==='connected').map(d=>d.unit_id).sort();
   const options=await cdp.evaluate("[...document.querySelectorAll('#route-destination option[data-availability=connected]')].map(n=>n.value).sort()");
   assert.deepEqual(options,connected,'visible catalog choices differ from candidate reachability');
-  const buttons=await cdp.evaluate("[...document.querySelectorAll('#reachable-destinations button')].map(n=>({id:n.dataset.destinationUnitId,text:n.textContent,origin:n.dataset.originUnitId,profile:n.dataset.profile})).sort((a,b)=>a.id.localeCompare(b.id))");
-  const expected=connected.length>0&&connected.length<=5?connected:[];
-  assert.deepEqual(buttons.map(b=>b.id),expected,'small sets must expose every named choice; large sets must not be arbitrarily truncated');
-  for(const button of buttons){assert.equal(button.origin,origin);assert.equal(button.profile,profile);assert.match(button.text,/^Directions to /);}
   return body;
 }
 
@@ -235,10 +230,10 @@ async function run() {
         }
         const choices=await waitOptions(cdp,fixture.origin.unit_id,fixture.profile,true);
         const connected=(choices.destinations||[]).filter(d=>d.availability==='connected');
-        if(connected.length>0&&connected.length<=5&&connected.some(d=>d.unit_id===fixture.destination.unit_id)){
+        if(connected.some(d=>d.unit_id===fixture.destination.unit_id)){
           const before=await cdp.evaluate(`${requests}.length`);
-          await activateButton(cdp,`#reachable-destinations button[data-destination-unit-id="${fixture.destination.unit_id}"]`,'Enter');
-          await completedRoute(cdp,before,fixture);record.namedChoiceClicked=true;
+          await cdp.evaluate(`document.querySelector('#route-destination').value=${quote(fixture.destination.unit_id)};document.querySelector('#route-destination').dispatchEvent(new Event('change',{bubbles:true}));`);
+          await completedRoute(cdp,before,fixture);record.mappedChoiceSelected=true;
           const walk=body.guidance?.steps.find(s=>s.kind==='walk');
           if(walk){await activateButton(cdp,`button[data-step-id="${walk.step_id}"]`);await assertSelected(cdp,body,walk);}
         }

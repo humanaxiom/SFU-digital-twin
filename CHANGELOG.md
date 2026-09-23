@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — exact source topology promotion
+
+- Promote exact same-level source vertices from an isolated experiment to the
+  default for new graph rebuilds, while keeping endpoint-only mode for legacy
+  manifests and explicit comparisons.
+- Restore the authored Strand Hall stair chain for the reported
+  `SH1036` → `SH3050.1` route without adding proximity or inferred edges.
+- Add candidate browser/API coverage for clickable rooms and floors, destination
+  selection, journey floors and Previous/Next across Strand levels.
+
+## Unreleased — clickable building/floor navigation and visible rooms
+
+- Open recorded room geometry directly from building buttons and footprints;
+  keep exact-ID floor buttons visible above the map.
+- Expose floor-local room buttons and filtering outside collapsed details.
+- Scope direction starts to the viewed floor and offer mapped destinations only;
+  synchronize journey floor clicks with that visit's first instruction.
+- Remove the duplicate scrollable “Directions to…” action list; mapped destinations
+  now appear once in destination B.
+- Preserve mapped destination choices during route-following floor changes and avoid
+  redundant availability requests while guidance advances between floors.
+- Make floor-room destination picking connectivity-aware: known disconnected rooms
+  stay visible but disabled, clicks wait for pending availability, and no doomed
+  route request is submitted. Retain origin A when replacing B after success or
+  failure; Clear explicitly starts a new origin.
+- Compact navigation and map tools, with secondary dropdowns and directions in
+  expandable panels. See docs/reports/DT-024-COMPACT.md for verification and limits.
+
 ## Unreleased — DT-024 Stage A/B navigation foundation
 
 - Keep buildings stable and scope floors by exact level identity, with remembered

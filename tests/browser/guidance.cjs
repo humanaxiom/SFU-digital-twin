@@ -104,7 +104,20 @@ async function activateButton(cdp,selector,key=null){
 }
 
 async function assertSelected(cdp,body,step){
-  await cdp.wait(`document.querySelector('button[data-step-id="${step.step_id}"]')?.getAttribute('aria-current')==='step'`);
+  try {
+    await cdp.wait(`document.querySelector('button[data-step-id="${step.step_id}"]')?.getAttribute('aria-current')==='step'`);
+  } catch (error) {
+    const state=await cdp.evaluate(`(() => ({
+      requested:${quote(step.step_id)},
+      selected:[...document.querySelectorAll('button[data-step-id][aria-current="step"]')].map(node=>node.dataset.stepId),
+      viewing:document.querySelector('#viewing-floor')?.dataset.levelId,
+      mapStatus:document.querySelector('#map-status')?.textContent,
+      instruction:document.querySelector('#current-instruction')?.textContent,
+      routeState:document.querySelector('#route-status')?.dataset.state,
+      errors:window.__errors,
+    }))()`);
+    throw new Error(`${error.message}; state=${JSON.stringify(state)}`);
+  }
   await cdp.wait(`document.querySelector('#viewing-floor')?.dataset.levelId===${quote(step.level_id)} && !document.querySelector('#map-status').textContent.includes('Loading')`);
   assert.equal(await cdp.evaluate(`document.querySelectorAll('button[data-step-id][aria-current="step"]').length`),1);
   const origin=await sceneOrigin(cdp);
@@ -173,12 +186,8 @@ async function exerciseGuidance(cdp,body,record){
   const otherVisit=g.visits.find(v=>v.level_id!==middle.level_id);
   if(otherVisit){
     await activateButton(cdp,`#floor-journey [data-visit-id="${otherVisit.visit_id}"]`);
-    await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(otherVisit.level_id)}`);
-    assert.equal(await cdp.evaluate(`document.querySelector('button[data-step-id][aria-current="step"]').dataset.stepId`),middle.step_id);
-    assert.equal(await cdp.evaluate(`document.querySelectorAll('.route-selected').length`),0);
-    assert.equal(await cdp.evaluate(`document.querySelector('#floor-preview').hidden`),false);
-    await activateButton(cdp,'#show-selected-step');
-    await assertSelected(cdp,body,middle);
+    const firstOnVisit=g.steps.find(step=>step.visit_id===otherVisit.visit_id);
+    await assertSelected(cdp,body,firstOnVisit);
   }
   record.guidance={status:g.status,steps:g.steps.length,visits:g.visits.map(v=>v.label),transitions:g.transitions.length,selectedStepIds:chosen.map(s=>s.step_id)};
   await activateButton(cdp,`button[data-step-id="${g.steps[0].step_id}"]`);

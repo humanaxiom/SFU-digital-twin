@@ -4,7 +4,7 @@ set -eu
 usage() { echo "usage: $0 build|review|compare RUN_ID [OTHER_RUN_ID] [--local-image] [--topology endpoint-v1|exact-shared-vertices-v1]" >&2; exit 2; }
 [ "$#" -ge 2 ] || usage
 action=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]'); run_id=$2; shift 2
-other_id=""; local_image=0; topology="endpoint-v1"; topology_set=0
+other_id=""; local_image=0; topology="exact-shared-vertices-v1"; topology_set=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --local-image) local_image=1 ;;
@@ -48,7 +48,7 @@ trap restore EXIT
 export WAYFINDING_REBUILD_IMAGE=$image_id WAYFINDING_BUILD_IMAGE_ID=$image_id WAYFINDING_BUILD_IMAGE_REFERENCE=$image_ref
 run() { docker compose -p "$project" -f "$compose_file" run --rm --no-deps -T "$@"; }
 case "$action" in
-  build) if [ "$topology" = endpoint-v1 ]; then run source-build python -m wayfinding.etl.rebuild extract --run-id "$run_id"; else run source-build python -m wayfinding.etl.rebuild extract --run-id "$run_id" --topology "$topology"; fi; run artifact-build python -m wayfinding.etl.rebuild derive --run-id "$run_id"; run source-build python -m wayfinding.etl.rebuild finalize --run-id "$run_id" ;;
+  build) if [ "$topology_set" -eq 0 ]; then run source-build python -m wayfinding.etl.rebuild extract --run-id "$run_id"; else run source-build python -m wayfinding.etl.rebuild extract --run-id "$run_id" --topology "$topology"; fi; run artifact-build python -m wayfinding.etl.rebuild derive --run-id "$run_id"; run source-build python -m wayfinding.etl.rebuild finalize --run-id "$run_id" ;;
   review) run source-review python -m wayfinding.etl.source_review --legacy /sources/IndoorWayfinding.gdb --revised /sources/IndoorWayfinding_AQ_SH_ECC_Revised.gdb --supplemental /sources/AdditionalData_Testing.gdb --output "/workspace/build/experiments/reviews/$run_id.json" ;;
   compare) run artifact-build python -m wayfinding.etl.rebuild compare --left "$run_id" --right "$other_id" ;;
 esac

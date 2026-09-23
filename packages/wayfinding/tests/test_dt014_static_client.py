@@ -82,7 +82,7 @@ def test_success_failure_and_approximate_anchor_disclosures_are_visible():
     html = _asset("index.html")
     text = re.sub(r"<[^>]+>", " ", html).lower()
 
-    heading = re.search(r'<h2[^>]+id="route-heading"[^>]*>(.*?)</h2>', html, re.S | re.I)
+    heading = re.search(r'<summary[^>]+id="route-heading"[^>]*>(.*?)</summary>', html, re.S | re.I)
     assert heading
     assert "directions" in re.sub(r"<[^>]+>", " ", heading.group(1)).lower()
     assert "approximate" in text

@@ -130,10 +130,29 @@ async function submit(cdp, fixture, chat = false) {
     const prompt = `${fixture.profile === "elevator_only" ? "mobility " : ""}directions from ${fixture.origin.room_id} to ${fixture.destination.room_id}`;
     await cdp.evaluate(`document.querySelector('#assistant-input').value = ${quote(prompt)}; document.querySelector('#assistant-form').requestSubmit()`);
   } else {
+    await chooseFloor(cdp,fixture.origin.level_id);
+    await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(fixture.origin.level_id)}`);
+    assert.equal(await cdp.evaluate(`!!document.querySelector('#route-origin option[value="${fixture.origin.unit_id}"]')`),true,
+      `origin ${fixture.origin.unit_id} is missing from its viewed-floor dropdown`);
     await cdp.evaluate(`
+      document.querySelector('#route-destination').value = '';
       document.querySelector('#route-origin').value = ${quote(fixture.origin.unit_id)};
-      document.querySelector('#route-destination').value = ${quote(fixture.destination.unit_id)};
       document.querySelector('#route-profile').value = ${quote(fixture.profile)};
+      document.querySelector('#route-origin').dispatchEvent(new Event('change',{bubbles:true}));
+    `);
+    try {
+      await cdp.wait(`document.querySelector('#route-options-status').dataset.state==='ready'
+        && document.querySelector('#route-options-status').dataset.originUnitId===${quote(fixture.origin.unit_id)}
+        && document.querySelector('#route-options-status').dataset.profile===${quote(fixture.profile)}`);
+    } catch (error) {
+      const state=await cdp.evaluate(`(() => {const node=document.querySelector('#route-options-status');return {
+        origin:document.querySelector('#route-origin').value,destination:document.querySelector('#route-destination').value,
+        state:node.dataset.state,stateOrigin:node.dataset.originUnitId,stateProfile:node.dataset.profile,text:node.textContent,
+        latest:window.__requests.filter(item=>item.url.startsWith('/demo/v1/route-options?')).at(-1),errors:window.__errors};})()`);
+      throw new Error(`${error.message}; state=${JSON.stringify(state)}`);
+    }
+    await cdp.evaluate(`
+      document.querySelector('#route-destination').value = ${quote(fixture.destination.unit_id)};
       document.querySelector('#route-form').requestSubmit();
     `);
   }
@@ -182,28 +201,36 @@ async function activate(cdp, unitId, key = null) {
   } else for (const type of ["mousePressed", "mouseReleased"]) await cdp.call("Input.dispatchMouseEvent", { type, ...point, button: "left", clickCount: 1 });
 }
 async function chooseFloor(cdp, levelId) {
-  await cdp.evaluate(`(() => {
-    const level = window.__requests.find(r=>r.url==='/demo/v1/levels'&&r.done).response.levels.find(l=>l.level_id===${quote(levelId)});
-    const floor=document.querySelector('#level-select'), facility=document.querySelector('#facility-select');
-    if (facility.value !== level.facility_id) {
-      facility.value=level.facility_id; facility.dispatchEvent(new Event('change'));
-    }
-    if (floor.value !== level.level_id) {
-      floor.value=level.level_id; floor.dispatchEvent(new Event('change'));
-    } else {
-      document.querySelector('#open-floor').click();
-    }
-  })()`);
+  const facilityId = await cdp.evaluate(`window.__requests.find(r=>r.url==='/demo/v1/levels'&&r.done).response.levels.find(l=>l.level_id===${quote(levelId)}).facility_id`);
+  if (await cdp.evaluate("document.querySelector('#facility-select').value") !== facilityId) {
+    await activateButton(cdp, `#building-buttons [data-building-id="${facilityId}"]`);
+  }
+  await activateButton(cdp, `#floor-buttons [data-level-id="${levelId}"]`);
 }
-
 async function submitPair(cdp,origin,destination,profile='default') {
+  await chooseFloor(cdp,origin.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(origin.level_id)}`);
   const before=await cdp.evaluate(`${routes}.length`);
   await cdp.evaluate(`
+    document.querySelector('#route-destination').value='';
     document.querySelector('#route-origin').value=${quote(origin.unit_id)};
-    document.querySelector('#route-destination').value=${quote(destination.unit_id)};
     document.querySelector('#route-profile').value=${quote(profile)};
-    document.querySelector('#route-form').requestSubmit();
+    document.querySelector('#route-origin').dispatchEvent(new Event('change', { bubbles: true }));
   `);
+  await cdp.wait(`document.querySelector('#route-options-status').dataset.state==='ready'
+    && document.querySelector('#route-options-status').dataset.originUnitId===${quote(origin.unit_id)}
+    && document.querySelector('#route-options-status').dataset.profile===${quote(profile)}`);
+  const listed=await cdp.evaluate(`!!document.querySelector('#route-destination option[value="${destination.unit_id}"]')`);
+  if (listed) {
+    await cdp.evaluate(`
+      document.querySelector('#route-destination').value=${quote(destination.unit_id)};
+      document.querySelector('#route-form').requestSubmit();
+    `);
+  } else {
+    await chooseFloor(cdp,destination.level_id);
+    await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(destination.level_id)}`);
+    await activateButton(cdp,`#room-list [data-unit-id="${destination.unit_id}"]`);
+  }
   await cdp.wait(`${routes}[${before}]?.done && ['success','error'].includes(document.querySelector('#route-status').dataset.state)`);
   assert.equal(await cdp.evaluate(`${routes}.length`),before+1);
   const response=await cdp.evaluate(`${routes}[${before}].response`);
@@ -288,12 +315,12 @@ async function actionableOrigin(cdp,label,viewport) {
   assert.equal(await cdp.evaluate("document.querySelector('#route-destination').value"),'');
   assert.notEqual(await cdp.evaluate("document.querySelector('#route-status').textContent"),oldError,
     'new map origin must remove the previous pair failure');
-  const choices=await cdp.evaluate("[...document.querySelectorAll('#reachable-destinations button')].map(n=>({id:n.dataset.destinationUnitId,text:n.textContent}))");
+  const choices=await cdp.evaluate("[...document.querySelectorAll('#route-destination option[data-availability=connected]')].map(n=>({id:n.value,text:n.textContent}))");
   assert.equal(choices.length,1);
   assert.equal(choices[0].id,destination.unit_id);
   assert.ok(choices[0].text.includes('AQ6067'));
   const before=await cdp.evaluate(`${routes}.length`);
-  await activateButton(cdp,`#reachable-destinations button[data-destination-unit-id="${destination.unit_id}"]`);
+  await cdp.evaluate(`document.querySelector('#route-destination').value=${quote(destination.unit_id)};document.querySelector('#route-destination').dispatchEvent(new Event('change',{bubbles:true}));`);
   await cdp.wait(`${routes}[${before}]?.done&&document.querySelector('#route-status').dataset.state==='success'`);
   const body=await cdp.evaluate(`${routes}[${before}].response`);
   assert.equal(body.status,200);
@@ -301,7 +328,7 @@ async function actionableOrigin(cdp,label,viewport) {
   await activateButton(cdp,`button[data-step-id="${walk.step_id}"]`);
   await assertSelected(cdp,body,walk);
   viewport.actionableOrigin={origin:origin.unit_id,destination:destination.unit_id,distanceM:body.network_distance_m,
-    screenshot:await screenshot(cdp,`${label}-aq6071-named-destination`,Number(label.split('x')[0])<600)};
+    screenshot:await screenshot(cdp,`${label}-aq6071-mapped-destination`,Number(label.split('x')[0])<600)};
 }
 
 async function routeCamera(cdp,label,viewport) {
@@ -360,7 +387,15 @@ async function routeCamera(cdp,label,viewport) {
 }
 
 async function waitOptions(cdp,origin,profile) {
-  await cdp.wait(`(() => {const n=document.querySelector('#route-options-status');return n?.dataset.state==='ready'&&n.dataset.originUnitId===${quote(origin)}&&n.dataset.profile===${quote(profile)};})()`);
+  try {
+    await cdp.wait(`(() => {const n=document.querySelector('#route-options-status');return n?.dataset.state==='ready'&&n.dataset.originUnitId===${quote(origin)}&&n.dataset.profile===${quote(profile)};})()`);
+  } catch (error) {
+    const state=await cdp.evaluate(`(() => {const node=document.querySelector('#route-options-status');return {
+      origin:document.querySelector('#route-origin').value,destination:document.querySelector('#route-destination').value,
+      state:node.dataset.state,stateOrigin:node.dataset.originUnitId,stateProfile:node.dataset.profile,text:node.textContent,
+      latest:window.__requests.filter(item=>item.url.startsWith('/demo/v1/route-options?')).at(-1),errors:window.__errors};})()`);
+    throw new Error(`${error.message}; state=${JSON.stringify(state)}`);
+  }
   const response=await cdp.evaluate(`window.__requests.filter(r=>r.done&&r.url.startsWith('/demo/v1/route-options?')&&r.response.origin_unit_id===${quote(origin)}&&r.response.profile===${quote(profile)}).at(-1)?.response`);
   assert.equal(response?.version,'route-options-v1');
   const actual=await cdp.evaluate(`[...document.querySelectorAll('#route-destination option[data-availability="connected"]')].map(n=>n.value).sort()`);
@@ -370,9 +405,14 @@ async function waitOptions(cdp,origin,profile) {
 }
 
 async function exerciseRouteChoices(cdp,viewport) {
-  const origin=fixtures.strand_corridor.origin.unit_id;
+  const originFixture=fixtures.strand_corridor.origin;
+  const origin=originFixture.unit_id;
   const destination=fixtures.strand_corridor.destination.unit_id;
   await activateButton(cdp,'#route-clear');
+  await chooseFloor(cdp,originFixture.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(originFixture.level_id)}`);
+  assert.equal(await cdp.evaluate(`!!document.querySelector('#route-origin option[value="${origin}"]')`),true,
+    'route-choice origin is missing from its viewed-floor dropdown');
   await cdp.evaluate(`document.querySelector('#route-profile').value='default';document.querySelector('#route-origin').value=${quote(origin)};document.querySelector('#route-origin').dispatchEvent(new Event('change'));`);
   const options=await waitOptions(cdp,origin,'default');
   assert.equal(await cdp.evaluate("document.querySelector('#route-destination').value"),'','availability must not choose a destination');
@@ -401,12 +441,24 @@ async function exerciseRouteChoices(cdp,viewport) {
   }
   const unavailable=options.destinations.find(d=>d.availability==='disconnected');
   assert.ok(unavailable);
+  const units=await cdp.evaluate("window.__requests.find(r=>r.url==='/demo/v1/units'&&r.done).response.units");
+  const originUnit=units.find(unit=>unit.unit_id===origin);
+  const unavailableUnit=units.find(unit=>unit.unit_id===unavailable.unit_id);
+  assert.ok(originUnit&&unavailableUnit);
+  await activateButton(cdp,'#route-clear');
+  await chooseFloor(cdp,originUnit.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(originUnit.level_id)}`);
+  await activateButton(cdp,`#room-list [data-unit-id="${origin}"]`);
+  await waitOptions(cdp,origin,'default');
+  await chooseFloor(cdp,unavailableUnit.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(unavailableUnit.level_id)}`);
   const beforeFailure=await cdp.evaluate(`${routes}.length`);
-  await cdp.evaluate(`document.querySelector('#route-destination').value=${quote(unavailable.unit_id)};document.querySelector('#route-destination').dispatchEvent(new Event('change'));`);
+  await activateButton(cdp,`#room-list [data-unit-id="${unavailable.unit_id}"]`);
   await cdp.wait(`${routes}[${beforeFailure}]?.done&&document.querySelector('#route-status').dataset.state==='error'`);
   assert.equal(await cdp.evaluate(`${routes}[${beforeFailure}].response.status`),409);
   assert.equal(await cdp.evaluate("document.querySelector('#route-destination').value"),unavailable.unit_id,'unsupported choice was silently replaced');
   assert.equal(await cdp.evaluate("document.querySelector('#current-instruction').textContent"),await cdp.evaluate("document.querySelector('#route-status').textContent"),'map-adjacent card hides the routing failure');
+  assert.equal(await cdp.evaluate("document.querySelector('.current-step').hidden"),false,'map-adjacent routing failure is hidden');
   await cdp.evaluate("document.querySelector('#route-profile').value='elevator_only';document.querySelector('#route-profile').dispatchEvent(new Event('change'));");
   const elevator=await waitOptions(cdp,origin,'elevator_only');
   assert.equal(await cdp.evaluate("document.querySelector('#route-destination').value"),unavailable.unit_id);
@@ -415,12 +467,18 @@ async function exerciseRouteChoices(cdp,viewport) {
 }
 
 async function latestOptionsWin(cdp) {
-  const first=fixtures.strand_corridor.origin.unit_id;
-  const newest=fixtures.aq_elevator.origin.unit_id;
+  const firstFixture=fixtures.strand_corridor.origin;
+  const newestFixture=fixtures.aq_elevator.origin;
+  const first=firstFixture.unit_id;
+  const newest=newestFixture.unit_id;
   const heldPath=`/demo/v1/route-options?origin_unit_id=${encodeURIComponent(first)}&profile=default`;
+  await chooseFloor(cdp,firstFixture.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(firstFixture.level_id)}`);
   await activateButton(cdp,'#route-clear');
   await cdp.evaluate(`document.querySelector('#route-profile').value='default';window.__release=null;window.__released=false;window.__holdPath=${quote(heldPath)};document.querySelector('#route-origin').value=${quote(first)};document.querySelector('#route-origin').dispatchEvent(new Event('change'));`);
   await cdp.wait("typeof window.__release==='function'");
+  await chooseFloor(cdp,newestFixture.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(newestFixture.level_id)}`);
   await cdp.evaluate(`document.querySelector('#route-origin').value=${quote(newest)};document.querySelector('#route-origin').dispatchEvent(new Event('change'));`);
   await waitOptions(cdp,newest,'default');
   const before=await cdp.evaluate("document.querySelector('#route-destination').innerHTML");
@@ -429,6 +487,8 @@ async function latestOptionsWin(cdp) {
   await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   await waitOptions(cdp,newest,'default');
   assert.equal(await cdp.evaluate("document.querySelector('#route-destination').innerHTML"),before);
+  await chooseFloor(cdp,firstFixture.level_id);
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(firstFixture.level_id)}`);
   await cdp.evaluate(`window.__release=null;window.__released=false;window.__holdPath=${quote(heldPath)};document.querySelector('#route-origin').value=${quote(first)};document.querySelector('#route-origin').dispatchEvent(new Event('change'));`);
   await cdp.wait("typeof window.__release==='function'");
   await activateButton(cdp,'#route-clear');
@@ -518,11 +578,11 @@ async function run() {
       viewport.interactions.push("SVG pointer origin",key==='Enter'?"SVG Enter destination":"SVG Space destination");
       const layout=await cdp.evaluate(`(() => {
         const map=document.querySelector('.map-panel').getBoundingClientRect(),side=document.querySelector('.side-panel').getBoundingClientRect();
-        const controls=[...document.querySelectorAll('select,input,.route-actions button')].map(n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right};});
+        const controls=[...document.querySelectorAll('select,input,.route-actions button')].filter(n=>n.checkVisibility()).map(n=>{const r=n.getBoundingClientRect();return {id:n.id,left:r.left,right:r.right,width:r.width,height:r.height};});
         return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,separated:map.right<=side.left+1||map.bottom<=side.top+1,controls};
       })()`);
       assert.ok(layout.scrollWidth<=width+1&&layout.separated,"panels overflow or overlap");
-      assert.ok(layout.controls.every(r=>r.left>=0&&r.right<=width+1),"control clipped horizontally");
+      assert.ok(layout.controls.every(r=>r.left>=0&&r.right<=width+1),`control clipped horizontally: ${JSON.stringify(layout.controls.filter(r=>r.left<0||r.right>width+1))}`);
       viewport.layout=layout;
       viewport.screenshot=await screenshot(cdp,`${label}-interactions`,width<600);
       await requestedRoutes(cdp,label,viewport);
@@ -548,14 +608,7 @@ async function run() {
     results.checks.push("manual incomplete pair retains origin and submits only after correction");
 
     const beforeFailure = await cdp.evaluate(`${routes}.length`);
-    await cdp.evaluate(`
-      document.querySelector('#route-origin').value = ${quote(fixtures.aq_elevator.origin.unit_id)};
-      document.querySelector('#route-destination').value = ${quote(pair.destination.unit_id)};
-      document.querySelector('#route-profile').value = 'elevator_only';
-      document.querySelector('#route-form').requestSubmit();
-    `);
-    await cdp.wait(`${routes}[${beforeFailure}]?.done && document.querySelector('#route-status').dataset.state === 'error'`);
-    const failure = await cdp.evaluate(`${routes}[${beforeFailure}].response`);
+    const failure = await submitPair(cdp,fixtures.aq_elevator.origin,pair.destination,'elevator_only');
     assert.equal(failure.status, 409);
     assert.equal(failure.code, 'no_elevator_only_route');
     assert.equal(await cdp.evaluate(`${routes}.length`), beforeFailure + 1);

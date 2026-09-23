@@ -22,6 +22,8 @@ if grep -q -- '--topology' "$FAKE_LOG"; then exit 1; fi
 :
 sh "$root/tools/rebuild.sh" build Run_02 --topology exact-shared-vertices-v1 --local-image
 grep -q 'extract --run-id Run_02 --topology exact-shared-vertices-v1' "$FAKE_LOG"
+sh "$root/tools/rebuild.sh" build Run_03 --topology endpoint-v1 --local-image
+grep -q 'extract --run-id Run_03 --topology endpoint-v1' "$FAKE_LOG"
 if sh "$root/tools/rebuild.sh" review Review_02 --topology endpoint-v1 --local-image >/dev/null 2>&1; then exit 1; fi
 if sh "$root/tools/rebuild.sh" build BadTopology --topology invalid --local-image >/dev/null 2>&1; then exit 1; fi
 if sh "$root/tools/rebuild.sh" compare Same same >/dev/null 2>&1; then exit 1; fi

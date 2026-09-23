@@ -2,6 +2,10 @@
 
 Current client work: [DT-024](docs/plans/DT-024.md) is being delivered in phases under [ADR-0017](docs/adr/0017-navigation-state-and-journey.md). The first increment implements building-scoped floors, explicit floor entry and protection against stale navigation responses. Searchable endpoint drafts and synchronized journeys remain pending. See the [phase A/B report](docs/reports/DT-024-PHASE-AB.md) for verification and delivery limits.
 
+The [compact navigation follow-up](docs/reports/DT-024-COMPACT.md) adds visible
+building/floor buttons, direct room-map entry and a filterable room list, reducing
+the need to scroll or use dropdowns for exploration.
+
 Design and analysis workspace for an AI-assisted indoor navigation system over the SFU Burnaby
 AQ / Strand Hall / ECC indoor geodatabase.
 
@@ -107,11 +111,12 @@ and final verification run separately from artifact-only graph construction.
 
 Omit `-LocalImage` to require the published pinned image. On POSIX, use
 `sh tools/rebuild.sh build legacy-01 --local-image` (also `review` and `compare`).
-Build extraction uses the endpoint topology by default. To select the exact shared-vertices
-topology for a new build, add `--topology exact-shared-vertices-v1` to the POSIX command or
-`-Topology exact-shared-vertices-v1` to the PowerShell command. Topology selection is valid only
-for `Build`; derive and finalize consume the sealed extraction manifest, while `Review` and
-`Compare` reject the option.
+Build extraction uses exact shared source vertices by default. To reproduce the
+historical endpoint-only graph for comparison, add `--topology endpoint-v1` to the
+POSIX command or `-Topology endpoint-v1` to the PowerShell command. Topology
+selection is valid only for `Build`; derive and finalize consume the sealed
+extraction manifest, while `Review` and `Compare` reject the option. Legacy
+manifests without a topology setting retain endpoint-only semantics.
 
 If PowerShell reports `No such image` for the published digest, select the existing
 local development image explicitly:

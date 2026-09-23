@@ -48,7 +48,7 @@ assert.equal(nodes.get('#campus-map').getAttribute('viewBox'),zoomed);
 const footprint=nodes.get('#campus-map').children[0].children[0];
 footprint.handlers.keydown({key:'Enter',preventDefault(){}});
 assert.equal(nodes.get('#facility-select').value,'AQ');
-// A campus list activation must synchronize both controls without loading a scene.
+// Internal overview inspection retains explicit no-floor coverage without loading a scene.
 run("selectCampusBuilding('SH')");
 assert.match(nodes.get('#campus-details').children.map(n=>n.textContent||'').join(' '),/No indoor floors/);
 assert.equal(nodes.get('#facility-select').value,'SH');

@@ -35,7 +35,6 @@ const transitionDeparture = document.querySelector("#transition-departure");
 const transitionArrival = document.querySelector("#transition-arrival");
 const routeDiagnostics = document.querySelector("#route-diagnostics");
 const routeOptionsStatus = document.querySelector("#route-options-status");
-const reachableDestinations = document.querySelector("#reachable-destinations");
 const unavailableGuidanceMessage = "A directions preview is unavailable for this route. See route details for the data checks.";
 let facilitiesById = new Map();
 // Navigation identity is state-owned; select values are event inputs only.
@@ -61,6 +60,13 @@ let previewVisitId = null;
 let mapFit = "floor";
 let mapOrigin = [0, 0];
 let availabilityGeneration = 0;
+let routeAvailability = null;
+let routeAvailabilityOrigin = "";
+let routeAvailabilityProfile = "";
+let routeAvailabilityPendingOrigin = "";
+let routeAvailabilityPendingProfile = "";
+let routeAvailabilitySettled = Promise.resolve();
+let settleRouteAvailability = () => {};
 let routeUiState = "empty";
 const campusView = document.querySelector("#campus-view");
 const floorView = document.querySelector("#floor-view");
@@ -137,7 +143,7 @@ function renderCampusBuildings() {
     button.dataset.campusFacilityId = item.facility_id;
     button.textContent = `${item.code || "Building"} · ${item.name || item.facility_id}`;
     button.setAttribute("aria-pressed", String(item.facility_id === campusFacilityId));
-    button.addEventListener("click", () => selectCampusBuilding(item.facility_id));
+    button.addEventListener("click", () => openBuilding(item.facility_id));
     return button;
   }));
   document.querySelector("#campus-status").textContent = matches.length
@@ -175,6 +181,46 @@ function selectCampusBuilding(facilityId) {
   if (changed) resetCampusCamera();
 }
 
+function openBuilding(facilityId) {
+  selectCampusBuilding(facilityId);
+  const level = activeLevel();
+  if (level) return previewFloor(level.level_id);
+}
+
+function renderQuickNavigation() {
+  const buildingButtons = document.querySelector("#building-buttons");
+  if (buildingButtons.children.length !== facilitiesById.size) {
+    buildingButtons.replaceChildren(...Array.from(facilitiesById.values(), facility => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.buildingId = facility.facility_id;
+      button.textContent = facility.code || facility.name;
+      button.setAttribute("aria-label", `${facility.code} · ${facility.name}. Show rooms.`);
+      button.addEventListener("click", () => openBuilding(facility.facility_id));
+      return button;
+    }));
+  }
+  for (const button of buildingButtons.children) {
+    button.setAttribute("aria-pressed", String(button.dataset.buildingId === navigationState.facilityId));
+  }
+  const floors = allLevels.filter(level => level.facility_id === navigationState.facilityId);
+  const floorButtons = document.querySelector("#floor-buttons");
+  if (Array.from(floorButtons.children, button => button.dataset.levelId).join("|") !== floors.map(level => level.level_id).join("|")) {
+    floorButtons.replaceChildren(...floors.map(level => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.levelId = level.level_id;
+      button.textContent = level.short_name;
+      button.setAttribute("aria-label", `Open ${floorLabel(level.level_id)}`);
+      button.addEventListener("click", () => previewFloor(level.level_id));
+      return button;
+    }));
+  }
+  for (const button of floorButtons.children) {
+    button.setAttribute("aria-pressed", String(button.dataset.levelId === navigationState.requestedLevelId));
+  }
+}
+
 function renderCampus() {
   if (!campusData) return;
   if (validCampusBounds(campusData.bounds)) campusOrigin = campusData.bounds.slice(0, 2);
@@ -186,12 +232,12 @@ function renderCampus() {
     const d = polygons.flatMap(polygon => polygon.map(ring => ring.map((point, index) =>
       `${index ? "L" : "M"}${point[0] - campusOrigin[0]} ${campusOrigin[1] - point[1]}`).join(" ") + " Z")).join(" ");
     const shape = element("path", {d, class: "campus-shape", tabindex: 0, role: "button",
-      "aria-label": `${item.code} · ${item.name}. Inspect building floors.`, "fill-rule": "evenodd"});
+      "aria-label": `${item.code} · ${item.name}. Show rooms.`, "fill-rule": "evenodd"});
     shape.dataset.campusFacilityId = item.facility_id;
-    shape.addEventListener("click", () => selectCampusBuilding(item.facility_id));
+    shape.addEventListener("click", () => openBuilding(item.facility_id));
     shape.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();selectCampusBuilding(item.facility_id);
+        event.preventDefault();openBuilding(item.facility_id);
       }
     });
     layer.append(shape);
@@ -288,6 +334,7 @@ async function selectUnit(unitId, focusMap = false) {
       label.textContent = term; detail.textContent = value;
       row.append(label, detail); return row;
     }));
+    document.querySelector(".facts").open = true;
     setStatus(`Selected room ${body.room_id || body.unit_id}. Destination metadata does not describe path accessibility.`);
     if (focusMap) document.querySelector(`[data-unit-id="${CSS.escape(unitId)}"]`)?.focus();
     return true;
@@ -298,11 +345,22 @@ async function selectUnit(unitId, focusMap = false) {
 }
 
 function updateEndpointStates() {
+  const hasCurrentAvailability = routeAvailability instanceof Map
+    && routeAvailabilityOrigin === routeOrigin.value
+    && routeAvailabilityProfile === routeProfile.value;
   document.querySelectorAll("[data-unit-id]").forEach((node) => {
     const isOrigin = node.dataset.unitId === routeOrigin.value;
     const isDestination = node.dataset.unitId === routeDestination.value;
+    const availability = hasCurrentAvailability ? routeAvailability.get(node.dataset.unitId) : null;
+    const isConnected = !isOrigin && availability === "connected";
+    const isUnavailable = !isOrigin && Boolean(availability) && availability !== "connected";
     node.classList.toggle("route-origin", isOrigin);
     node.classList.toggle("route-destination", isDestination);
+    node.classList.toggle("route-connected", isConnected);
+    node.classList.toggle("route-unavailable", isUnavailable);
+    if (node.tagName?.toLowerCase() === "button") node.disabled = isUnavailable;
+    if (isUnavailable) node.setAttribute("aria-disabled", "true");
+    else node.removeAttribute("aria-disabled");
     if (isOrigin) node.setAttribute("aria-current", "Origin A selected");
     else if (isDestination) node.setAttribute("aria-current", "Destination B selected");
     else node.removeAttribute("aria-current");
@@ -339,6 +397,14 @@ function clearRoute(clearEndpoints = true) {
     routeDestination.value = "";
     routeSelection = "empty";
     availabilityGeneration += 1;
+    routeAvailability = null;
+    routeAvailabilityOrigin = "";
+    routeAvailabilityProfile = "";
+    settleRouteAvailability();
+    settleRouteAvailability = () => {};
+    routeAvailabilitySettled = Promise.resolve();
+    routeAvailabilityPendingOrigin = "";
+    routeAvailabilityPendingProfile = "";
     renderDestinationOptions();
     setAvailabilityState("empty");
     routeOptionsStatus.textContent = "Choose a starting room to see mapped connections.";
@@ -347,10 +413,16 @@ function clearRoute(clearEndpoints = true) {
 }
 
 async function activateRouteEndpoint(unitId, focusMap = false) {
+  document.querySelector("#directions-panel").open = true;
   if (routeSelection === "complete" || routeSelection === "failed") {
-    clearRoute();
+    const retainedOrigin = routeOrigin.value;
+    clearRoute(false);
+    routeDestination.value = "";
+    routeSelection = retainedOrigin ? "origin_selected" : "empty";
+    updateEndpointStates();
   }
   if (routeSelection === "empty" || !routeOrigin.value) {
+    retainEndpointOption(routeOrigin, unitId);
     routeOrigin.value = unitId;
     routeDestination.value = "";
     routeSelection = "origin_selected";
@@ -365,14 +437,32 @@ async function activateRouteEndpoint(unitId, focusMap = false) {
     return;
   }
   if (unitId !== routeOrigin.value) {
+    const pendingOrigin = routeOrigin.value;
+    const pendingProfile = routeProfile.value;
+    while (routeAvailabilityPendingOrigin === pendingOrigin
+      && routeAvailabilityPendingProfile === pendingProfile) {
+      const pendingAvailability = routeAvailabilitySettled;
+      await pendingAvailability;
+      if (routeOrigin.value !== pendingOrigin || routeProfile.value !== pendingProfile) return;
+      if (routeAvailabilitySettled === pendingAvailability) break;
+    }
+    const hasCurrentAvailability = routeAvailability instanceof Map
+      && routeAvailabilityOrigin === routeOrigin.value
+      && routeAvailabilityProfile === routeProfile.value;
+    if (hasCurrentAvailability && routeAvailability.get(unitId) !== "connected") {
+      setStatus(`${roomLabel(unitId)} has no mapped connection from ${roomLabel(routeOrigin.value)}. Choose a highlighted room, or Clear to choose another start.`);
+      routeSelection = "origin_selected";
+      updateEndpointStates();
+      return;
+    }
+    retainEndpointOption(routeDestination, unitId);
     routeDestination.value = unitId;
     routeSelection = "request_pending";
     updateEndpointStates();
     const generation = ++requestGeneration;
     const origin = routeOrigin.value;
     const profile = routeProfile.value;
-    const inspected = await selectUnit(unitId, focusMap);
-    if (!inspected || generation !== requestGeneration) return;
+    void selectUnit(unitId, focusMap);
     await requestRoute(origin, unitId, profile, generation);
   }
 }
@@ -464,7 +554,22 @@ function renderScene(scene) {
   floorMap.append(routeOverlay);
   renderRouteOverlay(scene.level.level_id);
 
-  const buttons = scene.units.map((item) => {
+  document.querySelector("#room-filter").value = "";
+  renderRoomList();
+  updateEndpointStates();
+  viewingFloor.textContent = `Viewing ${floorLabel(scene.level.level_id)}`;
+  viewingFloor.dataset.levelId = scene.level.level_id;
+  setStatus(`${floorLabel(scene.level.level_id)} · ${scene.units.length} rooms`);
+  updateGuidanceControls();
+  fitMap(mapFit);
+}
+
+function renderRoomList() {
+  if (!currentScene) return;
+  const query = document.querySelector("#room-filter").value.trim().toLocaleLowerCase();
+  const rooms = currentScene.units.filter(item =>
+    `${item.room_id || ""} ${item.use_type || ""}`.toLocaleLowerCase().includes(query));
+  const buttons = rooms.map((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = item.room_id || item.use_type || "Unnamed room";
@@ -473,12 +578,13 @@ function renderScene(scene) {
     return button;
   });
   roomList.replaceChildren(...buttons);
+  if (!buttons.length) {
+    const empty = document.createElement("p");
+    empty.textContent = currentScene.units.length ? "No rooms match this search." : "No rooms are recorded on this floor. Try another floor.";
+    roomList.append(empty);
+  }
+  document.querySelector("#room-count").textContent = `${rooms.length} of ${currentScene.units.length}`;
   updateEndpointStates();
-  viewingFloor.textContent = `Viewing ${floorLabel(scene.level.level_id)}`;
-  viewingFloor.dataset.levelId = scene.level.level_id;
-  setStatus(`${floorLabel(scene.level.level_id)} · ${scene.units.length} rooms`);
-  updateGuidanceControls();
-  fitMap(mapFit);
 }
 
 async function loadScene() {
@@ -538,6 +644,7 @@ function populateFloorOptions() {
   levelSelect.value = navigationState.requestedLevelId || "";
   levelSelect.disabled = levels.length === 0;
   openFloor.disabled = levels.length === 0;
+  renderQuickNavigation();
 }
 
 function selectBuildingControls(facilityId) {
@@ -551,6 +658,7 @@ function selectBuildingControls(facilityId) {
   if (level) navigationState.rememberedLevels.set(facilityId, level.level_id);
   updateFacilities();
   populateFloorOptions();
+  renderRouteCatalog();
 }
 
 function initializeFloorControls(levels) {
@@ -565,6 +673,10 @@ function selectFloorControls(level) {
   navigationState.rememberedLevels.set(level.facility_id, level.level_id);
   updateFacilities();
   populateFloorOptions();
+  if (navigationState.context !== "route") renderRouteCatalog();
+  if (routeOrigin.value && routeSelection === "origin_selected") {
+    refreshRouteOptions(routeOrigin.value, routeProfile.value);
+  }
 }
 
 async function selectLevel(levelId) {
@@ -630,6 +742,9 @@ function stepIsVisible(step = guidanceStep()) {
 function updateGuidanceControls() {
   const guidance = activeRoute?.guidance;
   const step = guidanceStep();
+  const hasRouteMessage = ["pending", "error"].includes(routeUiState)
+    || Boolean(activeRoute?.guidance && !step);
+  document.querySelector(".current-step").hidden = !step && !hasRouteMessage;
   const pending = Boolean(navigationState.pendingStep) || navigationState.sceneStatus === "loading";
   stepPrevious.disabled = pending || !step || activeStep === 0;
   stepNext.disabled = pending || !step || activeStep === guidance.steps.length - 1;
@@ -891,10 +1006,9 @@ function renderRoute(body, { follow = true } = {}) {
   }
   if (!body.guidance || body.guidance.version !== "dt018-guidance-v1") {
     activeRoute = null;
-    updateGuidanceControls();
     routeStatus.textContent = "This demo needs an update before directions can be displayed.";
-    currentInstruction.textContent = routeStatus.textContent;
     setRouteState("error");
+    updateGuidanceControls();
     renderRouteOverlay(currentScene?.level.level_id);
     return;
   }
@@ -950,8 +1064,11 @@ function renderRoute(body, { follow = true } = {}) {
     button.type = "button";
     button.dataset.visitId = visit.visit_id;
     button.textContent = `${index + 1}. ${visit.label}`;
-    button.disabled = !visit.level_id;
-    button.addEventListener("click", () => previewFloor(visit.level_id, visit.visit_id));
+    const firstStep = guidance.steps.find(step => step.visit_id === visit.visit_id);
+    button.disabled = !visit.level_id || !firstStep;
+    button.addEventListener("click", () => {
+      if (firstStep) return selectGuidanceStep(firstStep.step_id, "route");
+    });
     floorJourney.append(button);
   });
   if (follow) selectGuidanceStep(guidance.steps[0].step_id, "route");
@@ -963,6 +1080,7 @@ function renderRoute(body, { follow = true } = {}) {
 }
 
 async function requestRoute(origin, destination, profile, generation) {
+  document.querySelector("#directions-panel").open = true;
   cancelPendingRouteScene();
   const navigationIntent = navigationState.intentRevision;
   activeRoute = null;
@@ -986,7 +1104,7 @@ async function requestRoute(origin, destination, profile, generation) {
   routeSelection = "request_pending";
   setRouteState("pending");
   routeStatus.textContent = "Finding a mapped route…";
-  currentInstruction.textContent = routeStatus.textContent;
+  updateGuidanceControls();
   try {
     const body = await request("/demo/v1/route", {
       method: "POST",
@@ -998,46 +1116,21 @@ async function requestRoute(origin, destination, profile, generation) {
       }),
     });
     if (generation !== requestGeneration) return;
-    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
     routeSelection = "complete";
+    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
   } catch (error) {
     if (generation !== requestGeneration) return;
     const body = error.payload || { status: 500, code: error.message, profile: profile };
     if (!body.profile) body.profile = profile;
-    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
     routeSelection = "failed";
+    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
   }
 }
 
 function setAvailabilityState(state, origin = "", profile = "") {
-  if (state !== "ready") {
-    reachableDestinations.replaceChildren();
-    reachableDestinations.hidden = true;
-  }
   routeOptionsStatus.setAttribute?.("data-state", state);
   routeOptionsStatus.setAttribute?.("data-origin-unit-id", origin);
   routeOptionsStatus.setAttribute?.("data-profile", profile);
-}
-
-function renderReachableDestinations(availability, origin, profile, generation) {
-  const units = routeUnits.filter((unit) => availability.get(unit.unit_id) === "connected");
-  reachableDestinations.replaceChildren();
-  reachableDestinations.hidden = !units.length || units.length > 5;
-  if (reachableDestinations.hidden) return;
-  units.forEach((unit) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = `Directions to ${unit.room_id || "Unnamed room"} · ${floorLabel(unit.level_id)}`;
-    button.dataset.destinationUnitId = unit.unit_id;
-    button.dataset.originUnitId = origin;
-    button.dataset.profile = profile;
-    button.addEventListener("click", () => {
-      if (generation !== availabilityGeneration || routeOrigin.value !== origin || routeProfile.value !== profile) return;
-      routeDestination.value = unit.unit_id;
-      return submitSelectedRoute();
-    });
-    reachableDestinations.append(button);
-  });
 }
 
 function renderDestinationOptions(availability = null, origin = "") {
@@ -1050,25 +1143,17 @@ function renderDestinationOptions(availability = null, origin = "") {
   };
   const children = [option("", "Select destination B")];
   if (!availability) {
-    children.push(...routeUnits.map((unit) => makeOption(unit)));
+    children.push(...routeUnits.filter((unit) => unit.level_id === navigationState.requestedLevelId).map((unit) => makeOption(unit)));
   } else {
-    const labels = {
-      connected: "Mapped routes",
-      same_anchor: "Same route point — no walking path",
-      disconnected: "No mapped connection",
-      endpoint_unavailable: "No mapped route point",
-    };
-    Object.entries(labels).forEach(([state, label]) => {
-      const units = routeUnits.filter((unit) => availability.get(unit.unit_id) === state);
-      if (!units.length) return;
+    const connected = routeUnits.filter((unit) => availability.get(unit.unit_id) === "connected");
+    if (connected.length) {
       const group = document.createElement("optgroup");
-      group.label = `${label} (${units.length})`;
-      group.dataset.availability = state;
-      group.append(...units.map((unit) => makeOption(unit, state)));
+      group.label = `Mapped destinations (${connected.length})`;
+      group.dataset.availability = "connected";
+      group.append(...connected.map((unit) => makeOption(unit, "connected")));
       children.push(group);
-    });
-    // Retain the complete catalog: Swap and assistant entry may next select the
-    // previous origin. Native selects discard values absent from their options.
+    }
+    // Retain only explicit endpoint values needed by Swap or an assistant result.
     const startingRoom = routeUnits.find((item) => item.unit_id === origin);
     if (startingRoom) {
       const node = makeOption(startingRoom);
@@ -1077,19 +1162,74 @@ function renderDestinationOptions(availability = null, origin = "") {
     }
   }
   routeDestination.replaceChildren(...children);
+  if (selected && routeUnits.some(unit => unit.unit_id === selected)
+    && !Array.from(routeDestination.querySelectorAll("option")).some(node => node.value === selected)) {
+    const selectedRoom = routeUnits.find(unit => unit.unit_id === selected);
+    const node = makeOption(selectedRoom);
+    node.textContent += " · selected";
+    routeDestination.append(node);
+  }
   routeDestination.value = selected;
+}
+
+function renderRouteCatalog() {
+  if (!routeUnits.length) return;
+  const selected = routeOrigin.value;
+  const units = routeUnits.filter(unit => unit.level_id === navigationState.requestedLevelId);
+  const children = [option("", "Select start A")];
+  const floors = allLevels.filter(level => level.level_id === navigationState.requestedLevelId);
+  floors.forEach(level => {
+    const onFloor = units.filter(unit => unit.level_id === level.level_id);
+    if (!onFloor.length) return;
+    const group = document.createElement("optgroup");
+    group.label = floorLabel(level.level_id);
+    group.append(...onFloor.map(unit => option(unit.unit_id, unit.room_id || "Unnamed room")));
+    children.push(group);
+  });
+  if (selected && !units.some(unit => unit.unit_id === selected)) {
+    const unit = routeUnits.find(item => item.unit_id === selected);
+    if (unit) children.push(option(unit.unit_id, `${unit.room_id} · current start`));
+  }
+  routeOrigin.replaceChildren(...children);
+  routeOrigin.value = selected;
+  const availability = routeAvailability instanceof Map
+    && routeAvailabilityOrigin === selected
+    && routeAvailabilityProfile === routeProfile.value
+    ? routeAvailability : null;
+  renderDestinationOptions(availability, selected);
+}
+
+function retainEndpointOption(select, unitId) {
+  if (!unitId || Array.from(select.querySelectorAll("option")).some(node => node.value === unitId)) return;
+  const unit = routeUnits.find(item => item.unit_id === unitId);
+  if (unit) select.append(option(unit.unit_id, `${unit.room_id || "Unnamed room"} · ${floorLabel(unit.level_id)}`));
 }
 
 async function refreshRouteOptions(origin = routeOrigin.value, profile = routeProfile.value) {
   const generation = ++availabilityGeneration;
+  settleRouteAvailability();
+  settleRouteAvailability = () => {};
+  routeAvailabilitySettled = Promise.resolve();
+  routeAvailabilityPendingOrigin = "";
+  routeAvailabilityPendingProfile = "";
+  routeAvailability = null;
+  routeAvailabilityOrigin = "";
+  routeAvailabilityProfile = "";
   renderDestinationOptions();
+  updateEndpointStates();
   if (!origin || !routeUnits.some((unit) => unit.unit_id === origin)) {
     setAvailabilityState("empty");
     routeOptionsStatus.textContent = "Choose a starting room to see mapped connections.";
     return;
   }
   setAvailabilityState("pending", origin, profile);
-  routeOptionsStatus.textContent = "Checking mapped connections… You can still choose any room.";
+  routeAvailabilityPendingOrigin = origin;
+  routeAvailabilityPendingProfile = profile;
+  let finishAvailability;
+  const settled = new Promise((resolve) => { finishAvailability = resolve; });
+  routeAvailabilitySettled = settled;
+  settleRouteAvailability = finishAvailability;
+  routeOptionsStatus.textContent = "Checking mapped connections...";
   try {
     const body = await request(`/demo/v1/route-options?origin_unit_id=${encodeURIComponent(origin)}&profile=${encodeURIComponent(profile)}`);
     if (generation !== availabilityGeneration || routeOrigin.value !== origin || routeProfile.value !== profile) return;
@@ -1103,28 +1243,41 @@ async function refreshRouteOptions(origin = routeOrigin.value, profile = routePr
     const expected = routeUnits.filter((unit) => unit.unit_id !== origin);
     if (availability.size !== expected.length || body.destinations.length !== expected.length
       || expected.some((unit) => !availability.has(unit.unit_id))) throw new Error("Incomplete route choices");
+    routeAvailability = availability;
+    routeAvailabilityOrigin = origin;
+    routeAvailabilityProfile = profile;
     renderDestinationOptions(availability, origin);
+    updateEndpointStates();
     const connected = body.destinations.filter((item) => item.availability === "connected").length;
     const sameAnchor = body.destinations.filter((item) => item.availability === "same_anchor").length;
-    let help = `${connected} mapped ${connected === 1 ? "route" : "routes"} from ${roomLabel(origin)} with this route option. Choose from “Mapped routes”.`;
-    if (connected > 0 && connected <= 5) help = `${connected} mapped ${connected === 1 ? "route" : "routes"} from ${roomLabel(origin)} with this route option. Choose a named destination below.`;
+    let help = `${connected} mapped ${connected === 1 ? "destination" : "destinations"} from ${roomLabel(origin)}. Choose destination B.`;
     if (!connected) help = `0 mapped routes from ${roomLabel(origin)} with this route option. The map has no connected destination with a walking path.`;
     if (sameAnchor) help += ` ${sameAnchor} ${sameAnchor === 1 ? "room shares" : "rooms share"} the starting route point, with no walking path drawn.`;
     const chosen = availability.get(routeDestination.value);
     if (chosen === "disconnected") help += " Your selected destination has no mapped connection.";
     if (chosen === "endpoint_unavailable") help += " Your selected destination has no mapped route point.";
-    help += " Other rooms remain selectable. Door connections and accessibility are not verified.";
+    help += " Only mapped destinations are offered. Door connections and accessibility are not verified.";
     routeOptionsStatus.textContent = help;
     setAvailabilityState("ready", origin, profile);
-    renderReachableDestinations(availability, origin, profile, generation);
   } catch (error) {
     if (generation !== availabilityGeneration || routeOrigin.value !== origin || routeProfile.value !== profile) return;
     renderDestinationOptions();
+    routeAvailability = null;
+    routeAvailabilityOrigin = "";
+    routeAvailabilityProfile = "";
+    updateEndpointStates();
     const reason = error.payload?.code === "endpoint_unavailable"
       ? "This starting room has no mapped route point."
       : "Connection choices are unavailable right now.";
     routeOptionsStatus.textContent = `${reason} You can still choose any room and request directions.`;
     setAvailabilityState("error", origin, profile);
+  } finally {
+    finishAvailability();
+    if (routeAvailabilitySettled === settled) {
+      routeAvailabilityPendingOrigin = "";
+      routeAvailabilityPendingProfile = "";
+      settleRouteAvailability = () => {};
+    }
   }
 }
 
@@ -1170,6 +1323,8 @@ routeSwap.addEventListener("click", async () => {
   const origin = routeOrigin.value;
   const destination = routeDestination.value;
   if (!origin || !destination || origin === destination) return;
+  retainEndpointOption(routeOrigin, destination);
+  retainEndpointOption(routeDestination, origin);
   routeOrigin.value = destination;
   routeDestination.value = origin;
   await submitSelectedRoute();
@@ -1189,6 +1344,8 @@ assistantForm.addEventListener("submit", async (event) => {
   if (directionRequest) {
     const origin = resolveRouteUnitId(directionRequest.origin);
     const destination = resolveRouteUnitId(directionRequest.destination);
+    retainEndpointOption(routeOrigin, origin);
+    retainEndpointOption(routeDestination, destination);
     routeOrigin.value = origin;
     routeDestination.value = destination;
     routeProfile.value = directionRequest.profile;
@@ -1270,6 +1427,7 @@ document.querySelector("#show-campus").addEventListener("click", () => {
   if (wasBuilding) resetCampusCamera();
 });
 campusSearch.addEventListener("input", renderCampusBuildings);
+document.querySelector("#room-filter").addEventListener("input", renderRoomList);
 document.querySelector("#campus-zoom-in").addEventListener("click", () => zoomCampus(1 / 1.5));
 document.querySelector("#campus-zoom-out").addEventListener("click", () => zoomCampus(1.5));
 document.querySelector("#campus-reset").addEventListener("click", resetCampusCamera);
@@ -1292,12 +1450,7 @@ async function initialize() {
     renderCampus();
     const units = await request("/demo/v1/units");
     routeUnits = units.units;
-    const routeOptions = units.units.map((unit) => option(
-      unit.unit_id,
-      `${unit.room_id || "Unnamed room"} · ${floorLabel(unit.level_id)}`,
-    ));
-    routeOrigin.replaceChildren(option("", "Select origin A"), ...routeOptions.map((item) => item.cloneNode(true)));
-    routeDestination.replaceChildren(option("", "Select destination B"), ...routeOptions);
+    renderRouteCatalog();
   } catch (error) {
     setStatus(error.message);
     document.querySelector("#campus-status").textContent = `Campus pilot unavailable: ${error.message}`;

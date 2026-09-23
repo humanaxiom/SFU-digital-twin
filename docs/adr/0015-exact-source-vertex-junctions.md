@@ -1,6 +1,7 @@
 # 15. Experimental exact source-vertex junctions
 
-Status: accepted for isolated DT-022 investigation, 2026-09-11.
+Status: superseded for new-build defaults by ADR-0018, 2026-09-23. The experimental
+evidence and endpoint-mode comparison contract remain historical.
 
 ## Evidence
 

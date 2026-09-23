@@ -142,7 +142,11 @@ The mapping lives in a checked-in YAML file, not in code, so facilities staff ca
 
 This is the core of the ETL and the step the data most requires (mean segment length 0.94 m).
 
-1. **Snap nodes.** Round every pathway/transition endpoint to a 1 cm grid in (x, y, `vertical_order`).
+1. **Node authored vertices.** Before snapping, split single-part pathways at exact
+   same-level XYZ vertices shared with another pathway or recorded transition endpoint.
+   Preserve source spans and authoritative length; reject ambiguous snap-cell collisions.
+   Do not join nearby coordinates or interpolate geometric crossings. Then round every
+   pathway/transition endpoint to a 1 cm grid in (x, y, `vertical_order`).
    Z alone is unreliable for identity; `vertical_order` is the authoritative level discriminator.
    Node IDs are the snapped coordinate tuples themselves (deterministic, stable, self-documenting —
    see ADR-0004).
@@ -184,7 +188,9 @@ This is the core of the ETL and the step the data most requires (mean segment le
   synthetic unit tests retain zero-edge semantic coverage. IDs and evidence use canonical RFC 8785
   JSON and SHA-256 as defined by
   [ADR-0009](adr/0009-edge-induced-profile-components-and-endpoint-reachability.md). Topology repair
-  is deferred beyond Phase 1; elevator-only, stairs-excluded routing is not wheelchair certification
+  uses the exact authored-vertex default in [ADR-0018](adr/0018-exact-source-topology-default.md);
+  historical accepted-artifact component counts remain evidence for the endpoint-only graph.
+  Elevator-only, stairs-excluded routing is not wheelchair certification
   ([ADR-0005](adr/0005-measured-connectivity-baseline-and-validation-gates.md)).
 
 Artifacts: `graph.pkl` (NetworkX), `wayfinding.gpkg`, `search.sqlite`, `basemap.pmtiles`, and a
@@ -430,6 +436,12 @@ success; route replacement cancels route-owned scene work while Clear preserves
 independent floor browsing. Scene loading/errors retain priority over room status.
 The remaining draft/commit, journey, cache and responsive requirements below are
 the C/D contract, not a claim that the first increment implements them.
+
+The post-PR #4 usability follow-up exposes persistent building/floor buttons and
+a filterable room list. Primary building actions open a recorded floor directly;
+secondary dropdowns and search forms expand on demand. Compact map tools reduce
+initial scrolling without changing scene data or route behavior. See the
+[follow-up report](reports/DT-024-COMPACT.md) for current verification.
 
 One explicit state model owns context (Campus, Building, Floor exploration or Route),
 inspected facility, requested and displayed exact floor IDs, scene status, inspected
