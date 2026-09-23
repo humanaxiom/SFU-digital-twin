@@ -1,6 +1,7 @@
 name: sfudt-candidate
 
 x-build-image: &build-image ${WAYFINDING_BROWSER_BUILD_IMAGE:-ghcr.io/humanaxiom/sfu-digital-twin/wayfinding-build@sha256:26259879732ceffe8405f22d19c423bf14408583e1a752da35a61d3e2825276c}
+x-external-image: &external-image nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
 
 services:
   demo:
@@ -25,6 +26,40 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/demo/v1/health', timeout=2).read()\""]
       interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  external:
+    image: *external-image
+    user: "101:101"
+    init: true
+    read_only: true
+    entrypoint: ["nginx"]
+    command: ["-g", "daemon off;"]
+    depends_on:
+      demo:
+        condition: service_healthy
+    volumes:
+      - ./wayfinding-external.nginx.conf:/etc/nginx/nginx.conf:ro
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - "${WAYFINDING_EXTERNAL_BIND_ADDRESS:-0.0.0.0}:${WAYFINDING_EXTERNAL_PORT:-8007}:8007"
+    networks:
+      candidate: {}
+      host-bridge: {}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --header='Host: sfuai.ca' http://127.0.0.1:8007/demo/v1/health"]
+      interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
