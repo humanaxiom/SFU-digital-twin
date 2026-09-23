@@ -8,7 +8,7 @@ param(
     [ValidatePattern("^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")]
     [string]$OtherRunId,
     [ValidateSet("endpoint-v1", "exact-shared-vertices-v1")]
-    [string]$Topology = "endpoint-v1",
+    [string]$Topology = "exact-shared-vertices-v1",
     [switch]$LocalImage
 )
 
@@ -60,7 +60,7 @@ try {
     switch ($Action) {
         "Build" {
             $extractCommand = @("python", "-m", "wayfinding.etl.rebuild", "extract", "--run-id", $RunId)
-            if ($Topology -ne "endpoint-v1") { $extractCommand += @("--topology", $Topology) }
+            if ($PSBoundParameters.ContainsKey("Topology")) { $extractCommand += @("--topology", $Topology) }
             Invoke-RebuildContainer "source-build" $extractCommand
             Invoke-RebuildContainer "artifact-build" @("python", "-m", "wayfinding.etl.rebuild", "derive", "--run-id", $RunId)
             Invoke-RebuildContainer "source-build" @("python", "-m", "wayfinding.etl.rebuild", "finalize", "--run-id", $RunId)

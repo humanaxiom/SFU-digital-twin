@@ -40,10 +40,12 @@ async function exerciseCampus(cdp, screenshot, label, width) {
   assert.ok(zoomed[2]>initial[2] && zoomed[3]>initial[3]);
   const facility = body.facilities.find(f=>f.code==='AQ') || body.facilities[0];
   const selectedBefore = await cdp.evaluate("[document.querySelector('#route-origin').value,document.querySelector('#route-destination').value,document.querySelector('#route-profile').value]");
+  if (!(await cdp.evaluate("document.querySelector('#building-search').open"))) await activateButton(cdp, '#building-search summary');
   await cdp.evaluate(`(() => {const input=document.querySelector('#campus-search');input.value=${JSON.stringify(facility.code)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   assert.deepEqual(await cdp.evaluate("document.querySelector('#campus-map').getAttribute('viewBox').split(/\\s+/).map(Number)"),zoomed,'search preserves deliberate camera');
   const selector = `#campus-buildings [data-campus-facility-id="${facility.facility_id}"]`;
   await cdp.evaluate("window.__campusRequests=[];window.__campusOriginalFetch=window.fetch;window.fetch=async(...args)=>{window.__campusRequests.push(String(args[0]));return window.__campusOriginalFetch(...args)}");
+  const displayedBefore = await cdp.evaluate("document.querySelector('#viewing-floor').dataset.levelId");
   await activateButton(cdp, selector, 'Enter');
   assert.equal(await cdp.evaluate("document.querySelector('#facility-select').value"), facility.facility_id,
     'building selection synchronizes the Building control');
@@ -53,15 +55,19 @@ async function exerciseCampus(cdp, screenshot, label, width) {
     body.facilities.map(item=>item.facility_id).sort(), 'every recorded building remains discoverable');
   assert.deepEqual((await cdp.evaluate("[...document.querySelector('#level-select').options].map(item=>item.value)")).sort(),
     facility.levels.map(item=>item.level_id).sort(), 'floor choices contain only this building exact levels');
-  assert.deepEqual(await cdp.evaluate("window.__campusRequests.filter(url=>url.includes('/scene')||url.includes('/route'))"), [],
-    'building selection does not request a scene or route');
+  const selectedAfter = await cdp.evaluate("document.querySelector('#level-select').value");
+  assert.equal(await cdp.evaluate("window.__campusRequests.filter(url=>url.includes('/scene')).length"), displayedBefore === selectedAfter ? 0 : 1,
+    'building selection loads its floor or reuses that exact displayed scene');
+  assert.deepEqual(await cdp.evaluate("window.__campusRequests.filter(url=>url.includes('/route'))"), [],
+    'building selection opens its remembered floor without requesting a route');
   await cdp.evaluate("window.fetch=window.__campusOriginalFetch");
-  assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"), 'Building');
+  assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"), 'Floor');
+  await cdp.wait("!document.querySelector('#floor-view').hidden && !document.querySelector('#map-status').textContent.includes('Loading')");
   const synchronizedImage = await screenshot(cdp, `${label}-campus-synchronized`, false);
-  const floors = await cdp.evaluate("[...document.querySelectorAll('#campus-details [data-campus-level-id]')].map(n=>n.dataset.campusLevelId)");
+  const floors = await cdp.evaluate("[...document.querySelectorAll('#floor-buttons [data-level-id]')].map(n=>n.dataset.levelId)");
   assert.deepEqual([...floors].sort(), facility.levels.map(l=>l.level_id).sort());
   assert.deepEqual(await cdp.evaluate("[document.querySelector('#route-origin').value,document.querySelector('#route-destination').value,document.querySelector('#route-profile').value]"),selectedBefore);
-  await activateButton(cdp, `#campus-details [data-campus-level-id="${floors[0]}"]`);
+  await activateButton(cdp, `#floor-buttons [data-level-id="${floors[0]}"]`);
   await cdp.wait(`document.querySelector('#campus-view').hidden && document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(floors[0])}`);
   assert.ok(await cdp.evaluate("document.querySelectorAll('.unit-shape').length>0"));
   await activateButton(cdp, '#show-campus');
@@ -75,8 +81,8 @@ async function exerciseCampus(cdp, screenshot, label, width) {
   assert.ok(aqOnly, 'fixture must contain an AQ-only global order');
   const remembered = new Map();
   for (const [other, key] of [[ecc, 'ECC'], [strand, 'SH']]) {
-    await activateButton(cdp, `#campus-buildings [data-campus-facility-id="${facility.facility_id}"]`, 'Enter');
-    await activateButton(cdp, `#campus-details [data-campus-level-id="${aqOnly.level_id}"]`);
+    await activateButton(cdp, `#building-buttons [data-building-id="${facility.facility_id}"]`, 'Enter');
+    await activateButton(cdp, `#floor-buttons [data-level-id="${aqOnly.level_id}"]`);
     await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(aqOnly.level_id)}`);
     await activateButton(cdp, '#show-campus');
     assert.equal(await cdp.evaluate("document.querySelector('#level-select').value"), aqOnly.level_id);
@@ -86,32 +92,35 @@ async function exerciseCampus(cdp, screenshot, label, width) {
       `${key} footprint selection synchronizes the Building control`);
     const selectedLevel = await cdp.evaluate("document.querySelector('#level-select').value");
     assert.ok(other.levels.some(level=>level.level_id===selectedLevel), `${key} selection belongs to its exact recorded floors`);
+    await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(selectedLevel)} && !document.querySelector('#map-status').textContent.includes('Loading')`);
     // Deliberately inspect a known floor, then leave it: later building selection
     // must remember this floor rather than inherit another building's global order.
     const rememberedLevel = other.levels.at(-1).level_id;
-    await activateButton(cdp, `#campus-details [data-campus-level-id="${rememberedLevel}"]`);
+    await activateButton(cdp, `#floor-buttons [data-level-id="${rememberedLevel}"]`);
     await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(rememberedLevel)}`);
     remembered.set(other.facility_id, rememberedLevel);
     await activateButton(cdp, '#show-campus');
     await activateButton(cdp, `#campus-buildings [data-campus-facility-id="${other.facility_id}"]`, 'Enter');
     assert.equal(await cdp.evaluate("document.querySelector('#level-select').value"), rememberedLevel,
       `${key} remembers its own inspected exact floor`);
-    assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"), 'Building');
+    assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"), 'Floor');
   }
   // Visiting a shared global order in AQ cannot replace Strand's remembered floor.
   const shared=facility.levels.find(level=>level.vertical_order!==0 && strand.levels.some(other=>
     other.vertical_order===level.vertical_order));
   assert.ok(shared, 'fixture must contain a shared nonzero AQ/Strand global order');
-  await activateButton(cdp, `#campus-buildings [data-campus-facility-id="${facility.facility_id}"]`, 'Enter');
-  await activateButton(cdp, `#campus-details [data-campus-level-id="${shared.level_id}"]`);
+  await activateButton(cdp, `#building-buttons [data-building-id="${facility.facility_id}"]`, 'Enter');
+  await activateButton(cdp, `#floor-buttons [data-level-id="${shared.level_id}"]`);
   await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(shared.level_id)}`);
   await activateButton(cdp, '#show-campus');
   await activateButton(cdp, `#campus-buildings [data-campus-facility-id="${strand.facility_id}"]`, 'Enter');
   assert.equal(await cdp.evaluate("document.querySelector('#level-select').value"),remembered.get(strand.facility_id));
   assert.deepEqual(await cdp.evaluate("[document.querySelector('#route-origin').value,document.querySelector('#route-destination').value,document.querySelector('#route-profile').value]"),selectedBefore);
   // Hold a real floor response, then make a newer campus context choice.
-  const delayedLevel=ecc.levels[0].level_id;
+  const delayedLevel=facility.levels[0].level_id;
+  await activateButton(cdp, '#show-campus');
   await activateButton(cdp, `#campus-map [data-campus-facility-id="${ecc.facility_id}"]`, ' ');
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(ecc.levels[0].level_id)} && !document.querySelector('#map-status').textContent.includes('Loading')`);
   await cdp.evaluate(`(() => {
     window.__campusOriginalFetch=window.fetch;window.__campusReleased=false;window.__campusRelease=null;
     window.fetch=async(...args)=>{
@@ -123,7 +132,8 @@ async function exerciseCampus(cdp, screenshot, label, width) {
       return response;
     };
   })()`);
-  await activateButton(cdp, `#campus-details [data-campus-level-id="${delayedLevel}"]`);
+  await activateButton(cdp, `#building-buttons [data-building-id="${facility.facility_id}"]`);
+  await activateButton(cdp, `#floor-buttons [data-level-id="${delayedLevel}"]`);
   await cdp.wait("typeof window.__campusRelease==='function'");
   await activateButton(cdp, '#show-campus');
   await activateButton(cdp, `#campus-map [data-campus-facility-id="${strand.facility_id}"]`, ' ');
@@ -133,10 +143,11 @@ async function exerciseCampus(cdp, screenshot, label, width) {
   await cdp.evaluate("window.fetch=window.__campusOriginalFetch;window.__campusRelease()");
   await cdp.wait("window.__campusReleased");
   await cdp.evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
-  assert.equal(await cdp.evaluate("document.querySelector('#campus-view').hidden"),false,'late floor response cannot replace campus');
+  await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(latestControls[1])} && !document.querySelector('#map-status').textContent.includes('Loading')`);
+  assert.equal(await cdp.evaluate("document.querySelector('#campus-view').hidden"),true,'late floor response cannot replace the newer building floor');
   assert.deepEqual(await cdp.evaluate("[document.querySelector('#facility-select').value,document.querySelector('#level-select').value]"),latestControls,
     'late scene cannot restore older dropdowns');
-  assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"),'Building');
+  assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"),'Floor');
   return {version:body.version, artifactSha256:health.artifact_sha256, facilityIds:body.facilities.map(f=>f.facility_id),initial,zoomed,screenshot:image,synchronizedScreenshot:synchronizedImage};
 }
 

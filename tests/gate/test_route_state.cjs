@@ -22,7 +22,10 @@ function client() {
         return nodes.get(selector);
       },
       querySelectorAll: () => [],
-      createElement: () => ({value: '', textContent: ''}),
+      createElement: () => ({value: '', textContent: '', dataset: {}, attributes: {}, handlers: {},
+        setAttribute(key, value) { this.attributes[key] = String(value); },
+        addEventListener(name, callback) { this.handlers[name] = callback; },
+      }),
     },
   });
   vm.runInContext(fs.readFileSync('packages/wayfinding/src/wayfinding/demo/static/app.js', 'utf8'), context);

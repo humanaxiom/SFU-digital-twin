@@ -37,13 +37,12 @@ function body(origin='A',profile='default'){
 }
 (async()=>{
   const failures=[];async function check(name,fn){try{await fn();console.log('PASS '+name);}catch(error){failures.push(name+': '+error.stack);}}
-  await check('availability groups preserve unsupported selection and separate same anchor',async()=>{
+  await check('mapped-only catalog preserves an explicit unsupported selection',async()=>{
     const c=client();const pending=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await pending;
     assert.equal(c.nodes.get('#route-destination').value,'D');
     const groups=c.nodes.get('#route-destination').querySelectorAll('optgroup');
-    assert.deepEqual(groups.map(n=>n.dataset.availability),['connected','same_anchor','disconnected','endpoint_unavailable']);
-    assert.match(groups[1].label,/no walking path/i);
-    assert.match(c.nodes.get('#route-options-status').textContent,/1 mapped route/);
+    assert.deepEqual(groups.map(n=>n.dataset.availability),['connected']);
+    assert.match(c.nodes.get('#route-options-status').textContent,/1 mapped destination/);
     assert.equal(c.context.posts.length,0);
   });
   await check('new profile response wins over delayed default response',async()=>{
@@ -63,11 +62,13 @@ function body(origin='A',profile='default'){
     const c=client();const pending=c.run('submitSelectedRoute()');
     assert.equal(c.context.posts.length,1);assert.equal(c.context.posts[0].payload.destination.unit_id,'D');
     assert.match(c.nodes.get('#current-instruction').textContent,/Finding/);
+    assert.equal(c.nodes.get('.current-step').hidden,false);
     c.context.gets[0].reject(new Error('offline'));await Promise.resolve();await Promise.resolve();
     assert.equal(c.nodes.get('#route-destination').value,'D');
     assert.match(c.nodes.get('#route-options-status').textContent,/choose any room/i);
     c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await pending;
     assert.match(c.nodes.get('#current-instruction').textContent,/connected route/);
+    assert.equal(c.nodes.get('.current-step').hidden,false);
     assert.equal(c.nodes.get('#step-next').disabled,true);
     c.run('updateGuidanceControls()');
     assert.match(c.nodes.get('#current-instruction').textContent,/connected route/,'map redraw must retain the failure');
@@ -78,58 +79,108 @@ function body(origin='A',profile='default'){
     assert.equal(c.context.gets.length,1);assert.match(c.context.gets[0].path,/origin_unit_id=B/);
     assert.equal(c.nodes.get('#route-destination').value,'');assert.equal(c.context.posts.length,0);
   });
-  await check('new map origin clears the previous failed pair message while destinations load',async()=>{
+  await check('room click after a failed route keeps origin and replaces destination',async()=>{
     const c=client(true);
-    c.run("renderRoute({status:409,code:'disconnected',profile:'default'});routeSelection='failed';selectUnit=async()=>{};");
+    c.run("renderRoute({status:409,code:'disconnected',profile:'default'});routeSelection='failed';selectUnit=async()=>true;");
     const oldError=c.nodes.get('#route-status').textContent;
     assert.match(oldError,/connected route/);
-    await c.run("activateRouteEndpoint('A')");
+    const routed=c.run("activateRouteEndpoint('B')");
     assert.equal(c.nodes.get('#route-origin').value,'A');
-    assert.equal(c.nodes.get('#route-destination').value,'');
-    assert.equal(c.nodes.get('#route-status').attributes['data-state'],'empty');
+    assert.equal(c.nodes.get('#route-destination').value,'B');
     assert.notEqual(c.nodes.get('#route-status').textContent,oldError,'an empty new pair must not display the previous disconnected failure');
     assert.notEqual(c.nodes.get('#current-instruction').textContent,oldError);
-    assert.equal(c.context.posts.length,0,'choosing a new origin must not choose or route to a destination');
-    c.context.gets[0].resolve(body());await Promise.resolve();await Promise.resolve();
-    assert.match(c.nodes.get('#route-options-status').textContent,/1 mapped route/);
-    assert.notEqual(c.nodes.get('#route-status').textContent,oldError);
+    assert.equal(c.context.posts.length,1,'replacement destination must route from the retained origin');
+    assert.equal(c.context.posts[0].payload.origin.unit_id,'A');
+    c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await routed;
   });
-  await check('a small connected set names its exact destination and routes only after deliberate click',async()=>{
+  await check('guidance floor changes do not queue new availability catalogs',async()=>{
+    const c=client(true);
+    c.run("availabilityCalls=0;catalogCalls=0;refreshRouteOptions=()=>{availabilityCalls+=1};renderRouteCatalog=()=>{catalogCalls+=1};navigationState.context='route';routeSelection='complete';selectFloorControls(allLevels[0])");
+    assert.equal(c.run('availabilityCalls'),0);
+    assert.equal(c.run('catalogCalls'),0);
+    c.run("navigationState.context='floor';routeSelection='origin_selected';selectFloorControls(allLevels[0])");
+    assert.equal(c.run('availabilityCalls'),1);
+    assert.equal(c.run('catalogCalls'),1);
+  });
+  await check('known disconnected room is not offered as a clickable destination',async()=>{
+    const c=client(true);const options=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await options;
+    c.run("routeSelection='origin_selected';selectUnit=async()=>true;");
+    const clicked=c.run("activateRouteEndpoint('D')");await Promise.resolve();
+    const posted=c.context.posts.length;
+    if(c.context.posts[0])c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});
+    await clicked;
+    assert.equal(c.nodes.get('#route-destination').value,'');
+    assert.equal(posted,0);
+    assert.equal(c.run('routeSelection'),'origin_selected');
+    assert.match(c.nodes.get('#map-status').textContent,/no mapped connection/i);
+  });
+  await check('room click waits for pending availability before rejecting a disconnected destination',async()=>{
+    const c=client(true);c.run("routeSelection='origin_selected';selectUnit=async()=>true;");
+    const options=c.run('refreshRouteOptions()');
+    const clicked=c.run("activateRouteEndpoint('D')");
+    await Promise.resolve();
+    const postedWhilePending=c.context.posts.length;
+    c.context.gets[0].resolve(body());await options;
+    const totalPosts=c.context.posts.length;
+    if(c.context.posts[0])c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});
+    await clicked;
+    assert.equal(postedWhilePending,0);
+    assert.equal(totalPosts,0);
+    assert.equal(c.nodes.get('#route-destination').value,'');
+    assert.equal(c.run('routeSelection'),'origin_selected');
+  });
+  await check('room click follows a superseding same-origin availability request',async()=>{
+    const c=client(true);c.run("routeSelection='origin_selected';selectUnit=async()=>true;");
+    const first=c.run('refreshRouteOptions()');
+    const clicked=c.run("activateRouteEndpoint('D')");
+    const second=c.run('refreshRouteOptions()');
+    c.context.gets[0].resolve(body());await first;await Promise.resolve();
+    const postsAfterStaleCatalog=c.context.posts.length;
+    c.context.gets[1].resolve(body());await second;await Promise.resolve();
+    const totalPosts=c.context.posts.length;
+    if(c.context.posts[0])c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});
+    await clicked;
+    assert.equal(postsAfterStaleCatalog,0);
+    assert.equal(totalPosts,0);
+    assert.equal(c.nodes.get('#route-destination').value,'');
+  });
+  await check('room click after a completed route keeps origin and replaces destination',async()=>{
+    const c=client(true);const options=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await options;
+    c.run("routeSelection='complete';routeDestination.value='D';selectUnit=async()=>true;");
+    const routed=c.run("activateRouteEndpoint('B')");await Promise.resolve();
+    assert.equal(c.nodes.get('#route-origin').value,'A');
+    assert.equal(c.nodes.get('#route-destination').value,'B');
+    assert.equal(c.context.posts[0].payload.origin.unit_id,'A');
+    c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await routed;
+  });
+  await check('destination route does not wait for room metadata',async()=>{
+    const c=client(true);let resolveInspection;
+    c.run("routeSelection='origin_selected';selectUnit=()=>new Promise(resolve=>{resolveInspection=resolve});");
+    const routed=c.run("activateRouteEndpoint('B')");
+    await Promise.resolve();
+    const postedBeforeInspection=c.context.posts.length;
+    c.run('resolveInspection(true)');await Promise.resolve();
+    assert.equal(c.context.posts[0].payload.origin.unit_id,'A');
+    assert.equal(c.context.posts[0].payload.destination.unit_id,'B');
+    c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await routed;
+    assert.equal(postedBeforeInspection,1);
+  });
+  await check('a mapped destination routes only after deliberate select change',async()=>{
     const c=client(true);c.run("routeDestination.value='';routeUnits.find(u=>u.unit_id==='A').room_id='AQ6071';routeUnits.find(u=>u.unit_id==='B').room_id='AQ6067';allLevels[0].short_name='6000';");
     const pending=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await pending;
-    const choices=c.nodes.get('#reachable-destinations');
-    assert.equal(choices.hidden,false);
-    const buttons=choices.querySelectorAll('button');
-    assert.equal(buttons.length,1);
-    assert.match(buttons[0].textContent,/Directions to AQ6067.*AQ 6000/);
-    assert.equal(buttons[0].dataset.destinationUnitId,'B');
     assert.equal(c.nodes.get('#route-destination').value,'');
     assert.equal(c.context.posts.length,0);
-    const route=buttons[0].handlers.click();
+    c.run("routeDestination.value='B'");
+    const route=c.nodes.get('#route-destination').handlers.change();
     assert.equal(c.nodes.get('#route-destination').value,'B');
     assert.deepEqual(JSON.parse(JSON.stringify(c.context.posts[0].payload)),{origin:{unit_id:'A'},destination:{unit_id:'B'},profile:'default'});
-    assert.equal(choices.children.length,0,'the previous availability actions must disappear while refreshing');
     c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await route;
   });
-  await check('stale named buttons cannot route after profile refresh or Clear',async()=>{
-    const c=client(true);const pending=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await pending;
-    const old=c.nodes.get('#reachable-destinations').querySelectorAll('button')[0];
-    c.run("routeProfile.value='elevator_only';refreshRouteOptions()");
-    assert.equal(c.nodes.get('#reachable-destinations').children.length,0);
-    await old.handlers.click();assert.equal(c.context.posts.length,0);
-    c.run('clearRoute()');
-    c.context.gets[1].resolve(body('A','elevator_only'));await Promise.resolve();await Promise.resolve();
-    assert.equal(c.nodes.get('#reachable-destinations').children.length,0);
-    await old.handlers.click();assert.equal(c.context.posts.length,0);
-    assert.equal(c.nodes.get('#route-destination').value,'');
-  });
-  await check('large reachable sets remain in the catalog without an arbitrary five-room shortlist',async()=>{
+  await check('large reachable sets remain in the mapped selector',async()=>{
     const c=client(true);
     c.run("routeUnits.push(...['F','G'].map(unit_id=>({unit_id,room_id:'Room '+unit_id,level_id:'L'})))");
     const response=body();response.destinations=['B','C','D','E','F','G'].map(unit_id=>({unit_id,availability:'connected'}));
     const pending=c.run('refreshRouteOptions()');c.context.gets[0].resolve(response);await pending;
-    assert.equal(c.nodes.get('#reachable-destinations').children.length,0);
-    assert.equal(c.nodes.get('#reachable-destinations').hidden,true);
     assert.equal(c.nodes.get('#route-destination').querySelectorAll('option').filter(n=>n.dataset.availability==='connected').length,6);
   });
   await check('older service without guidance reports update needed beside map and form',async()=>{
@@ -137,6 +188,7 @@ function body(origin='A',profile='default'){
     assert.match(c.nodes.get('#current-instruction').textContent,/demo needs an update/i);
     assert.equal(c.nodes.get('#route-status').textContent,c.nodes.get('#current-instruction').textContent);
     assert.equal(c.nodes.get('#route-status').attributes['data-state'],'error');
+    assert.equal(c.nodes.get('.current-step').hidden,false);
     assert.equal(c.run('activeRoute'),null);
   });
   await check('a destination selected while availability loads is never replaced',async()=>{
@@ -167,6 +219,7 @@ function body(origin='A',profile='default'){
   });
   await check('native select swap retains previous origin after availability grouping',async()=>{
     const c=client(true);const options=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await options;
+    c.run("routeDestination.value='B'");
     const swapped=c.nodes.get('#route-swap').handlers.click();
     assert.equal(c.nodes.get('#route-destination').value,'A');
     assert.equal(c.context.posts.length,1);
@@ -181,11 +234,22 @@ function body(origin='A',profile='default'){
     assert.equal(c.context.posts[0].payload.destination.unit_id,'A');
     c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await chat;
   });
+  await check('assistant retains endpoints outside the viewed floor in scoped selects',async()=>{
+    const c=client(true);
+    c.run("routeUnits.push({unit_id:'Z',room_id:'Room Z',level_id:'OTHER'});assistantInput.value='directions from Z to B';");
+    const chat=c.nodes.get('#assistant-form').handlers.submit({preventDefault(){}});
+    assert.equal(c.nodes.get('#route-origin').value,'Z');
+    assert.equal(c.nodes.get('#route-destination').value,'B');
+    assert.equal(c.context.posts[0].payload.origin.unit_id,'Z');
+    assert.equal(c.context.posts[0].payload.destination.unit_id,'B');
+    c.context.posts[0].reject({payload:{status:409,code:'disconnected',profile:'default'}});await chat;
+  });
   await check('unavailable guidance message survives floor redraw',async()=>{
     const c=client();c.run("renderRoute({status:200,profile:'default',origin:{unit_id:'A'},destination:{unit_id:'B'},guidance:{version:'dt018-guidance-v1',status:'unavailable',steps:[],geometries:[],visits:[],markers:[],transitions:[],distance_m:null,warnings:['Preview unavailable.']}})");
     const message=c.nodes.get('#current-instruction').textContent;c.run('updateGuidanceControls()');
     assert.equal(c.nodes.get('#current-instruction').textContent,message);
     assert.match(message,/preview is unavailable/);
+    assert.equal(c.nodes.get('.current-step').hidden,false);
   });
   assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exitCode=1;});

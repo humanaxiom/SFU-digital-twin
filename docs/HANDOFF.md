@@ -1,5 +1,46 @@
 # Handoff — Living Project State
 
+## Current deployment — exact Strand cross-floor topology
+
+The reported Strand failure was a routing-artifact defect rather than a floor-button
+failure. The accepted endpoint-only graph preserved six Strand stair transitions but
+omitted exact authored pathway endpoint/interior-vertex junctions. `SH1036` therefore
+had only seven same-floor destinations and could not route to `SH3050.1`.
+
+DT-025 makes `exact-shared-vertices-v1` the default for new rebuilds while preserving
+endpoint mode for explicit comparisons and old manifests. A fresh isolated candidate
+restores the reported pair using recorded stairs across SH1000, SH2000 and SH3000.
+The verified candidate now serves **http://127.0.0.1:18007/** from Compose project
+`sfudt-sh-navigation-candidate`; the old endpoint-only demo is stopped. Artifact
+hashes, full gates, source QA, limitations and final host-port Chromium evidence are
+recorded in [DT-025](reports/DT-025.md). Strand level 100 remains disconnected from
+its rooms and Strand has no recorded elevator transition.
+
+## Current follow-up — clickable rooms and reduced scrolling
+
+User feedback after PR #4 prioritizes visible rooms and clickable building/floor
+choices. Branch `feat/dt-024-clickable-map` implements the amended DT-024 interaction:
+building clicks open a recorded floor, persistent floor buttons stay above the map,
+and a visible filtered room list replaces the hidden list. Secondary dropdowns and
+directions expand on demand. Starts are floor-scoped and destinations show mapped
+connections once in destination B rather than in a duplicate scrollable action list.
+A journey floor click selects that
+visit's first instruction. [Follow-up evidence](reports/DT-024-COMPACT.md) records
+current verification. Route-following floor changes preserve the mapped catalog and
+do not queue redundant availability requests. Stage C draft/commit and the remaining
+Stage D exploration/cache work remain open.
+
+The 2026-09-23 cross-floor room-picking follow-up fixes a separate interaction
+failure: every rendered room had been clickable as B even when the route-options
+API already classified it as disconnected. The client now waits for pending
+availability, highlights mapped choices, disables known unsupported rooms without
+posting a route, keeps A when replacing B after success/failure, and does not wait
+for room-detail metadata before routing. Fresh deployed Chromium passed immediate
+AQ and SH floor switches, known-disconnected blocking and connected retries; the
+full Docker gate passed 632 tests with 16 expected skips, lint, type and artifact
+QA. Evidence is in
+[the cross-floor room-picking report](reports/DT-024-CROSSFLOOR-ROOM-PICKING.md).
+
 ## Current implementation — DT-024 Stage A/B (2026-09-17)
 
 User authorized phased implementation with multiple agents/models and end-to-end

@@ -17,10 +17,11 @@ services:
       - ../build/experiments/${WAYFINDING_CANDIDATE_RUN:?WAYFINDING_CANDIDATE_RUN is required}/derived/graph_contracted_stats.json:/data/graph_contracted_stats.json:ro
     command: ["python", "-m", "wayfinding.demo.server", "--host", "0.0.0.0", "--port", "8080", "--artifact", "/data/wayfinding.gpkg", "--graph", "/data/graph_contracted.pkl", "--stats", "/data/graph_contracted_stats.json"]
     ports:
-      - "${WAYFINDING_CANDIDATE_BIND_ADDRESS:-127.0.0.1}:18107:8080"
+      - "${WAYFINDING_CANDIDATE_BIND_ADDRESS:-127.0.0.1}:${WAYFINDING_CANDIDATE_PORT:-18107}:8080"
     networks:
       candidate:
         aliases: [demo]
+      host-bridge: {}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/demo/v1/health', timeout=2).read()\""]
       interval: 5s
@@ -52,3 +53,5 @@ services:
 networks:
   candidate:
     internal: true
+  host-bridge:
+    internal: false

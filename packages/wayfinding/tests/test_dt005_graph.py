@@ -968,7 +968,7 @@ class TestCLIAndArtifacts:
                 return_value=(graph, stats),
             ),
         ):
-            assert run_graph_raw(tmp_path) == 0
+            assert run_graph_raw(tmp_path, topology_mode="endpoint-v1") == 0
 
         with open(tmp_path / "graph_raw.pkl", "rb") as graph_file:
             loaded_graph = pickle.load(graph_file)

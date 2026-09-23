@@ -1,8 +1,9 @@
 # 17. Navigation state, route drafts and synchronized journeys
 
 Status: accepted; Stage A/B navigation foundation implemented, delivery validation
-recorded in [the phase report](../reports/DT-024-PHASE-AB.md). Endpoint drafts,
-synchronized journeys and cache/mobile work remain pending.
+recorded in [the phase report](../reports/DT-024-PHASE-AB.md). The journey-entry
+first-instruction synchronization slice is delivered; endpoint drafts and the
+remaining journey, cache and mobile work remain pending.
 Date: 2026-09-17.
 
 ## Scope and supersession
@@ -26,7 +27,7 @@ For DT-024, this decision supersedes only these client interaction choices:
 
 The earlier documents describe runtime behavior except where a delivered DT-024
 stage supersedes it. Stage B supersedes the global-order picker and stale-response
-behavior; draft/commit and journey changes remain pending. Their other requirements remain applicable. In particular,
+behavior; draft/commit and the remaining journey changes remain pending. Their other requirements remain applicable. In particular,
 ADR-0012 guidance geometry, chronological visits, validation and limitations;
 ADR-0013 directed availability; ADR-0014 camera semantics; and ADR-0016 artifact-only
 campus coverage remain authoritative. No HTTP API, guidance schema, source,
@@ -49,8 +50,29 @@ control and explicit coverage text. Building inspection does not edit endpoints.
 
 Provide an Open floor action that works for the already-selected floor. Native
 select change events cannot be the sole way to enter a floor from Building context.
+
+Post-PR #4 usability amendment: primary building buttons and clickable footprints
+open the remembered/default recorded floor directly, so room geometry is visible.
+Persistent exact-ID floor buttons sit above the map. An overview-only building
+still shows coverage explicitly. Keep dropdowns as expandable secondary controls;
+expose a filterable room button list outside collapsed record details. This
+supersedes the earlier primary building-click behavior that stopped at a footprint
+inspection screen. It does not change routing, endpoints or source coverage.
 Opening a route step uses that step's exact facility/level identity and synchronizes
 the visible controls without hiding other recorded buildings from discovery.
+
+Interim clickable-room safety amendment (2026-09-23): while the Stage C draft and
+explicit-preview workflow remains pending, a room click continues to choose A and
+then B. Once directed availability for the exact A/profile is known, only
+`connected` rooms are actionable as B; other rooms remain visible on the map and
+in the floor inventory with an unavailable treatment. A click made while
+availability is pending waits for that result before deciding whether it may
+submit. If availability cannot be checked, the outcome stays unknown and the
+existing manual request fallback remains available. After a completed or failed
+route, another room click replaces B while retaining A; Clear is the explicit way
+to choose a new A. Room-detail loading is independent of route submission. This
+amendment prevents the primary clickable workflow from inviting known doomed
+requests without claiming that disconnected rooms have become routable.
 
 ## Authoritative state and effects
 
@@ -130,7 +152,9 @@ room and deliberate camera. Late responses cannot undo Clear.
 Connected destinations are rooms reachable in the draft origin/profile graph,
 not alternative paths or promises of validated guidance. Prioritize connected
 matches without silently substituting a selected destination or profile. Preserve
-discoverability of unsupported rooms and allow explicit requests with explanations.
+discoverability of unsupported rooms. In the delivered interim clickable-room
+flow, known unsupported rooms are visible but disabled as destination B; an
+availability error remains unknown and permits the manual request fallback.
 Use distinct labels and state for:
 
 | Outcome | Presentation meaning |

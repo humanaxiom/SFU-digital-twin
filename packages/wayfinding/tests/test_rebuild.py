@@ -47,6 +47,7 @@ def test_extraction_preserves_raw_and_refuses_reuse(sandbox):
     assert manifest["state"] == "extracted"
     assert manifest["path_base"] == "run_directory"
     assert manifest["source"]["sha256"] == rebuild.LEGACY_SHA256
+    assert manifest["build_config"] == {"topology_mode": rebuild.EXACT_MODE}
     with pytest.raises(FileExistsError):
         rebuild.extract_run("first")
     assert raw.read_bytes() == b"raw extraction"
@@ -148,10 +149,14 @@ def tiny_pipeline(sandbox, monkeypatch):
     monkeypatch.setattr(rebuild.normalise, "normalise_details", lambda path: {"detail": 0})
     monkeypatch.setattr(rebuild, "_units_from_gpkg", lambda path: [])
 
-    def raw(path):
+    def raw(path, **_kwargs):
         (path / "graph_raw.pkl").write_bytes(pickle.dumps(nx.MultiDiGraph()))
         (path / "node_map.pkl").write_bytes(pickle.dumps({}))
-        (path / "graph_raw_stats.json").write_text("{}")
+        (path / "graph_raw_stats.json").write_text(
+            json.dumps({"topology_mode": _kwargs.get("topology_mode", "omitted")})
+        )
+        if _kwargs.get("topology_mode") == rebuild.EXACT_MODE:
+            (path / "topology_audit.json").write_text("{}")
         return 0
 
     def transitions(path):
@@ -195,9 +200,24 @@ def test_complete_staged_build_and_comparison(tiny_pipeline):
         rebuild.compare_runs("left", "right")
 
 
+def test_legacy_manifest_without_build_config_uses_endpoint_topology(tiny_pipeline):
+    run = rebuild.extract_run("legacy")
+    manifest = json.loads((run / "run.json").read_text())
+    manifest.pop("build_config")
+    rebuild._checkpoint(run, manifest)
+
+    rebuild.derive_run("legacy")
+
+    assert not (run / "derived/topology_audit.json").exists()
+    assert json.loads((run / "derived/graph_raw_stats.json").read_text()) == {
+        "topology_mode": rebuild.ENDPOINT_MODE
+    }
+    assert len(json.loads((run / "run.json").read_text())["stages"]) == 6
+
+
 def test_graph_failure_stops_pipeline_and_finalization(tiny_pipeline, monkeypatch):
     run = rebuild.extract_run("broken")
-    monkeypatch.setattr(rebuild.graph, "run_graph_raw", lambda path: 7)
+    monkeypatch.setattr(rebuild.graph, "run_graph_raw", lambda path, **_kwargs: 7)
     with pytest.raises(RuntimeError, match="exit 7"):
         rebuild.derive_run("broken")
     manifest = json.loads((run / "run.json").read_text())
@@ -233,7 +253,7 @@ def test_consumed_input_cannot_be_modified_by_stage(tiny_pipeline, monkeypatch):
         (path / "wayfinding.gpkg").write_bytes(b"unexpected write")
         return 0
 
-    monkeypatch.setattr(rebuild.graph, "run_graph_raw", mutate)
+    monkeypatch.setattr(rebuild.graph, "run_graph_raw", lambda path, **_kwargs: mutate(path))
     with pytest.raises(ValueError, match="Input changed"):
         rebuild.derive_run("mutation")
     assert json.loads((run / "run.json").read_text())["state"] == "failed"

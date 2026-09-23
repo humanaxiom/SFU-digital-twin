@@ -21,7 +21,7 @@ from wayfinding.etl import graph, normalise
 from wayfinding.etl.build_semantics import compare_snapshots, semantic_snapshot
 from wayfinding.etl.extract import extract_to_gpkg
 from wayfinding.etl.source_review import hash_directory
-from wayfinding.etl.topology import ENDPOINT_MODE, EXACT_MODE, TOPOLOGY_MODES
+from wayfinding.etl.topology import DEFAULT_MODE, ENDPOINT_MODE, EXACT_MODE, TOPOLOGY_MODES
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 EXPERIMENTS_ROOT = REPO_ROOT / "build/experiments"
@@ -215,7 +215,7 @@ def _failed(run: Path, manifest: dict[str, Any], error: Exception) -> None:
     _checkpoint(run, manifest)
 
 
-def extract_run(run_id: str, topology_mode: str = ENDPOINT_MODE) -> Path:
+def extract_run(run_id: str, topology_mode: str = DEFAULT_MODE) -> Path:
     if topology_mode not in TOPOLOGY_MODES:
         raise ValueError("Unsupported topology mode")
     run = _run_path(run_id)
@@ -302,7 +302,17 @@ def derive_run(run_id: str) -> Path:
         _stage(run, manifest, lambda: _normalise(run, manifest))
         topology_mode = manifest.get("build_config", {}).get("topology_mode", ENDPOINT_MODE)
         if topology_mode == ENDPOINT_MODE:
-            _stage(run, manifest, lambda: _graph_stage(graph.run_graph_raw, run))
+            # Legacy manifests may omit build_config. Pin their historical graph
+            # behavior explicitly because run_graph_raw defaults to exact noding
+            # for new standalone builds.
+            _stage(
+                run,
+                manifest,
+                lambda: _graph_stage(
+                    lambda path: graph.run_graph_raw(path, topology_mode=ENDPOINT_MODE),
+                    run,
+                ),
+            )
         else:
             def raw_graph() -> None:
                 code = graph.run_graph_raw(run / "derived", topology_mode=topology_mode)
@@ -374,7 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--run-id", required=True)
         if command == "extract":
-            subparser.add_argument("--topology", choices=TOPOLOGY_MODES, default=ENDPOINT_MODE)
+            subparser.add_argument("--topology", choices=TOPOLOGY_MODES, default=DEFAULT_MODE)
     compare = subparsers.add_parser("compare")
     compare.add_argument("--left", required=True)
     compare.add_argument("--right", required=True)

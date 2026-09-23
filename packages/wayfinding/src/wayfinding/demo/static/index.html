@@ -13,6 +13,8 @@
       <p class="eyebrow">SFU Burnaby</p>
       <h1>Campus &amp; indoor directions</h1>
     </div>
+    <details id="navigation-options">
+      <summary>More navigation options</summary>
     <div class="selectors" aria-label="Map controls">
       <label for="facility-select">Building</label>
       <select id="facility-select"></select>
@@ -20,22 +22,29 @@
       <select id="level-select"></select>
       <button id="open-floor" type="button" disabled>Open floor</button>
     </div>
+    </details>
   </header>
 
   <main>
     <section class="map-panel" aria-label="Campus and floor maps">
+      <nav class="quick-navigation" aria-label="Buildings and floors">
+        <div id="building-buttons" class="building-buttons" aria-label="Choose a building"></div>
+        <div id="floor-buttons" class="floor-buttons" aria-label="Choose a floor"></div>
+      </nav>
       <nav class="map-actions" aria-label="Map context">
         <button id="show-campus" type="button">Campus overview</button>
         <span id="map-context" aria-live="polite">Campus</span>
         <button id="return-to-route" type="button" hidden>Return to route</button>
       </nav>
       <section id="campus-view" aria-labelledby="campus-heading">
-        <p class="eyebrow">Three-building pilot · incomplete campus inventory</p>
-        <h2 id="campus-heading">Explore the campus pilot</h2>
-        <p class="campus-disclosure">AQ, ECC and Strand Hall are shown. No verified outdoor connections or building destinations are available. Choose a building to inspect its recorded floors.</p>
+        <h2 id="campus-heading">Choose a building to see rooms</h2>
+        <p class="campus-disclosure">Three-building pilot · indoor coverage only. Click a building or floor above.</p>
+        <details id="building-search">
+        <summary>Building names and search</summary>
         <label for="campus-search">Find a building by name or acronym</label>
         <input id="campus-search" type="search" autocomplete="off" placeholder="Academic Quadrangle, AQ, Strand…">
         <div id="campus-buildings" class="campus-buildings" aria-label="Pilot buildings"></div>
+        </details>
         <div class="map-actions">
           <button id="campus-zoom-in" type="button" aria-controls="campus-map">Zoom in</button>
           <button id="campus-zoom-out" type="button" aria-controls="campus-map">Zoom out</button>
@@ -53,7 +62,6 @@
       <div id="floor-view" hidden>
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Route preview · no live location</p>
           <h2 id="map-heading"><span id="viewing-floor">Floor plan</span></h2>
         </div>
         <div class="legend" aria-label="Map legend">
@@ -65,12 +73,12 @@
         </div>
       </div>
       <nav id="floor-journey" class="floor-journey" aria-label="Route floor visits"></nav>
-      <div class="map-actions">
+      <div class="map-actions floor-tools">
         <button id="retry-scene" type="button" hidden>Retry floor</button>
-        <button id="zoom-in" type="button" aria-controls="floor-map">Zoom in</button>
-        <button id="zoom-out" type="button" aria-controls="floor-map">Zoom out</button>
-        <button id="fit-route" type="button">Show route on this floor</button>
-        <button id="fit-floor" type="button">Show whole floor</button>
+        <button id="zoom-in" type="button" aria-controls="floor-map" aria-label="Zoom in">+</button>
+        <button id="zoom-out" type="button" aria-controls="floor-map" aria-label="Zoom out">−</button>
+        <button id="fit-route" type="button">Fit route</button>
+        <button id="fit-floor" type="button">Whole floor</button>
       </div>
       <div class="map-frame">
         <svg id="floor-map" role="img" aria-labelledby="map-title map-description">
@@ -80,7 +88,7 @@
         </svg>
         <p id="map-status" class="map-status" aria-live="polite">Loading artifact geometry…</p>
       </div>
-      <section class="current-step" aria-label="Selected instruction">
+      <section class="current-step" aria-label="Selected instruction" hidden>
         <div class="step-topline"><p id="step-position">Choose a route</p><span class="preview-label">Preview</span></div>
         <p id="current-instruction" aria-live="polite">Select a starting room and destination to see directions.</p>
         <div id="transition-views" class="transition-views" hidden>
@@ -96,12 +104,18 @@
           <button id="step-next" type="button" disabled>Next</button>
         </div>
       </section>
+      <section class="room-browser" aria-labelledby="rooms-heading">
+        <div class="rooms-heading"><h2 id="rooms-heading">Rooms on this floor</h2><span id="room-count" aria-live="polite"></span></div>
+        <label class="visually-hidden" for="room-filter">Filter rooms on this floor</label>
+        <input id="room-filter" type="search" placeholder="Find a room on this floor" autocomplete="off">
+        <div id="room-list" class="room-list" aria-label="Keyboard-selectable rooms"></div>
+      </section>
       </div>
     </section>
 
     <aside class="side-panel">
-      <section class="route-panel" aria-labelledby="route-heading">
-        <h2 id="route-heading">Directions</h2>
+      <details id="directions-panel" class="route-panel">
+        <summary id="route-heading">Directions</summary>
         <form id="route-form">
           <div class="route-controls">
             <label for="route-origin">From</label>
@@ -115,7 +129,6 @@
             </select>
           </div>
           <p id="route-options-status" class="route-options-status" data-state="empty" aria-live="polite">Choose a starting room to see mapped connections.</p>
-          <div id="reachable-destinations" class="reachable-destinations" role="group" aria-label="Mapped destinations" hidden></div>
           <div class="route-actions">
             <button id="route-submit" type="submit">Show directions</button>
             <button id="route-swap" type="button">Swap A/B</button>
@@ -136,7 +149,7 @@
           <p>Door width, path width, slope, powered doors, surface, closures, door access and elevator status are not verified.</p>
           <pre id="route-diagnostics">No route requested.</pre>
         </details>
-      </section>
+      </details>
 
       <details class="facts">
         <summary>Rooms and record details</summary>
@@ -145,10 +158,6 @@
         <dl id="unit-details">
           <div><dt>Room</dt><dd>Select a room from the map or list.</dd></div>
         </dl>
-        <div>
-          <h3>Rooms on this floor</h3>
-          <div id="room-list" class="room-list" aria-label="Keyboard-selectable rooms"></div>
-        </div>
       </details>
 
       <details class="assistant">

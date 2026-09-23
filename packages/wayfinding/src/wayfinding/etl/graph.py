@@ -28,7 +28,12 @@ from osgeo import ogr  # pyright: ignore[reportMissingImports]
 from shapely import wkt
 from shapely.geometry import LineString, MultiLineString, Point
 
-from wayfinding.etl.topology import ENDPOINT_MODE, EXACT_MODE, TOPOLOGY_MODES, reverse_spans
+from wayfinding.etl.topology import (
+    DEFAULT_MODE,
+    EXACT_MODE,
+    TOPOLOGY_MODES,
+    reverse_spans,
+)
 
 logger = logging.getLogger(__name__)
 ogr.UseExceptions()
@@ -519,7 +524,7 @@ def compute_graph_stats(
     return stats
 
 
-def run_graph_raw(output_dir: Path, *, topology_mode: str = ENDPOINT_MODE) -> int:
+def run_graph_raw(output_dir: Path, *, topology_mode: str = DEFAULT_MODE) -> int:
     """Run graph-raw ETL step: snap nodes and build raw pathway graph.
 
     Outputs:
