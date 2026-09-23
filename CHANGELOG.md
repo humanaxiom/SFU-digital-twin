@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — external candidate access on port 8007
+
+- Keep the verified candidate loopback endpoint on port 18007 and add a
+  digest-pinned, unprivileged nginx edge on `sfuai.ca:8007`.
+- Restrict the edge to the expected Host, preserve the backend Host boundary,
+  clear client-supplied forwarding identity, and bound access logs.
+- Verify AQ and SH cross-floor routes in Chromium through port 8007 and confirm
+  HTTP 200 responses from independent internet nodes.
+
 ## Unreleased — exact source topology promotion
 
 - Promote exact same-level source vertices from an isolated experiment to the

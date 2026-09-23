@@ -1,5 +1,20 @@
 # Handoff — Living Project State
 
+## Current external deployment — sfuai.ca:8007
+
+DT-026 keeps the verified candidate at **http://127.0.0.1:18007/** and exposes the
+same read-only client and artifacts at **http://sfuai.ca:8007/**. A digest-pinned,
+unprivileged nginx service accepts only `Host: sfuai.ca`, forwards a fixed `Host:
+demo` to the private backend, and rejects arbitrary hosts. The public endpoint is
+plain HTTP with no authentication and is limited to this read-only demonstration.
+
+The live Compose project is `sfudt-sh-navigation-candidate`. AQ and SH cross-floor
+room-picking passed in real Chromium through port 8007. Independent HTTP probes from
+three countries returned 200 from `173.180.31.84`; internal and external health
+responses report the same GeoPackage, graph, and stats hashes. Configuration,
+commands, evidence, rollback, and limits are recorded in [DT-026](reports/DT-026.md)
+and [ADR-0019](adr/0019-public-demo-reverse-proxy.md).
+
 ## Current deployment — exact Strand cross-floor topology
 
 The reported Strand failure was a routing-artifact defect rather than a floor-button
