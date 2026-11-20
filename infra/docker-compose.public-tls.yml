@@ -1,0 +1,15 @@
+# Public HTTPS transport; certificate files are existing read-only host inputs.
+services:
+  external:
+    volumes:
+      - ./wayfinding-external-tls.nginx.conf:/etc/nginx/nginx.conf:ro
+      - type: bind
+        source: ${WAYFINDING_TLS_CERT_DIR:?WAYFINDING_TLS_CERT_DIR is required}
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
+    extra_hosts:
+      - "sfuai.ca:127.0.0.1"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null https://sfuai.ca:8007/demo/v1/health"]

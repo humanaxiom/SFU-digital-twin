@@ -3,6 +3,11 @@
 Status: accepted
 Date: 2026-09-09
 
+The room-details accessibility display contract is superseded by
+[ADR-0023](0023-facilities-evidence-and-legacy-tags.md): omit raw legacy flags
+and verification rows, identify source-recorded classifications, and disclose
+that destination accessibility is unverified. Existing API keys remain unchanged.
+
 ## Context
 
 DT-013 must provide Facilities, CIO, and AI-policy stakeholders with a visual, clickable UI and a

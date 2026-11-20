@@ -25,9 +25,10 @@ from typing import Any, cast
 
 import networkx as nx
 from osgeo import ogr  # pyright: ignore[reportMissingImports]
-from shapely import wkt
+from shapely import wkb, wkt
 from shapely.geometry import LineString, MultiLineString, Point
 
+from wayfinding.etl.multipart import reconstruct_pathway
 from wayfinding.etl.topology import (
     DEFAULT_MODE,
     EXACT_MODE,
@@ -184,7 +185,20 @@ def snap_nodes(
         if not isinstance(geom, (LineString, MultiLineString)):
             raise ValueError(f"Pathway FID {fid} has unsupported geometry {geom.geom_type}")
 
-        start_coord, end_coord = extract_endpoints(geom)
+        if isinstance(geom, MultiLineString) and len(geom.geoms) > 1:
+            try:
+                native = wkb.loads(bytes(geom_ogr.ExportToWkb()))
+                direction = (
+                    feature.GetField("TRAVEL_DIRECTION")
+                    if feature.GetFieldIndex("TRAVEL_DIRECTION") >= 0 else None
+                )
+                coords, _spans = reconstruct_pathway(cast(MultiLineString, native), direction)
+                start_coord, end_coord = coords[0], coords[-1]
+            except ValueError as error:
+                logger.warning("Excluded pathway %s: %s", fid, error)
+                continue
+        else:
+            start_coord, end_coord = extract_endpoints(geom)
 
         # Snap to 1 cm grid
         start_node = (
@@ -334,12 +348,32 @@ def build_raw_graph(
 
     self_loops_removed = 0
     self_loop_fids = []
+    multipart_audit: dict[str, Any] = {"reconstructed_features": [], "excluded_features": []}
 
     pathways_layer.ResetReading()
     for feature in pathways_layer:
         fid = str(feature.GetFID())
         level_id = feature.GetField("LEVEL_ID")
         length_3d = feature.GetField("LENGTH_3D")
+
+        native = wkb.loads(bytes(feature.GetGeometryRef().ExportToWkb()))
+        native_coords: list[Any] = []
+        _spans: list[dict[str, int]] = []
+        multipart = isinstance(native, MultiLineString) and len(native.geoms) > 1
+        if multipart:
+            try:
+                direction = (
+                    feature.GetField("TRAVEL_DIRECTION")
+                    if feature.GetFieldIndex("TRAVEL_DIRECTION") >= 0 else None
+                )
+                native_coords, _spans = reconstruct_pathway(
+                    cast(MultiLineString, native), direction)
+            except ValueError as error:
+                multipart_audit["excluded_features"].append(
+                    {"feature_id": fid, "reason": str(error)})
+                continue
+            multipart_audit["reconstructed_features"].append(
+                {"feature_id": fid, "part_count": len(cast(MultiLineString, native).geoms)})
 
         # Look up snapped nodes
         start_node = node_map[("PW", fid, "start")]
@@ -370,11 +404,12 @@ def build_raw_graph(
         elif len(source_geom.geoms) == 1:
             geom = cast(LineString, source_geom.geoms[0])
         else:
-            # Flatten multipart into single LineString by concatenating coordinates
-            all_coords = []
-            for part in source_geom.geoms:
-                all_coords.extend(part.coords)
-            geom = LineString(all_coords)
+            geom = LineString(native_coords)
+
+        lineage = {}
+        if multipart:
+            lineage = {"source_feature_id": fid, "source_spans_complete": True,
+                       "source_spans": [dict(span, feature_id=fid) for span in _spans]}
 
         # Create forward edge (this adds nodes automatically if they don't exist)
         forward_key = f"PW_{fid}"
@@ -387,6 +422,7 @@ def build_raw_graph(
             level_id=level_id,
             feature_id=fid,
             geometry=geom,
+            **lineage,
         )
 
         # Set node attributes (nodes were created by add_edge above)
@@ -407,6 +443,8 @@ def build_raw_graph(
             level_id=level_id,
             feature_id=fid,
             geometry=reverse_geom,
+            **({**lineage, "source_spans": reverse_spans(lineage["source_spans"])}
+               if lineage else {}),
         )
 
     ds = None  # Close dataset
@@ -421,6 +459,8 @@ def build_raw_graph(
         graph, level_lookup, self_loops_removed, self_loop_fids
     )
 
+    stats["multipart_reconstruction"] = multipart_audit
+    graph.graph["multipart_reconstruction"] = multipart_audit
     return graph, stats
 
 
@@ -533,7 +573,7 @@ def run_graph_raw(output_dir: Path, *, topology_mode: str = DEFAULT_MODE) -> int
     - graph_raw_stats.json: Graph statistics
 
     Args:
-        output_dir: Directory for output artifacts (typically /workspace/build)
+        output_dir: Directory for the current run's artifacts
 
     Returns:
         Exit code (0 = success)
@@ -547,7 +587,6 @@ def run_graph_raw(output_dir: Path, *, topology_mode: str = DEFAULT_MODE) -> int
 
     if not gpkg_path.exists():
         logger.error(f"GeoPackage not found: {gpkg_path}")
-        logger.error("Run 'make etl-extract' and 'make etl-normalise' first.")
         return 1
 
     logger.info("=== DT-005: Graph Node Snapping and Raw Graph Construction ===")
@@ -984,7 +1023,7 @@ def run_graph_transitions(output_dir: Path) -> int:
     and outputs graph_with_transitions.pkl and graph_with_transitions_stats.json.
 
     Args:
-        output_dir: Directory for output artifacts (typically /workspace/build)
+        output_dir: Directory for the current run's artifacts
 
     Returns:
         Exit code (0 = success)
@@ -998,17 +1037,14 @@ def run_graph_transitions(output_dir: Path) -> int:
     # Validate inputs exist
     if not graph_raw_pkl.exists():
         logger.error(f"graph_raw.pkl not found: {graph_raw_pkl}")
-        logger.error("Run 'make etl-graph-raw' first.")
         return 1
 
     if not node_map_pkl.exists():
         logger.error(f"node_map.pkl not found: {node_map_pkl}")
-        logger.error("Run 'make etl-graph-raw' first.")
         return 1
 
     if not gpkg_path.exists():
         logger.error(f"GeoPackage not found: {gpkg_path}")
-        logger.error("Run 'make etl-extract' and 'make etl-normalise' first.")
         return 1
 
     logger.info("=== DT-006: Add Transition Edges to Graph ===")
@@ -1393,6 +1429,14 @@ def _traverse_chains(
             sorted(by_neighbor[neighbor_b], key=feature_sort_key),
             strict=False,
         ):
+            incoming = [data for data in graph.get_edge_data(neighbor_a, node, default={}).values()
+                        if str(data.get("feature_id")) == feature_a]
+            outgoing = [data for data in graph.get_edge_data(node, neighbor_b, default={}).values()
+                        if str(data.get("feature_id")) == feature_b]
+            if (not incoming or not outgoing
+                    or tuple(incoming[0]["geometry"].coords[-1])
+                    != tuple(outgoing[0]["geometry"].coords[0])):
+                continue
             pairings[(node, feature_a)] = feature_b
             pairings[(node, feature_b)] = feature_a
 
@@ -1474,13 +1518,16 @@ def _add_contracted_chain(
     """
     start = chain["start"]
     end = chain["end"]
+    for node in (start, end):
+        contracted_graph.add_node(node, **source_graph.nodes[node])
     edges = chain["edges"]
 
     # Collect attributes from segments
     length_3d = sum(d.get("length_3d", 0.0) for u, v, k, d in edges)
     level_id = edges[0][3].get("level_id")  # All segments must share level_id
     physical_ids = sorted(str(d["feature_id"]) for u, v, k, d in edges)
-    exact_mode = source_graph.graph.get("topology_mode") == EXACT_MODE
+    exact_mode = (source_graph.graph.get("topology_mode") == EXACT_MODE
+                  or any(data.get("source_spans") for _u, _v, _k, data in edges))
     original_fids = (
         sorted({str(d.get("source_feature_id", d["feature_id"])) for u, v, k, d in edges})
         if exact_mode else physical_ids
@@ -1502,7 +1549,9 @@ def _add_contracted_chain(
             # First segment: include all coords
             all_coords.extend(coords)
         else:
-            # Subsequent segments: skip first coord (duplicate of previous end)
+            if tuple(all_coords[-1]) != tuple(coords[0]):
+                raise ValueError("Cannot contract unequal native pathway endpoints")
+            # Subsequent segments: skip the exact duplicated source endpoint
             all_coords.extend(coords[1:])
 
     merged_geom = LineString(all_coords)
@@ -1846,7 +1895,7 @@ def run_graph_contract(output_dir: Path) -> int:
     graph_contracted_stats.json.
 
     Args:
-        output_dir: Directory for output artifacts (typically /workspace/build)
+        output_dir: Directory for the current run's artifacts
 
     Returns:
         Exit code (0 = success)
@@ -1866,12 +1915,10 @@ def run_graph_contract(output_dir: Path) -> int:
     # Validate inputs exist
     if not graph_transitions_pkl.exists():
         logger.error(f"graph_with_transitions.pkl not found: {graph_transitions_pkl}")
-        logger.error("Run 'make etl-graph-transitions' first.")
         return 1
 
     if not gpkg_path.exists():
         logger.error(f"GeoPackage not found: {gpkg_path}")
-        logger.error("Run 'make etl-extract' and 'make etl-normalise' first.")
         return 1
 
     logger.info("=== DT-007: Contract Degree-2 Chains ===")
@@ -1954,3 +2001,11 @@ def run_graph_contract(output_dir: Path) -> int:
     logger.info(f"  {stats_json}")
 
     return 0
+
+
+
+
+
+
+
+

@@ -1,0 +1,8 @@
+# These launchers and their Docker gate must execute as POSIX shell scripts.
+/tools/launch-stack.sh text eol=lf
+/tools/teardown-stack.sh text eol=lf
+/tests/gate/test_launch_stack.sh text eol=lf
+/tests/gate/recovery-demo.sh text eol=lf
+/tools/rebuild.sh text eol=lf
+/tests/gate/test_rebuild_launcher.sh text eol=lf
+/tests/gate/test_no_host_python.sh text eol=lf

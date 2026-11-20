@@ -2,8 +2,12 @@
 
 Status: accepted; Stage A/B navigation foundation implemented, delivery validation
 recorded in [the phase report](../reports/DT-024-PHASE-AB.md). The journey-entry
-first-instruction synchronization slice is delivered; endpoint drafts and the
-remaining journey, cache and mobile work remain pending.
+first-instruction synchronization slice is delivered. The [scoped room search
+increment](../reports/DT-024-ROOM-SEARCH.md) implements N05 using native search,
+filters and result lists. The [explicit Preview increment](../reports/DT-024-PREVIEW.md)
+implements endpoint drafts and committed route identity. The
+[journey report](../reports/DT-024-JOURNEY.md) records exploration, Return,
+mobile controls, camera restoration and artifact-scoped scene reuse.
 Date: 2026-09-17.
 
 ## Scope and supersession
@@ -27,7 +31,8 @@ For DT-024, this decision supersedes only these client interaction choices:
 
 The earlier documents describe runtime behavior except where a delivered DT-024
 stage supersedes it. Stage B supersedes the global-order picker and stale-response
-behavior; draft/commit and the remaining journey changes remain pending. Their other requirements remain applicable. In particular,
+behavior. Stage C supersedes automatic route submission with explicit Preview.
+Stage D implements the journey interactions below. Other requirements remain applicable. In particular,
 ADR-0012 guidance geometry, chronological visits, validation and limitations;
 ADR-0013 directed availability; ADR-0014 camera semantics; and ADR-0016 artifact-only
 campus coverage remain authoritative. No HTTP API, guidance schema, source,
@@ -61,7 +66,8 @@ inspection screen. It does not change routing, endpoints or source coverage.
 Opening a route step uses that step's exact facility/level identity and synchronizes
 the visible controls without hiding other recorded buildings from discovery.
 
-Interim clickable-room safety amendment (2026-09-23): while the Stage C draft and
+Historical clickable-room safety amendment (2026-09-23), superseded for room
+activation by Stage C on 2026-11-20: while the Stage C draft and
 explicit-preview workflow remains pending, a room click continues to choose A and
 then B. Once directed availability for the exact A/profile is known, only
 `connected` rooms are actionable as B; other rooms remain visible on the map and

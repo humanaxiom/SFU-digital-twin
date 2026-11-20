@@ -10,6 +10,7 @@ def test_guidance_client_state():
     root = Path(__file__).resolve().parents[3]
     result = subprocess.run(
         [node, "tests/gate/test_guidance_state.cjs"],
-        cwd=root, capture_output=True, text=True, check=False,
+        cwd=root, capture_output=True, text=True, check=False, timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "Guidance state regressions passed" in result.stdout, result.stdout + result.stderr

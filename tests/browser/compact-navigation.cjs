@@ -71,17 +71,21 @@ async function main(){
   const room=await evaluate("document.querySelector('#room-list button').textContent");await click("#room-list button");await wait("document.querySelector('.facts').open");
   assert.ok((await evaluate("document.querySelector('#unit-details').textContent")).includes(room));result.checks.push("visible room button selects its record without opening a disclosure first");
   // Build and follow a real cross-floor route using only visible room/floor controls.
+  if (!await evaluate("document.querySelector('#directions-panel').open")) await click('#directions-panel > summary');
   await click("#route-clear");
   await openBuilding(aq.facility_id);
   await click('#floor-buttons [data-level-id="SFU_BURNABY_QUAD_2000"]');await ready("SFU_BURNABY_QUAD_2000");
   assert.ok(await evaluate("[...document.querySelectorAll('#route-origin option')].filter(n=>n.value).every(n=>n.value.startsWith('SFU_BURNABY_QUAD_2000_'))"));
   await click('#room-list [data-unit-id="SFU_BURNABY_QUAD_2000_2035.2"]');
+  await click('#room-start-here');
   await wait("document.querySelector('#route-origin').value==='SFU_BURNABY_QUAD_2000_2035.2'&&document.querySelector('#route-options-status').dataset.state==='ready'");
   assert.equal(await evaluate("document.querySelector('#reachable-destinations')"),null);
   assert.ok(!(await evaluate("document.querySelector('#route-options-status').textContent")).includes('below'));
   const available=await evaluate("fetch('/demo/v1/route-options?origin_unit_id=SFU_BURNABY_QUAD_2000_2035.2&profile=default').then(r=>r.json())");
   await click('#floor-buttons [data-level-id="SFU_BURNABY_QUAD_5000"]');await ready("SFU_BURNABY_QUAD_5000");
   await click('#room-list [data-unit-id="SFU_BURNABY_QUAD_5000_5046"]');
+  await click('#room-directions-here');
+  await click('#route-submit');
   await wait("document.querySelector('#route-status').dataset.state==='success'&&document.querySelectorAll('#floor-journey button').length>1");
   const destinationOptions=await evaluate("[...document.querySelectorAll('#route-destination option')].filter(n=>n.value).map(n=>n.value)");
   assert.ok(destinationOptions.length < available.destinations.length);

@@ -31,7 +31,6 @@ All tests will FAIL initially because:
 - wayfinding.etl.graph.contract_degree2_chains() does not exist
 - run_graph_contract() orchestration entry point does not exist
 - run.py has no graph-contract subcommand
-- Makefile has no etl-graph-contract target
 - build/graph_contracted.pkl and build/graph_contracted_stats.json do not exist
 
 Tests use build/graph_with_transitions.pkl from DT-006 and build/wayfinding.gpkg
@@ -155,7 +154,7 @@ def load_required_graph_with_transitions() -> Any:
     """Load graph_with_transitions.pkl from DT-006, failing clearly if missing."""
     require_file(
         GRAPH_WITH_TRANSITIONS_PKL,
-        "DT-006 graph with transitions (run make etl-graph-transitions)",
+        "DT-006 graph with transitions",
     )
     with open(GRAPH_WITH_TRANSITIONS_PKL, "rb") as f:
         return pickle.load(f)
@@ -163,7 +162,7 @@ def load_required_graph_with_transitions() -> Any:
 
 def load_required_gpkg() -> Path:
     """Load required GPKG from DT-003/DT-004, failing clearly if missing."""
-    require_file(SOURCE_GPKG, "DT-003/DT-004 GeoPackage (run make etl-normalise)")
+    require_file(SOURCE_GPKG, "DT-003/DT-004 GeoPackage")
     return SOURCE_GPKG
 
 
@@ -402,7 +401,7 @@ def graph_with_transitions() -> Any:
 @pytest.fixture(scope="module")
 def graph_contracted() -> Any:
     """Load the DT-007 output once; missing output is a data-QA failure, not a skip."""
-    require_file(GRAPH_CONTRACTED_PKL, "DT-007 contracted graph (run make etl-graph-contract)")
+    require_file(GRAPH_CONTRACTED_PKL, "DT-007 contracted graph")
     with open(GRAPH_CONTRACTED_PKL, "rb") as f:
         return pickle.load(f)
 
@@ -1737,7 +1736,7 @@ def test_run_graph_contract_writes_artifacts():
     """AC8: CLI integration: graph_contracted.pkl and graph_contracted_stats.json
     created."""
     if not GRAPH_CONTRACTED_PKL.exists():
-        pytest.skip("graph_contracted.pkl not yet generated (run make etl-graph-contract)")
+        pytest.skip("graph_contracted.pkl not yet generated")
 
     if not GRAPH_CONTRACTED_STATS_JSON.exists():
         pytest.skip("graph_contracted_stats.json not yet generated")
@@ -1859,21 +1858,6 @@ def test_contracted_stats_lineage_excludes_sidecar_and_source_gdb():
     assert all("IndoorWayfinding.gdb" not in path and ".gdb" not in path for path in paths)
 
 
-def test_makefile_has_etl_graph_contract_target():
-    """Makefile integration: etl-graph-contract target exists."""
-    makefile_path = WORKSPACE_ROOT / "Makefile"
-
-    if not makefile_path.exists():
-        pytest.skip("Makefile not yet created (Phase 1 deliverable)")
-
-    makefile_content = makefile_path.read_text()
-
-    assert "etl-graph-contract:" in makefile_content, (
-        "Makefile must have 'etl-graph-contract:' target for container-only execution. "
-        "Per DT-007 plan §2.2 and container-only-execution.instructions.md."
-    )
-
-
 @pytest.mark.dataqa
 def test_makefile_dataqa_is_artifact_only_nonempty_gate_without_runtime_installers():
     """ADR-0006: normal targets use artifact service and preinstalled gate tools."""
@@ -1930,40 +1914,6 @@ def test_compose_artifact_has_no_gdb_mount_and_uses_digest_pinned_common_image()
     assert re.search(
         r"IndoorWayfinding\.gdb:/data/IndoorWayfinding\.gdb:ro",
         source_mounts,
-    )
-
-
-def test_run_py_has_graph_contract_handler():
-    """CLI integration: run.py has graph-contract subcommand handler."""
-    try:
-        from wayfinding.etl import run
-    except ImportError:
-        pytest.fail("wayfinding.etl.run module not importable")
-    assert callable(run.run_graph_contract)
-
-    # Check main() function dispatches graph-contract
-    # Since we can't easily invoke main() in test, check source code
-    run_py_path = (
-        WORKSPACE_ROOT
-        / "packages"
-        / "wayfinding"
-        / "src"
-        / "wayfinding"
-        / "etl"
-        / "run.py"
-    )
-
-    if not run_py_path.exists():
-        pytest.fail("run.py not found")
-
-    run_py_content = run_py_path.read_text()
-
-    assert "graph-contract" in run_py_content, (
-        "run.py must handle 'graph-contract' subcommand per DT-007 plan §2.2"
-    )
-
-    assert "run_graph_contract" in run_py_content, (
-        "run.py must call run_graph_contract() entry point per DT-007 plan"
     )
 
 
@@ -2090,19 +2040,6 @@ def test_run_graph_contract_reports_missing_inputs(
 
     assert run_graph_contract(tmp_path) == 1
     assert expected_message in caplog.text
-
-
-def test_run_graph_contract_cli_translates_step_error(monkeypatch, capsys):
-    """The CLI adapter returns a failure status when the graph step raises."""
-    from wayfinding.etl import graph, run
-
-    def fail_contract(_output_dir):
-        raise RuntimeError("synthetic contraction failure")
-
-    monkeypatch.setattr(graph, "run_graph_contract", fail_contract)
-
-    assert run.run_graph_contract() == 1
-    assert "ERROR: Contraction failed: synthetic contraction failure" in capsys.readouterr().out
 
 
 def test_validate_level_consistency_fails_on_cross_level_chain():

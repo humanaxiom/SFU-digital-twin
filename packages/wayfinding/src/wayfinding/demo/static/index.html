@@ -31,11 +31,12 @@
         <div id="building-buttons" class="building-buttons" aria-label="Choose a building"></div>
         <div id="floor-buttons" class="floor-buttons" aria-label="Choose a floor"></div>
       </nav>
-      <nav class="map-actions" aria-label="Map context">
+      <nav class="map-actions map-context-actions" aria-label="Map context">
         <button id="show-campus" type="button">Campus overview</button>
         <span id="map-context" aria-live="polite">Campus</span>
         <button id="return-to-route" type="button" hidden>Return to route</button>
       </nav>
+      <p id="map-route-identity" class="route-identity" aria-live="polite">No committed route.</p>
       <section id="campus-view" aria-labelledby="campus-heading">
         <h2 id="campus-heading">Choose a building to see rooms</h2>
         <p class="campus-disclosure">Three-building pilot · indoor coverage only. Click a building or floor above.</p>
@@ -80,30 +81,26 @@
         <button id="fit-route" type="button">Fit route</button>
         <button id="fit-floor" type="button">Whole floor</button>
       </div>
-      <div class="map-frame">
-        <svg id="floor-map" role="img" aria-labelledby="map-title map-description">
-          <title id="map-title">Selected SFU floor</title>
-          <desc id="map-description">Floor plan with the mapped route and selected instruction. This preview does not show your location.</desc>
-          <g id="route-overlay"></g>
-        </svg>
-        <p id="map-status" class="map-status" aria-live="polite">Loading artifact geometry…</p>
-      </div>
       <section class="current-step" aria-label="Selected instruction" hidden>
         <div class="step-topline"><p id="step-position">Choose a route</p><span class="preview-label">Preview</span></div>
-        <p id="current-instruction" aria-live="polite">Select a starting room and destination to see directions.</p>
+        <p id="current-instruction" tabindex="-1" aria-live="polite">Select a starting room and destination to see directions.</p>
         <div id="transition-views" class="transition-views" hidden>
           <button id="transition-departure" type="button">View departure floor</button>
           <button id="transition-arrival" type="button">View arrival floor</button>
-        </div>
-        <div id="floor-preview" class="floor-preview" hidden>
-          <span id="preview-message"></span>
-          <button id="show-selected-step" type="button">Show selected step</button>
         </div>
         <div class="step-navigation">
           <button id="step-previous" type="button" disabled>Previous</button>
           <button id="step-next" type="button" disabled>Next</button>
         </div>
       </section>
+      <div class="map-frame">
+        <svg id="floor-map" role="group" aria-labelledby="map-title map-description" aria-describedby="map-route-identity">
+          <title id="map-title">Selected SFU floor</title>
+          <desc id="map-description">Floor plan with the mapped route and selected instruction. This preview does not show your location.</desc>
+          <g id="route-overlay"></g>
+        </svg>
+        <p id="map-status" class="map-status" aria-live="polite">Loading artifact geometry…</p>
+      </div>
       <section class="room-browser" aria-labelledby="rooms-heading">
         <div class="rooms-heading"><h2 id="rooms-heading">Rooms on this floor</h2><span id="room-count" aria-live="polite"></span></div>
         <label class="visually-hidden" for="room-filter">Filter rooms on this floor</label>
@@ -116,6 +113,45 @@
     <aside class="side-panel">
       <details id="directions-panel" class="route-panel">
         <summary id="route-heading">Directions</summary>
+        <details id="route-origin-finder" class="endpoint-search">
+          <summary>Search From rooms</summary>
+          <label class="visually-hidden" for="route-origin-search">Search From rooms</label>
+          <input id="route-origin-search" type="search" autocomplete="off" placeholder="Room ID or building">
+          <div class="endpoint-search-scope">
+            <div>
+              <label for="route-origin-search-building">Building</label>
+              <select id="route-origin-search-building"></select>
+            </div>
+            <div>
+              <label for="route-origin-search-floor">Floor</label>
+              <select id="route-origin-search-floor"></select>
+            </div>
+          </div>
+          <label for="route-origin-search-results">Matching starting rooms</label>
+          <select id="route-origin-search-results" size="5" aria-describedby="route-origin-search-status" disabled></select>
+          <p id="route-origin-search-status" role="status">Loading the room catalog…</p>
+          <button id="route-origin-search-choose" type="button" disabled>Use as starting room</button>
+        </details>
+        <details id="route-destination-finder" class="endpoint-search">
+          <summary>Search To rooms</summary>
+          <label class="visually-hidden" for="route-destination-search">Search To rooms</label>
+          <input id="route-destination-search" type="search" autocomplete="off" placeholder="Room ID or building">
+          <div class="endpoint-search-scope">
+            <div>
+              <label for="route-destination-search-building">Building</label>
+              <select id="route-destination-search-building"></select>
+            </div>
+            <div>
+              <label for="route-destination-search-floor">Floor</label>
+              <select id="route-destination-search-floor"></select>
+            </div>
+          </div>
+          <label for="route-destination-search-results">Matching destinations</label>
+          <select id="route-destination-search-results" size="5" aria-describedby="route-destination-search-status" disabled></select>
+          <p id="route-destination-search-status" role="status">Loading the room catalog…</p>
+          <button id="route-destination-search-choose" type="button" disabled>Use as destination</button>
+        </details>
+        <p id="route-draft-status" role="status">Draft only. Select Preview route to request directions.</p>
         <form id="route-form">
           <div class="route-controls">
             <label for="route-origin">From</label>
@@ -128,17 +164,20 @@
               <option value="elevator_only">Elevator only</option>
             </select>
           </div>
+          <p id="route-profile-help" class="route-qualification" hidden>Draft option: stairs excluded; accessibility is not verified.</p>
           <p id="route-options-status" class="route-options-status" data-state="empty" aria-live="polite">Choose a starting room to see mapped connections.</p>
           <div class="route-actions">
-            <button id="route-submit" type="submit">Show directions</button>
+            <button id="route-submit" type="submit">Preview route</button>
             <button id="route-swap" type="button">Swap A/B</button>
-            <button id="route-clear" type="button">Clear</button>
+            <button id="route-clear" type="button">Clear route</button>
           </div>
         </form>
-        <div id="route-status" class="route-status" data-state="empty" aria-live="polite">Choose two rooms, or select them on the map.</div>
+        <p id="route-committed-identity" class="route-identity" aria-live="polite">No committed route.</p>
+        <p id="route-request-status" data-state="empty" role="status"></p>
+        <div id="route-status" class="route-status" data-state="empty" aria-live="polite">Choose two rooms, then select Preview route.</div>
         <p class="route-qualification">The mapped route starts and ends near the rooms. The connections to the doors have not been checked.</p>
         <p id="route-accessibility" class="route-qualification" hidden>Elevators only; stairs excluded. Accessibility is not verified.</p>
-        <details id="directions-list" class="directions-list" open>
+        <details id="directions-list" class="directions-list">
           <summary>All directions</summary>
           <ol id="route-steps" class="route-steps"></ol>
         </details>
@@ -155,6 +194,11 @@
         <summary>Rooms and record details</summary>
         <p class="eyebrow">Selected record</p>
         <h2 id="details-heading">Record details</h2>
+        <div class="route-actions">
+          <button id="room-start-here" type="button" disabled>Start here</button>
+          <button id="room-directions-here" type="button" disabled>Directions here</button>
+        </div>
+        <p id="room-route-status" role="status">Inspect a room to edit the route draft.</p>
         <dl id="unit-details">
           <div><dt>Room</dt><dd>Select a room from the map or list.</dd></div>
         </dl>
@@ -179,7 +223,7 @@
       <details class="limitations">
         <summary>Data and limitations</summary>
         <p>Content comes from the accepted legacy normalized Phase 1 artifact. Only source records marked searchable are shown.</p>
-        <p>Destination accessibility tags describe destinations, not paths.</p>
+        <p>Room details show source classifications. Physical accessibility is unverified.</p>
         <p>Routes use only measured graph geometry between approximate anchors. There is no public map geometry, nearest search, travel-time estimate, live-status, or LLM capability.</p>
         <p>Door width, path width, slope, surface, powered doors, closures, opening hours, door access, and elevator status are not verified.</p>
         <p>Artifact SHA-256: <code id="artifact-hash">Loading…</code></p>

@@ -99,7 +99,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(21rem, 25rem)
 .unit-shape.route-origin { fill: var(--teal); stroke-width: 2; stroke-dasharray: 5 2; }
 .unit-shape.route-destination { fill: var(--coral); stroke-width: 2; stroke-dasharray: 1 2; }
 .unit-shape.route-connected { stroke-width: 1.4; }
-.unit-shape.route-unavailable { fill: #e5e7e5; stroke: #9aa39f; cursor: not-allowed; opacity: .55; }
+.unit-shape.route-unavailable { fill: #e5e7e5; stroke: #9aa39f; cursor: pointer; opacity: .65; }
 .unit-shape.route-unavailable:hover, .unit-shape.route-unavailable:focus { fill: #e5e7e5; }
 .route-segment { fill: none; stroke: #b76a5e; stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 .route-halo { fill: none; stroke: white; stroke-width: 10; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -134,6 +134,17 @@ dd { margin: 0; overflow-wrap: anywhere; }
 form label { display: block; margin-bottom: .35rem; font: .8rem "Trebuchet MS", sans-serif; color: var(--muted); }
 button[type="submit"] { padding: .55rem 1rem; border: 0; border-radius: 4px; color: white; background: var(--teal); cursor: pointer; }
 .route-controls { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .4rem .7rem; align-items: center; }
+.endpoint-search { border-top: 1px solid var(--line); }
+.endpoint-search summary { color: var(--teal-dark); }
+.endpoint-search[open] { padding-bottom: .75rem; }
+.endpoint-search + #route-form { margin-top: .5rem; }
+.endpoint-search :is(input, select) { width: 100%; min-height: 44px; }
+.endpoint-search [size] { padding: .25rem; font-size: .85rem; }
+.endpoint-search [size] option { padding: .35rem .25rem; }
+.endpoint-search-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: .5rem 0; }
+.endpoint-search label, .endpoint-search p { display: block; margin: 0 0 .25rem; color: var(--muted); font-size: .85rem; }
+.endpoint-search p { margin: .4rem 0; overflow-wrap: anywhere; }
+.endpoint-search button { min-height: 44px; padding: .5rem .65rem; border: 1px solid var(--teal); border-radius: 4px; color: var(--teal-dark); background: white; cursor: pointer; }
 .route-panel form { display: grid; gap: .75rem; }
 .route-options-status { margin: 0; padding: .65rem .75rem; border-left: 3px solid var(--teal); background: #edf4f1; font-size: .85rem; line-height: 1.45; }
 .route-options-status[data-state="error"] { border-color: var(--coral); background: #f8e9e4; }
@@ -149,13 +160,13 @@ button[type="submit"] { padding: .55rem 1rem; border: 0; border-radius: 4px; col
 .visit-heading { display: block; padding: .8rem .15rem .3rem; font-weight: bold; color: var(--muted); font-size: .85rem; }
 .route-qualification { font-size: .85rem; line-height: 1.5; margin-bottom: .65rem; }
 .floor-journey { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .5rem; }
-.floor-journey button { background: white; border: 1px solid var(--line); border-radius: 4px; padding: .5rem .6rem; cursor: pointer; }
+.floor-journey button { min-height: 44px; background: white; border: 1px solid var(--line); border-radius: 4px; padding: .5rem .6rem; cursor: pointer; }
 .floor-journey button[aria-current="location"] { border: 2px solid #005fcc; background: #eaf2ff; font-weight: bold; }
 .journey-connector { display: flex; align-items: center; font-size: .8rem; color: var(--muted); }
 .map-actions, .transition-views, .step-navigation { display: flex; flex-wrap: wrap; gap: .5rem; }
 .map-actions { margin-bottom: .5rem; }
-.map-actions button, .step-navigation button, .transition-views button, #show-selected-step { min-height: 44px; padding: .5rem .65rem; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--teal-dark); cursor: pointer; }
-.current-step { margin-top: .65rem; padding: .8rem 1rem; border: 2px solid #005fcc; border-radius: 6px; background: white; }
+.map-actions button, .step-navigation button, .transition-views button { min-height: 44px; padding: .5rem .65rem; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--teal-dark); cursor: pointer; }
+.current-step { margin-bottom: .5rem; padding: .8rem 1rem; border: 2px solid #005fcc; border-radius: 6px; background: white; }
 .step-topline { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; color: #005fcc; font-size: .8rem; font-weight: bold; }
 #step-position { margin-bottom: .35rem; }
 .preview-label { color: var(--muted); font-size: .7rem; text-transform: uppercase; }
@@ -164,8 +175,6 @@ button[type="submit"] { padding: .55rem 1rem; border: 0; border-radius: 4px; col
 .step-navigation button { min-width: 6rem; }
 button:disabled { opacity: .5; cursor: default; }
 .transition-views button[aria-pressed="true"] { background: #eaf2ff; border: 2px solid #005fcc; }
-.floor-preview { padding: .5rem 0; font-size: .85rem; line-height: 1.4; }
-.floor-preview button { margin-top: .3rem; }
 .route-details { margin-top: .8rem; font-size: .85rem; line-height: 1.5; }
 summary { cursor: pointer; min-height: 44px; padding: .6rem 0; font-weight: bold; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .72rem; }
@@ -249,4 +258,18 @@ footer { padding: .7rem 1.5rem; color: var(--muted); background: var(--surface);
   .legend { gap: .5rem; font-size: .65rem; }
   .campus-disclosure { margin-bottom: .4rem; }
   #campus-heading { font-size: 1rem; margin-bottom: .3rem; }
+  .current-step, .map-context-actions:has(#return-to-route:not([hidden])) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: white;
+  }
+  .map-context-actions:has(#return-to-route:not([hidden])) { align-items: center; padding-block: .25rem; }
+  #map-route-identity { font-size: .85rem; }
+  #current-instruction { font-size: 1rem; }
 }
+
+.route-identity { font-weight: 600; overflow-wrap: anywhere; margin: .5rem 0; }
+#route-draft-status, #route-request-status, #room-route-status { overflow-wrap: anywhere; }
+#route-request-status[data-state="error"] { color: #8b1720; }
+#route-request-status[data-state="pending"] { color: #634b0a; }

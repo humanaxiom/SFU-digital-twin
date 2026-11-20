@@ -366,29 +366,26 @@ class TestEtlEntryPoint:
         assert hasattr(module, "main"), "run.py missing main() function"
         assert callable(module.main), "main in run.py is not callable"
 
-        # Call main() and verify it returns 0 (success)
+        # The retired entry point exits with a failure status.
         result = module.main()
-        assert result == 0, f"main() returned {result}, expected 0"
+        assert result == 1, f"main() returned {result}, expected a retirement error"
 
     @pytest.mark.skipif(
-        shutil.which("docker") is None,
-        reason="Docker CLI not available in test environment"
+        shutil.which("make") is None,
+        reason="GNU Make is unavailable in the test image",
     )
-    @pytest.mark.slow
-    def test_make_etl_runs_successfully(self):
-        """make etl must complete with exit code 0 (even if no-op).
-
-        This is a slow test because it spins up the Docker container.
-        """
+    def test_make_etl_requires_a_run_id(self):
+        """The isolated build alias requires an unused run ID."""
         result = subprocess.run(
-            ["make", "etl"],
+            ["make", "etl", "RUN_ID="],
             capture_output=True,
             text=True,
             cwd=WORKSPACE_ROOT
         )
 
-        assert result.returncode == 0, (
-            f"make etl failed with exit code {result.returncode}:\n"
+        assert result.returncode != 0, (
+            "make etl unexpectedly accepted an empty RUN_ID:\n"
             f"STDOUT:\n{result.stdout}\n"
             f"STDERR:\n{result.stderr}"
         )
+        assert "RUN_ID" in result.stderr

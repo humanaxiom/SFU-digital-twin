@@ -157,9 +157,29 @@ def _verify_chain(run: Path, manifest: dict[str, Any]) -> None:
         raise ValueError("Artifact ledger mismatch")
 
 
-def _load(run_id: str, state: str) -> tuple[Path, dict[str, Any]]:
+def _verify_recorded_runtime(runtime: Any) -> None:
+    """Check the recorded fingerprint's consistency without opening code paths."""
+    if not isinstance(runtime, dict):
+        raise ValueError("Invalid sealed runtime fingerprint")
+    files = runtime.get("code_files")
+    image = runtime.get("image_id")
+    if (
+        not isinstance(image, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image)
+        or any(not isinstance(runtime.get(key), str) or not runtime[key]
+               for key in ("image_reference", "python", "gdal"))
+        or not isinstance(files, dict) or not files
+        or any(not path or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
+               for path, digest in files.items())
+        or runtime.get("code_sha256") != _digest(files)
+    ):
+        raise ValueError("Invalid sealed runtime fingerprint")
+
+
+def _load_manifest(run_id: str, state: str) -> tuple[Path, dict[str, Any]]:
     run = _run_path(run_id)
     manifest = json.loads(_file(run, "run.json").read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("Invalid run manifest")
     seal = manifest.pop("manifest_sha256", None)
     if seal != _digest(manifest):
         raise ValueError("Manifest hash mismatch")
@@ -174,13 +194,32 @@ def _load(run_id: str, state: str) -> tuple[Path, dict[str, Any]]:
         raise ValueError("Invalid sealed build configuration")
     if state == "complete" and manifest.get("source_reverified") is not True:
         raise ValueError("Complete state requires final source verification")
-    if manifest.get("runtime") != runtime_identity():
-        raise ValueError("Build code or toolchain changed between stages")
     if manifest["source"]["sha256"] != LEGACY_SHA256:
         raise ValueError("Unreviewed source snapshot")
     expected_count = 1 if state == "extracted" else len(STAGES)
     if len(manifest["stages"]) != expected_count:
         raise ValueError("Incomplete stage ledger")
+    return run, manifest
+
+
+def _load(run_id: str, state: str) -> tuple[Path, dict[str, Any]]:
+    """Verify the sealed run and require the current build's exact runtime."""
+    run, manifest = _load_manifest(run_id, state)
+    if manifest.get("runtime") != runtime_identity():
+        raise ValueError("Build code or toolchain changed between stages")
+    _verify_chain(run, manifest)
+    return run, manifest
+
+
+def _load_historical(run_id: str) -> tuple[Path, dict[str, Any]]:
+    """Verify a completed run's sealed consistency for read-only comparison.
+
+    Its recorded runtime can differ from the current one. The manifest and
+    artifact hashes establish internal consistency only, without authenticating
+    the producer or granting permission to deserialize executable artifacts.
+    """
+    run, manifest = _load_manifest(run_id, "complete")
+    _verify_recorded_runtime(manifest.get("runtime"))
     _verify_chain(run, manifest)
     return run, manifest
 
@@ -351,18 +390,37 @@ def finalize_run(run_id: str) -> Path:
     return run
 
 
+def _load_snapshot(run: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    payload = _file(run, SEMANTICS).read_bytes()
+    if hashlib.sha256(payload).hexdigest() != manifest["artifacts"][SEMANTICS]:
+        raise ValueError(f"Artifact hash mismatch: {SEMANTICS}")
+    snapshot = json.loads(payload)
+    if not isinstance(snapshot, dict):
+        raise ValueError("Invalid semantic snapshot")
+    return snapshot
+
+
 def compare_runs(left: str, right: str) -> dict[str, Any]:
+    """Compare verified semantic JSON from two completed, immutable runs."""
     if left.casefold() == right.casefold():
         raise ValueError("Comparison requires two distinct runs")
-    left_path, left_manifest = _load(left, "complete")
-    right_path, right_manifest = _load(right, "complete")
-    left_snapshot = json.loads((left_path / SEMANTICS).read_text())
-    right_snapshot = json.loads((right_path / SEMANTICS).read_text())
+    left_path, left_manifest = _load_historical(left)
+    right_path, right_manifest = _load_historical(right)
+    left_snapshot = _load_snapshot(left_path, left_manifest)
+    right_snapshot = _load_snapshot(right_path, right_manifest)
     comparison = compare_snapshots(left_snapshot, right_snapshot)
+    left_runtime = left_manifest["runtime"]
+    right_runtime = right_manifest["runtime"]
     comparison.update({
         "schema_version": 1, "left_run": left, "right_run": right,
         "left_manifest_sha256": left_manifest["manifest_sha256"],
         "right_manifest_sha256": right_manifest["manifest_sha256"],
+        "left_runtime": left_runtime, "right_runtime": right_runtime,
+        "left_source": left_manifest["source"], "right_source": right_manifest["source"],
+        "left_artifacts": left_manifest["artifacts"],
+        "right_artifacts": right_manifest["artifacts"],
+        "runtime_equal": left_runtime == right_runtime,
+        "code_equal": left_runtime["code_sha256"] == right_runtime["code_sha256"],
         "source_equal": left_manifest["source"] == right_manifest["source"],
         "build_config_equal": (
             left_manifest.get("build_config") == right_manifest.get("build_config")
@@ -385,7 +443,11 @@ def main(argv: list[str] | None = None) -> int:
         subparser.add_argument("--run-id", required=True)
         if command == "extract":
             subparser.add_argument("--topology", choices=TOPOLOGY_MODES, default=DEFAULT_MODE)
-    compare = subparsers.add_parser("compare")
+    compare = subparsers.add_parser(
+        "compare",
+        description="Compare completed sealed runs, including builds made with different code.",
+        epilog="Writes a new report. Exits 0 for equivalent same-source runs and 1 otherwise.",
+    )
     compare.add_argument("--left", required=True)
     compare.add_argument("--right", required=True)
     args = parser.parse_args(argv)

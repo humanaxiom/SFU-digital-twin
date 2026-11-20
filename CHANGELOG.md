@@ -1,5 +1,112 @@
 # Changelog
 
+The unreleased entries describe the local implementation documented by the
+[November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
+traces the decisions and the evidence behind them.
+
+## Unreleased — journey navigation
+
+- Browsing another floor or the campus map preserves the selected route
+  instruction. **Return to route** restores the floor, step and deliberate zoom.
+- Mobile users can reach the current instruction and floor-change actions beside
+  the map. A failed floor load offers Retry for the selected instruction.
+- Revisiting a recently loaded floor reuses its scene. The client validates its
+  artifact identity before caching and preloads adjacent route visits.
+
+## Unreleased — Preview route
+
+- Directions now waits for **Preview route** after endpoint, profile, Swap or
+  assistant edits. The map and instructions keep the displayed route’s endpoints
+  and profile visible while a replacement is pending or fails.
+- Selecting a room opens its record. **Start here** and **Directions here**
+  explicitly set the endpoints. Clear cancels pending previews while preserving
+  floor inspection.
+
+## Unreleased — scoped room search in Directions
+
+- Find a starting room or destination by room ID, building ID, name or acronym.
+  Narrow results by building and floor, and check the selected profile’s mapped
+  connection before choosing a destination.
+
+## Unreleased — multipart pathway reconstruction
+
+- Reconstruct bidirectional multipart pathways when exact source XYZ endpoints
+  form one unambiguous open chain. Retain original part/vertex references and
+  preserve a graph boundary between unequal native endpoints during contraction.
+- Compare separately verified historical manifests and semantic results across
+  code revisions. Record the 141 revised pathways with missing assignments in
+  a snapshot-specific exclusion ledger.
+- Verified all 11 recovered AQ pathways and 697 additional reachable room pairs
+  per profile in the isolated legacy candidate. Desktop, mobile and API checks
+  passed against that build.
+
+## Unreleased — isolated ETL builds
+
+- Retire the five Make stage targets and fixed-output Python entry point. The
+  supported rebuild command requires a new run ID and produces a candidate.
+- Stage GeoPackage extraction on the destination filesystem. A failed extraction
+  preserves the previous file. Default extraction also preserves a competing
+  output created before the new candidate is installed.
+
+## Unreleased — Facilities evidence in room details
+
+- Show recorded category and use type with an explicit physical accessibility
+  disclosure. Omit category-derived flags and their source dates in room details.
+- Record Facilities' available location records, manual restrictions and automatic
+  door locations, plus the evidence needed for future survey and feed integrations.
+
+## Unreleased — destination click ownership
+
+- Keep newer floor and room inspection when a destination click awaits connection
+  availability; retain the late route with explicit Return to route.
+- Supersede older waiting destination choices without invalidating valid pending
+  routes for unsupported choices; preserve Clear and scene-cancellation behavior.
+- Add delayed-response client regressions and pointer/keyboard browser coverage at
+  desktop, 390px and 320px. Verification is tracked in docs/reports/DT-031.md.
+
+## Unreleased — HTTPS public startup
+
+- Serve the integrated public candidate at `https://sfuai.ca:8017` using the
+  existing certificate files mounted read-only; redirect plain HTTP to HTTPS.
+- Preserve strict Host/upstream identity, NAT ports, artifact isolation and
+  restart policies. Keep certificate renewal with the existing certificate owner.
+- Fix PowerShell environment clearing to remove overrides in PowerShell 7 as
+  well as 5.1. Verify both real startup paths, trusted TLS browser/API behavior,
+  isolated recovery and independent outside HTTPS.
+
+## Unreleased — integrated public startup and recovery
+
+- Include the protected `sfuai.ca:8017` candidate in normal PowerShell/POSIX
+  startup, with a root PowerShell entrypoint and explicit developer-only opt-out.
+- Reuse existing projects and ports on repeat startup; reject unrelated project
+  ownership and protect checked-in public configuration from ambient overrides.
+- Apply `unless-stopped` to both public services for recovery when Docker starts.
+  Docker Desktop sign-in startup remains a prerequisite.
+- Verify repeated real startup, isolated automatic restart, full Docker gates,
+  fresh AQ/SH browser/API routes and outside HTTP 200 from three countries.
+
+## Unreleased — router-matched public candidate
+
+- Restore the protected exact-topology candidate at `sfuai.ca:8017`, mapped by
+  the confirmed router rule to local nginx port 18087; keep its private endpoint
+  on 18107 and preserve the loaded developer stack on 18007.
+- Check in deployment settings and Docker evidence capture; retain strict Host
+  controls, immutable nginx image and unchanged candidate artifacts.
+- Verify outside-network HTTP 200 from three countries and AQ/SH cross-floor
+  browser/API behavior through the local edge.
+
+## Unreleased — Windows PowerShell startup
+
+- Resolve the default Compose path after parameter binding in the PowerShell
+  start and teardown launchers, fixing the empty PSScriptRoot startup failure.
+- Document the tools-directory command and explicit cached-local-image startup;
+  pin launcher shell scripts to LF for Docker execution.
+- Align legacy browser checks with the accepted disconnected-room blocking and
+  explicit Clear behavior, retaining direct unsupported-route API coverage.
+- Verify actual Docker startup/teardown, full gates and fresh desktop/mobile/
+  320px browser/API checks with the explicit local-image override; published
+  registry access remains unauthorized.
+
 ## Unreleased — external candidate access on port 8007
 
 - Keep the verified candidate loopback endpoint on port 18007 and add a

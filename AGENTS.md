@@ -2,10 +2,12 @@
 
 Read `docs/HANDOFF.md` first, then the applicable ticket plan and accepted ADRs.
 Current takeover work is tracked in `docs/plans/CODEX-TAKEOVER.md`.
-The isolated build increment is `docs/plans/DT-016.md`; the next geometry/source
-reconciliation task is `docs/plans/DT-017.md`. Read the current handoff for gate status.
-Floor-navigation and route-guidance work is tracked in `docs/plans/DT-018.md` under
-ADR-0012. Read the handoff/report for its actual gate and demo status.
+Use `docs/plans/DT-016.md` and `docs/plans/DT-033.md` for isolated builds.
+`docs/plans/DT-017.md` tracks the verified legacy candidate and the outstanding
+revised-source assignments. `docs/plans/DT-024.md` tracks navigation under
+ADR-0017. DT-018/ADR-0012 describe the underlying route guidance. See
+`docs/plans/DT-023.md` for the subsequent Burnaby building expansion and
+the handoff for current gate and demo status.
 
 ## Architecture and boundaries
 
@@ -25,8 +27,9 @@ ADR-0012. Read the handoff/report for its actual gate and demo status.
   If Docker is unavailable, stop execution; do not fall back to a host runtime.
 - Compute geometry and routing deterministically in EPSG:26910. Use vertical_order
   for cross-building floor identity. Preserve parallel graph edges.
-- ADR-0005/0009 define measured connectivity: 816 default and 840 elevator-only
-  edge-induced components. Fragmentation is expected; reject unsupported routes.
+- ADR-0005/0009 record 816 default and 840 elevator-only edge-induced components
+  for the original endpoint artifacts. Use the measured baseline for the artifact
+  under test; DT-017 separately reports the reconstructed candidate. Reject unsupported routes.
 - Room anchors are approximate and same-level. Do not invent connector traversal
   or gap edges. Elevator-only excludes stairs; it is not verified wheelchair access.
 - Hashes establish artifact consistency, not independent trust. Only load trusted

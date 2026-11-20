@@ -781,7 +781,7 @@ class TestDeterminismAndSerialization:
     def test_graph_raw_stats_json_schema(self):
         """graph_raw_stats.json must have all required keys per ADR-0004 §10."""
         if not GRAPH_RAW_STATS_JSON.exists():
-            pytest.skip("graph_raw_stats.json not found (run make etl-graph-raw)")
+            pytest.skip("graph_raw_stats.json not found")
 
         with open(GRAPH_RAW_STATS_JSON) as f:
             stats = json.load(f)
@@ -864,46 +864,6 @@ class TestDeterminismAndSerialization:
 class TestContainerExecution:
     """Test container-only execution and read-only boundaries (AC7)."""
 
-    def test_makefile_target_exists(self):
-        """Makefile must have etl-graph-raw target."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-        assert makefile_path.exists(), f"Missing {makefile_path}"
-
-        with open(makefile_path) as f:
-            content = f.read()
-
-        assert "etl-graph-raw" in content, "Makefile missing 'etl-graph-raw' target for DT-005"
-
-    def test_makefile_target_uses_docker(self):
-        """make etl-graph-raw must invoke docker compose, not host Python."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-
-        with open(makefile_path) as f:
-            content = f.read()
-
-        # Find etl-graph-raw target
-        if "etl-graph-raw" not in content:
-            pytest.fail("etl-graph-raw target not in Makefile")
-
-        # Extract target section (naive: lines after 'etl-graph-raw:' until next target)
-        lines = content.split("\n")
-        target_lines = []
-        in_target = False
-
-        for line in lines:
-            if line.startswith("etl-graph-raw"):
-                in_target = True
-                continue
-            if in_target:
-                if line and not line.startswith(("\t", " ")):
-                    break
-                target_lines.append(line)
-
-        target_body = "\n".join(target_lines)
-        assert "docker" in target_body.lower() or "compose" in target_body.lower(), (
-            "etl-graph-raw target must use docker compose, not host Python"
-        )
-
     def test_gpkg_read_only(self):
         """build/wayfinding.gpkg mtime must not change after graph construction."""
         if not SOURCE_GPKG.exists():
@@ -926,12 +886,12 @@ class TestContainerExecution:
 
 
 # ============================================================================
-# Test CLI and Artifact Output
+# Test Graph Build and Artifact Output
 # ============================================================================
 
 
-class TestCLIAndArtifacts:
-    """Test CLI dispatch via run.py and artifact creation."""
+class TestGraphBuildAndArtifacts:
+    """Test graph build failures and artifact creation."""
 
     def test_run_graph_raw_missing_gpkg_returns_one(self, tmp_path):
         """Graph artifact orchestration must fail cleanly without its GeoPackage input."""
@@ -980,57 +940,6 @@ class TestCLIAndArtifacts:
         assert set(loaded_graph.edges(keys=True)) == set(graph.edges(keys=True))
         assert loaded_node_map == node_map
         assert loaded_stats == stats
-
-    def test_run_py_accepts_graph_raw_command(self):
-        """run.py must accept 'graph-raw' command for DT-005."""
-        run_path = (
-            WORKSPACE_ROOT / "packages" / "wayfinding" / "src" / "wayfinding" / "etl" / "run.py"
-        )
-
-        if not run_path.exists():
-            pytest.fail("run.py module not found")
-
-        with open(run_path) as f:
-            content = f.read()
-
-        # Check that run.py has a graph-raw command handler
-        assert "graph-raw" in content or "graph_raw" in content, (
-            "run.py must handle 'graph-raw' command for DT-005"
-        )
-
-    def test_makefile_etl_graph_raw_dispatches_via_run_py(self):
-        """make etl-graph-raw must invoke run.py graph-raw, not graph.py directly."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-
-        with open(makefile_path) as f:
-            content = f.read()
-
-        if "etl-graph-raw" not in content:
-            pytest.fail("Makefile missing 'etl-graph-raw' target")
-
-        # Extract target section
-        lines = content.split("\n")
-        target_lines = []
-        in_target = False
-
-        for line in lines:
-            if line.startswith("etl-graph-raw"):
-                in_target = True
-                continue
-            if in_target:
-                if line and not line.startswith(("\t", " ")):
-                    break
-                target_lines.append(line)
-
-        target_body = "\n".join(target_lines)
-
-        # Must invoke run.py, not graph.py
-        assert "wayfinding.etl.run" in target_body, (
-            "etl-graph-raw must invoke wayfinding.etl.run, not graph.py __main__"
-        )
-        assert "graph-raw" in target_body or "graph_raw" in target_body, (
-            "etl-graph-raw must pass 'graph-raw' command to run.py"
-        )
 
 
 # ============================================================================

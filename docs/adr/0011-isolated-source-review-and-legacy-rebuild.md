@@ -66,8 +66,8 @@ the physical accuracy or accessibility of the source.
 
 ## Consequences
 
-`make etl` becomes a safe full isolated legacy build with an explicit run ID; legacy
-individual stage targets remain available with their existing behavior. New commands
+`make etl` becomes a safe full isolated legacy build with an explicit run ID; the later
+[ADR-0024](0024-retire-fixed-output-etl.md) retires the legacy stage targets. New commands
 give a reproducible baseline and actionable revised-source diagnostics while leaving
 source promotion, supplemental ingestion, image publication and LAN acceptance open.
 No revised eligible-subset graph is presented as a complete revised build.

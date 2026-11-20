@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ComposeFile = (Join-Path $PSScriptRoot '..\infra\docker-compose.yml'),
+    [string]$ComposeFile,
     [ValidateRange(1024, 65429)]
     [int]$BasePort = 18000,
     [ValidatePattern('^[a-z0-9][a-z0-9_-]*$')]
@@ -10,10 +10,15 @@ param(
     [switch]$LocalImage,
     [switch]$Build,
     [switch]$Test,
+    [switch]$NoPublicDemo,
     [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 does not populate PSScriptRoot during parameter defaults.
+if (-not $PSBoundParameters.ContainsKey('ComposeFile')) {
+    $ComposeFile = Join-Path $PSScriptRoot '..\infra\docker-compose.yml'
+}
 $machineName = [Environment]::MachineName
 if ($machineName -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$') {
     throw 'Local machine name is not a DNS-compatible host label.'
@@ -40,8 +45,11 @@ $gates = @(
 function Test-HostPortAvailable {
     param([int]$Port)
 
-    if ($script:DockerPublishedPorts -match ":$Port->") {
+    if ($script:OtherPublishedPorts -match ":$Port->") {
         return $false
+    }
+    if ($script:OwnedPublishedPorts -match ":$Port->") {
+        return $true
     }
 
     $socket = [System.Net.Sockets.Socket]::new(
@@ -70,11 +78,33 @@ docker compose version *> $null
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose is unavailable. Start Docker Desktop and retry.'
 }
-$script:DockerPublishedPorts = @(docker ps --format '{{.Ports}}')
+$containerIds = @(docker ps -aq)
 if ($LASTEXITCODE -ne 0) {
     throw 'Unable to inspect Docker host-port allocations.'
 }
 
+$dockerRows = @()
+if ($containerIds.Count -gt 0) {
+    # JSON templates avoid native Windows PowerShell argument-quoting problems.
+    $dockerRows = @(docker inspect --format '{{json .Config.Labels}}|{{json .NetworkSettings.Ports}}' @containerIds)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect Docker project ownership.'
+    }
+}
+$dockerContainers = @($dockerRows | ForEach-Object {
+    $fields = $_ -split '\|', 2
+    $labels = $fields[0] | ConvertFrom-Json
+    $portMap = $fields[1] | ConvertFrom-Json
+    $published = @($portMap.PSObject.Properties | ForEach-Object {
+        $containerPort = $_.Name
+        foreach ($binding in $_.Value) { "$($binding.HostIp):$($binding.HostPort)->$containerPort" }
+    })
+    [pscustomobject]@{
+        Project = $labels.'com.docker.compose.project'
+        ConfigFiles = $labels.'com.docker.compose.project.config_files'
+        Ports = $published
+    }
+})
 $resolvedComposeFile = (Resolve-Path $ComposeFile).Path
 $composeArgs = @('-f', $resolvedComposeFile)
 $composeText = Get-Content -LiteralPath $resolvedComposeFile -Raw
@@ -95,16 +125,38 @@ if ($useLocalOverride) {
     $composeArgs += @('-f', (Resolve-Path $localOverride).Path)
 }
 
-$selectedBase = $null
+$existingBase = $null
 for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
     $candidateBase = $BasePort + ($attempt * $portBlockSize)
+    $existing = @($dockerContainers | Where-Object { $_.Project -eq "$ProjectName-$candidateBase" })
+    if ($existing.Count -gt 0) {
+        foreach ($container in $existing) {
+            $configPaths = @($container.ConfigFiles -split ',' | ForEach-Object { $_.Replace('\', '/') })
+            if ($configPaths -notcontains $resolvedComposeFile.Replace('\', '/')) {
+                throw "Existing project $ProjectName-$candidateBase belongs to a different Compose file."
+            }
+        }
+        $existingBase = $candidateBase
+        break
+    }
+}
+
+$selectedBase = $null
+for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+    $candidateBase = if ($null -ne $existingBase) { $existingBase } else { $BasePort + ($attempt * $portBlockSize) }
     if (($candidateBase + ($portOffsets.Values | Measure-Object -Maximum).Maximum) -gt 65535) {
         break
     }
+    $candidateProject = "$ProjectName-$candidateBase"
+    $script:OwnedPublishedPorts = @($dockerContainers | Where-Object { $_.Project -eq $candidateProject } | ForEach-Object { $_.Ports })
+    $script:OtherPublishedPorts = @($dockerContainers | Where-Object { $_.Project -ne $candidateProject } | ForEach-Object { $_.Ports })
     $candidatePorts = $portOffsets.Values | ForEach-Object { $candidateBase + $_ }
     if (($candidatePorts | Where-Object { -not (Test-HostPortAvailable $_) }).Count -eq 0) {
         $selectedBase = $candidateBase
         break
+    }
+    if ($null -ne $existingBase) {
+        throw "Existing project $candidateProject has a host-port conflict; refusing to create a duplicate stack."
     }
 }
 
@@ -113,6 +165,21 @@ if ($null -eq $selectedBase) {
 }
 
 $selectedProject = "$ProjectName-$selectedBase"
+$publicArgs = @()
+if (-not $NoPublicDemo) {
+    $infraDir = (Resolve-Path (Join-Path $PSScriptRoot '..\infra')).Path
+    $publicComposeFile = Join-Path $infraDir 'docker-compose.candidate.yml'
+    foreach ($container in @($dockerContainers | Where-Object { $_.Project -eq 'sfudt-sh-navigation-candidate' })) {
+        $configPaths = @($container.ConfigFiles -split ',' | ForEach-Object { $_.Replace('\', '/') })
+        if ($configPaths -notcontains $publicComposeFile.Replace('\', '/')) {
+            throw 'Existing public project belongs to a different Compose file.'
+        }
+    }
+    $publicArgs = @('compose', '--project-directory', $infraDir, '--env-file',
+        (Join-Path $infraDir 'wayfinding-public.env'), '-f',
+        $publicComposeFile, '-f', (Join-Path $infraDir 'docker-compose.public-tls.yml'), '-p',
+        'sfudt-sh-navigation-candidate', 'up', '-d', '--wait', 'demo', 'external')
+}
 $previousEnvironment = @{}
 $failedGate = $null
 $gateExitCode = 0
@@ -163,6 +230,11 @@ try {
             Write-Host "Dry run: docker build -f $dockerfile -t wayfinding-build:local $contextDir"
         }
         Write-Host "Dry run: docker $($upArgs -join ' ')"
+        if (-not $NoPublicDemo) {
+            Write-Host "Dry run: docker $($publicArgs -join ' ')"
+            Write-Host 'Public demo URL              https://sfuai.ca:8017/'
+            Write-Host 'Private candidate URL        http://127.0.0.1:18107/'
+        }
         if ($Test) {
             foreach ($gate in $gates) {
                 $gateArgs = @('compose') + $composeArgs + @(
@@ -198,6 +270,24 @@ try {
         throw "Docker Compose status failed with exit code $LASTEXITCODE."
     }
 
+    if (-not $NoPublicDemo) {
+        # Public port/artifact settings come from the checked-in env file.
+        foreach ($publicKey in @('WAYFINDING_CANDIDATE_RUN', 'WAYFINDING_BROWSER_BUILD_IMAGE',
+            'WAYFINDING_CANDIDATE_BIND_ADDRESS', 'WAYFINDING_CANDIDATE_PORT',
+            'WAYFINDING_EXTERNAL_BIND_ADDRESS', 'WAYFINDING_EXTERNAL_PORT', 'WAYFINDING_TLS_CERT_DIR')) {
+            $previousEnvironment[$publicKey] = [Environment]::GetEnvironmentVariable($publicKey, 'Process')
+            # New .NET versions can retain an empty variable for a null value;
+            # Compose treats that as an override of the checked-in env file.
+            if (Test-Path "Env:$publicKey") { Remove-Item "Env:$publicKey" }
+        }
+        & docker @publicArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Public demo startup failed with exit code $LASTEXITCODE."
+        }
+        Write-Host 'Public demo URL              https://sfuai.ca:8017/'
+        Write-Host 'Private candidate URL        http://127.0.0.1:18107/'
+    }
+
     if ($Test) {
         foreach ($gate in $gates) {
             Write-Host "Running $($gate.Name) gate..."
@@ -216,11 +306,12 @@ try {
 }
 finally {
     foreach ($entry in $previousEnvironment.GetEnumerator()) {
-        [Environment]::SetEnvironmentVariable(
-            $entry.Key,
-            $entry.Value,
-            'Process'
-        )
+        if ($null -eq $entry.Value) {
+            if (Test-Path "Env:$($entry.Key)") { Remove-Item "Env:$($entry.Key)" }
+        }
+        else {
+            [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
+        }
     }
 }
 

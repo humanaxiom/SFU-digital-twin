@@ -1,5 +1,248 @@
 # Handoff — Living Project State
 
+## Start here — navigation pilot and Burnaby expansion
+
+The Stage D client is committed at `628c3c2`. It preserves the selected
+chronological instruction while a user explores, restores the route camera,
+keeps guidance controls beside the mobile map and reuses floor scenes by
+artifact and exact level. The [journey report](reports/DT-024-JOURNEY.md)
+records the Stage D and integrated Stage E gates.
+
+The full package gate passed 664 tests with 16 expected skips and 86.96%
+coverage. Real Chromium replayed four accepted-artifact routes and eight
+rebuilt-candidate routes at desktop and mobile widths. The Stage D journey
+probe separately verified a skipped elevator floor and a repeated floor visit.
+
+Stage E is accepted for the local pilot. Resume the [Burnaby campus plan](plans/DT-023.md).
+Screen one additional building using the authoritative building and room IDs,
+floor joins and available geometry. Record the coverage an isolated candidate
+supports and exercise the existing pilot fixtures alongside the new building.
+Other SFU campuses follow the Burnaby expansion.
+
+## Prior checkpoint — 2026-11-20, before Stage D
+
+This record describes the locally verified wayfinding work on top of `5ca5186`.
+The review branch includes the corresponding runtime, tests, ETL, launchers,
+deployment configuration and decision records. Reproduction requires the named
+images and locally supplied artifacts. A Git push does not deploy a service or
+promote a routing artifact.
+
+| Track | Verified state | Next decision or action |
+| --- | --- | --- |
+| Navigation | Stage C passed 662 package tests with 16 expected skips and 86.96% coverage. Browser checks covered search, explicit Preview, failed replacement and Clear. | Start the [Stage D acceptance cases](plans/DT-024.md). Preserve the Stage C fixtures through that work. |
+| Geometry | The isolated legacy candidate recovered all 11 affected AQ pathways and added 697 reachable room pairs per profile with zero losses. | Keep the candidate separate from the served artifacts. Obtain reviewed facility/level assignments for the 141 revised features before revised ingestion. |
+| Facilities | Building and room identifiers support search. Manual restriction and automatic-door records are potential inputs. | Request keyed samples. Security’s schedule coverage, elevator outage integration and detailed access surveys remain unconfirmed. |
+| Operations | Prior reports record TLS startup and recovery checks. Current application verification used local Docker images and private test stacks. | Check release provenance, certificate reload and actual network reachability before a deployment acceptance decision. |
+
+Read the [oral history](ORAL-HISTORY.md) for the decision trail and the [roadmap](ROADMAP.md) for phase status. Dated entries below record the state at each delivery.
+
+For this checkpoint the isolated Strand demo again passed 11 Preview and 15 room-search
+browser/API checks at 1440, 390 and 320 px. Results are under `build/navigation-review/`
+in `history-20261120-preview-route` and `history-20261120-room-search`. The local image
+and the served client and artifact hashes matched the [Stage C report](reports/DT-024-PREVIEW.md).
+
+The same local workspace rebuilt `dt017-history-20261120-v1` from the immutable
+legacy source. Its graph, anchors and reachability for both profiles matched
+`dt017-legacy-20261119-b` (zero pairs gained or lost). Independent geometry QA
+matched all 19,058 forward contracted pathways to source spans. The semantic
+snapshot SHA-256 was `3227bbbb6261302ed681b39c305b2f7f322ab16c4b2cb2eaf82ee21fc1203544`.
+
+### Checkpoint verification record
+
+All runs below used Docker against the local implementation on top of `5ca5186`.
+The app used the local image `sha256:d7b70c51d54d661d2932aa7c5a2263d4af7f2168c17711bd05a67f4f5ad0851a`.
+
+| Command or probe | Exit | Identity and retained evidence |
+| --- | ---: | --- |
+| `node tests/browser/preview-route.cjs` | 0 | Demo `3db5cd8023a4`, Chromium `ddc4e90e2923`. Preview result SHA-256 `f34b13c32c08b95d8e57cb3303026d7a9c896bf2966b31ff7f370470244350ff` |
+| `node tests/browser/room-search.cjs` | 0 | Same demo, Chromium `83dd193ea904`. N05 result SHA-256 `10128718847335b285367c389a1eb910749ea70e49f443dd6a6d094bed9b35af` |
+| `./tools/rebuild.ps1 -Action Build -RunId dt017-history-20261120-v1 -LocalImage` | 0 | Extract `a4016dd77a8a`, derive `6bf2f7fbe74c`, finalize `2162c771f79e`. Manifest seal `aed2c309fd7c56d42c3654f67948d7af1642391d92cd2921cc6b0515849946af` |
+| Sealed comparison with `dt017-legacy-20261119-b` | 0 | Container `1aa9c5f82471`. Contracted graph hash `7812c031ed8c20bb92c047d825d5c1b073a5564ccc90cfd976d636b2e15a28a7` |
+| `python tools/dt017_geometry_audit.py --candidate dt017-history-20261120-v1` | 0 | Container `a8d47bb8cff1`. Both profiles gained 697 reachable pairs versus DT-033, zero losses. |
+| `pytest packages/wayfinding/tests -m source_dataqa --strict-markers --no-cov` in `source-etl` | 0 | `df9b14840752`, one selected test passed and 677 were deselected. The accepted-artifact guard also matched all 12 DT-033 file hashes. |
+| Accepted-artifact `tests/browser/demo.cjs` | 0 | Demo `c41ff8b39ce6`, Chromium `2e45eb4c9188`, 279 reads and 33 POSTs. `history-20261120-canonical/results.json` SHA-256 `98c199369b0f9ba1bbd4e6ee0c9e4093a86e787f60149e4dab1e9d04c215f86a` |
+| `pytest packages/wayfinding/tests -q -rs` | 0 | Artifact container `ffdfc15477ac`, 662 passed, 16 skipped, 86.96% coverage. Full skip reasons are in `build/history-20261120-package.log`. |
+| Ruff, Pyright, launcher and host-execution checks, then `pytest packages/wayfinding/tests -m dataqa --strict-markers --no-cov` | 0 | Same container. Artifact QA recorded 23 passed, one skipped and 654 deselected. Source QA ran separately in the source container listed above. |
+
+The [Stage C report](reports/DT-024-PREVIEW.md) gives the pinned Chromium image and
+launch procedure.
+
+The rebuilt demo also served eight fixed routes and eight availability requests
+with HTTP 200 and the expected graph edge IDs, distances and availability. Strand’s
+elevator-only negative fixture returned HTTP 409. The first comprehensive
+rebuilt-browser run exited 1 after the desktop fixtures. It activated Preview
+before the destination draft was ready and recorded no route POST for that
+interaction. Its retained result SHA-256 is `1d07509ca128ad4f5df609a245caa7067db9cc7db5f403493c2067eadee4f0ac`.
+
+A serial rerun reproduced the failure. The browser test now waits for the exact
+destination room ID and checks the route POST count before it activates Preview.
+The rebuilt candidate then passed all eight fixtures on desktop and mobile,
+including the manual SVG pointer and keyboard workflow. The run also exercised
+320 px layout, reduced motion, a real 409 response and delayed requests.
+Demo `bfa20d3f3a2e` and Chromium `2bd171db0aeb` recorded 183 GETs and 26 POSTs.
+The run and teardown exited 0. The result under
+`build/takeover-browser/history-20261120-dt017-checkpoint-final/results.json`
+has SHA-256 `58bde5bde5e21066b5c36171e895053a0380fdd13f28525b874a47fa3dc11fdc`.
+
+The same updated browser test then passed against the accepted artifacts. Demo
+`3d59628f695c` and Chromium `ab86193e5a7d` exercised four fixtures at both
+1440×1000 and 390×844, plus seven checks including 320 px and an HTTP 409.
+The run recorded 279 GETs and 33 POSTs and exited 0. Its result under
+`build/takeover-browser/history-20261120-canonical-checkpoint-final/results.json`
+has SHA-256 `4aac5b00627151373844bb6804e7e7235606859e6ebb60e37e6aaaedccd50427`.
+Both temporary stacks were removed. The running demo and edge proxy stayed healthy.
+
+## Prior navigation delivery — explicit Preview route (2026-11-20)
+
+Stage C now separates the draft from the route displayed on the map. Room
+inspection, search, assistant directions and profile changes feed an explicit
+Preview action. The [delivery report](reports/DT-024-PREVIEW.md) records gates,
+fixtures and scope. The next navigation increment is the remaining Stage D
+journey and mobile work in the [DT-024 plan](plans/DT-024.md).
+
+## Prior navigation delivery — room search (2026-11-19)
+
+Directions now has scoped From and To searches based on Facilities' authoritative
+identifiers. The [room search report](reports/DT-024-ROOM-SEARCH.md) records the
+candidate and accepted-artifact checks for that delivery. Stage C now uses
+these searches to populate the route draft.
+
+## Current candidate — AQ pathway reconstruction (2026-11-19)
+
+[DT-017](plans/DT-017.md) reconstructed all 11 affected legacy AQ pathways in
+the isolated `dt017-legacy-20261119-b` build. Each routing profile gained 697
+reachable unordered room pairs and lost zero. See the [verification record](reports/DT-017.md)
+for the sealed outputs and app checks. Independent review accepted the isolated
+legacy candidate. The active demo still
+uses its existing artifacts. The 141 revised pathways require reviewed facility
+and level assignments before a revised build can proceed. The [Facilities and GIS
+request](requests/GIS-DATA-NEEDED.md) records the outstanding source questions.
+
+## Current build work — protect accepted artifacts (2026-11-19)
+
+[DT-033](plans/DT-033.md) retires the fixed-output ETL commands and makes explicit
+GeoPackage replacement transactional. Use the isolated rebuild launcher with an
+unused run ID. [ADR-0024](adr/0024-retire-fixed-output-etl.md) records the decision.
+Final Docker suite passed 640 tests with 16 expected skips and 86.99% coverage. The fresh isolated rebuild, same-ID refusal, source and artifact QA, and 17 Chromium checks passed. Accepted files retained their hashes. See the [DT-033 evidence](reports/DT-033.md).
+
+## Current work — Facilities evidence and room details (2026-11-19)
+
+[DT-032](plans/DT-032.md) applies Facilities feedback to the room inspector and
+the data acquisition plan. Room details show recorded room identity and use, and
+identify physical accessibility as unverified. [ADR-0023](adr/0023-facilities-evidence-and-legacy-tags.md)
+explains legacy API fields. Request keyed snapshots of manually restricted areas
+and automatic doors. Future delivery scope, survey coverage and operational feed
+availability require separate confirmation. DT-033 subsequently protected the
+accepted outputs, and Stage C used the four authoritative location fields for search.
+
+Full Docker suite passed 652 tests with 16 expected skips and 86.43% coverage. Candidate and canonical browser/API checks, artifact QA, lint, types and launcher contracts passed. Evidence is in the [DT-032 report](reports/DT-032.md).
+
+## Current resumption — destination ownership (2026-11-19)
+
+DT-031 repairs the delayed availability → destination B → newer floor race
+identified by the November repository review, under existing ADR-0017/DT-024.
+The original click owns its route navigation and room inspection; waiting clicks
+have independent revisions so rejected destinations cannot invalidate valid route
+requests. Clear, replacement and own scene-cancellation behavior are covered.
+
+Final focused Docker tests passed 22; lint/types, artifact QA and launcher contracts
+passed. Fresh candidate Chromium/API passed 10 checks, including desktop pointer,
+390px/320px keyboard, retained newer floors, suppressed obsolete details and Return.
+Fresh full suite passed 649/16 expected skips, 86.43% coverage; canonical
+accepted-artifact browser/API passed. Independent gpt-6-astra final review accepted. See [DT-031 evidence](reports/DT-031.md).
+All inherited dirty DT-027–DT-030 files and the review report are preserved.
+No source/artifact changes or remote integration. The existing candidate serves
+the mounted client; local image verification does not certify registry publication.
+DT-024 Stage C and remaining Stage D, DT-017 and broader review findings stay open.
+The October HTTPS evidence below remains historical; no fresh external TLS probe
+or certificate renewal check was performed during this client increment.
+
+## Current HTTPS startup — 2026-10-08
+
+DT-030 adds **https://sfuai.ca:8017/** to normal `.\launch-stack.ps1 -LocalImage`
+startup through a public TLS Compose overlay. Existing router mapping and private
+18107/developer18007 ports remain. Plain HTTP redirects to the fixed HTTPS origin.
+Existing C:/repos/web/certs inputs are mounted read-only with host-path creation
+disabled; the sibling web stack/files and certificate contents are untouched.
+Observed certificate covers sfuai.ca, issued by Let's Encrypt YE2 and expires
+2026-12-14. Its existing owner handles renewal; reload/restart nginx after renewal.
+
+Real root startup passed in PowerShell 7 and 5.1. Validated TLS/private-edge hash
+parity, Host rejection, HTTP redirect, fresh TLS Chromium/API and independent
+Austria/Brazil/Iran HTTPS 200 checks passed. Isolated TLS recovery passed for both
+services with unchanged IDs/restart counts 0 → 1. Final Docker full tests passed
+641 with 16 expected skips and 86.43% coverage; lint/types, artifact QA and
+launcher contracts passed. Independent final review accepted with no blocking
+findings; judgment is recorded in
+[DT-030 evidence](reports/DT-030.md).
+TLS does not repair same-network public-address timeout/NAT loopback, which
+remains an environmental limitation. The HTTP-only public observations below
+are historical and superseded by [ADR-0022](adr/0022-public-demo-tls.md).
+
+## Current integrated startup and recovery — 2026-10-08
+
+Run **`.\launch-stack.ps1 -LocalImage`** from the repository root. DT-029 makes
+normal startup bring up/reuse both the developer stack and protected public
+candidate at **http://sfuai.ca:8017/**. No separate public Compose command is
+needed. The developer remains on 18007; public nginx binds 18087 and the private
+candidate binds loopback 18107. Repeat launches retain existing identities,
+refuse unrelated ownership conflicts, and protect checked-in public settings
+from ambient environment overrides. `-NoPublicDemo` skips public startup only.
+
+Both live public services now use `unless-stopped`. They recover when Docker
+starts after reboot; Docker Desktop must start at sign-in. Desktop auto-start
+was not changed or inspected. Isolated process-exit recovery passed for both
+services with unchanged container IDs and restart counts 0 → 1. No actual host
+reboot or Docker daemon restart was performed; unrelated stacks stayed running.
+
+Fresh Docker full tests: 639 passed/16 expected skips, 86.43% coverage. Launcher
+contracts, lint/types and artifact QA passed. Live-edge AQ/SH Chromium/API passed;
+fresh Austria/Brazil/Iran probes returned HTTP 200. Explicit cached local image
+verification does not certify the published registry image. Independent final
+review accepted DT-029 with no blocking findings. See
+[DT-029 evidence](reports/DT-029.md) and [ADR-0021](adr/0021-integrated-public-startup-and-recovery.md).
+The following sections record earlier deliveries; their launcher and lifecycle
+observations are superseded by this section.
+
+## Current external endpoint — sfuai.ca:8017 (2026-10-08)
+
+The user confirmed TCP public 8010–8020 forwards to 192.168.1.80 local
+18080–18090. DT-028 restores the protected exact-topology candidate at
+**http://sfuai.ca:8017/** through local nginx port 18087. Its private endpoint is
+**http://127.0.0.1:18107/**. Use the checked-in `infra/wayfinding-public.env`
+with candidate Compose; DT-029 now includes this project in normal startup along
+with the separate legacy demo on 18007, which remains running unchanged.
+
+Independent Austria/Brazil/Romania probes returned HTTP 200. Both candidate and
+proxy are healthy, private/edge hashes agree, and edge-backed AQ/SH Chromium/API
+checks passed. Full Docker tests passed 637 with 16 expected skips and 86.43%
+coverage; lint/types and artifact QA also passed. Independent final review
+accepted DT-028 with no blocking findings. Local public-URL
+timeout suggests NAT loopback may be unavailable; it does not negate outside
+reachability. See [DT-028](reports/DT-028.md) and [ADR-0020](adr/0020-router-nat-demo-publication.md).
+This supersedes the stopped-deployment observations and old 8007/18007 candidate
+publication below. Sources/artifacts were not rebuilt or promoted.
+
+## Current launcher repair — 2026-10-08
+
+DT-027 fixes the Windows PowerShell default Compose path in both start and
+teardown. From the repository root, use `tools/launch-stack.ps1 -LocalImage`
+with the cached local image; the default published digest pull still returns
+`unauthorized`. The README separates image build from startup.
+
+Fresh Docker full tests passed 636 with 16 skips and 86.43% coverage; lint, types,
+artifact QA and launcher contracts passed. Actual isolated startup, teardown and
+default-path restart passed with all three services healthy on port 18117.
+Final Docker Chromium/API checks passed all four recorded routes on desktop and
+mobile, plus unsupported HTTP 409, response-ordering and 320px checks after
+migrating stale pre-N15/N16 expectations. The isolated verification stack was
+removed using the paired teardown. See [DT-027 evidence](reports/DT-027.md).
+
+The exact-topology candidate and public services described below were observed
+stopped at session entry and were not restarted. Their prior deployment evidence
+is historical until startup is requested and verified again. Testing uses a
+separate legacy developer project and does not promote or replace artifacts.
+
 ## Current external deployment — sfuai.ca:8007
 
 DT-026 keeps the verified candidate at **http://127.0.0.1:18007/** and exposes the
@@ -484,14 +727,10 @@ until an isolated rebuild/promotion workflow is implemented.
 
 - **DT-014 bounded routing integrity passed:** The local demo now routes exact unit pairs over the accepted legacy contracted graph, renders returned per-level graph geometry and geometry-derived steps, and exposes attachment distances, canonical reachability identities, artifact hashes, and limitations. Disconnected, profile-isolated, invalid-edge, and unavailable cases fail closed; elevator-only routes exclude stairs without claiming verified step-free access. Focused DT-014 validation passed 80 tests with one factual skip; GIS data-QA passed. Historical gate statement; see current takeover status for fresh evidence.
 
-## Open questions blocking Phase 1
+## Facilities responses
 
-See [docs/02-system-design.md §12](02-system-design.md#12-open-questions-for-stakeholders) —
-closures feed, accessibility survey feasibility, elevator-outage notifications, future building
-extracts, room-alias source, elevator-wait/walking-speed constants. None of these block *starting*
-Phase 1 ETL, but the accessibility-survey question should be raised with stakeholders before the
-accessible-routing UI copy is finalized.
-
+[System design §12](02-system-design.md#12-open-questions-for-stakeholders) records
+the six Facilities responses and the remaining evidence needed for later work.
 ## Historical next steps (superseded)
 
 1. Complete ADR-0006's image publication workflow and replace the `sha256:PUBLISHED_DIGEST_REQUIRED` placeholder with the published digest.

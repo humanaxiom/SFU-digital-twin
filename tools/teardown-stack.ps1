@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ComposeFile = (Join-Path $PSScriptRoot '..\infra\docker-compose.yml'),
+    [string]$ComposeFile,
     [Parameter(Mandatory)]
     [ValidatePattern('^[a-z0-9][a-z0-9_-]*$')]
     [string]$ProjectName,
@@ -10,6 +10,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 does not populate PSScriptRoot during parameter defaults.
+if (-not $PSBoundParameters.ContainsKey('ComposeFile')) {
+    $ComposeFile = Join-Path $PSScriptRoot '..\infra\docker-compose.yml'
+}
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Docker CLI was not found on PATH.'

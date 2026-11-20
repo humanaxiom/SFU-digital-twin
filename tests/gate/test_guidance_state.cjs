@@ -220,17 +220,22 @@ function client() {
     assert.equal(selected[0].querySelector('text').textContent, '3', 'both transition endpoints use departure step number');
     assert.equal(c.nodes.get('#route-overlay').querySelectorAll('.route-selected').length, 0);
   });
-  await check('repeated floor visits stay ordered and preview preserves selected step', async () => {
+  await check('repeated visits stay ordered and returning from exploration restores the selected step', async () => {
     const c = client(); c.run('renderRoute(fixture)');
     assert.deepEqual(c.nodes.get('#floor-journey').querySelectorAll('button').map(n => n.dataset.visitId), ['v0','v1','v2']);
     await c.run("selectGuidanceStep('s1')");
-    await c.run("previewFloor('L1','v2')");
+    await c.run("previewFloor('L1')");
     assert.equal(c.run('guidanceStep().step_id'), 's1');
-    assert.equal(c.nodes.get('#floor-preview').hidden, false);
+    assert.equal(c.nodes.get('#return-to-route').hidden, false);
+    assert.equal(c.nodes.get('#step-next').hidden, true);
+    assert.equal(c.nodes.get('#step-previous').hidden, true);
     assert.equal(c.nodes.get('#route-overlay').querySelectorAll('.route-selected').length, 0);
-    await c.nodes.get('#show-selected-step').handlers.click();
-    assert.equal(c.nodes.get('#floor-preview').hidden, true);
+    await c.nodes.get('#return-to-route').handlers.click();
+    assert.equal(c.nodes.get('#return-to-route').hidden, true);
     assert.equal(c.nodes.get('#route-overlay').querySelectorAll('.route-selected').length, 2);
+    await c.nodes.get('#floor-journey').querySelectorAll('button')[2].handlers.click();
+    assert.equal(c.run('guidanceStep().step_id'), 's5');
+    assert.equal(c.nodes.get('#floor-journey').querySelectorAll('button')[2].attributes['aria-current'], 'location');
   });
   await check('previous next and endpoint selection preserve matching numbered cues', async () => {
     const c = client(); c.run('renderRoute(fixture)');
@@ -358,4 +363,5 @@ function client() {
     assert.ok(svg.attributes.viewBox.split(' ').map(Number).every(v=>Math.abs(v)<100));
   });
   assert.deepEqual(failures, []);
+  console.log('Guidance state regressions passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

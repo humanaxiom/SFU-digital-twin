@@ -13,3 +13,4 @@ def test_route_options_client_state():
         cwd=root, capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "Route options regressions passed" in result.stdout, result.stdout + result.stderr

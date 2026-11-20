@@ -92,7 +92,8 @@ def test_client_discloses_deterministic_limits_without_ai_branding():
     assert "not an llm" in visible_text
     assert "data and limitations" in visible_text
     assert "destination" in visible_text
-    assert "not paths" in visible_text
+    assert "room details show source classifications" in visible_text
+    assert "physical accessibility is unverified" in visible_text
     assert all(term in visible_text for term in ("door width", "path width", "slope", "surface"))
     assert not re.search(r"\b(?:ai-powered|generative ai|chatgpt|copilot)\b", visible_text)
 

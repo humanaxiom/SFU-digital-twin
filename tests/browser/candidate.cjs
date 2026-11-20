@@ -82,6 +82,12 @@ function compareRoute(actual,expected) {
   if(actual.status===200)verifyGuidance(actual);
 }
 
+async function assertRouteFailure(cdp) {
+  assert.equal(await cdp.evaluate("document.querySelectorAll('#route-overlay path').length"), 0);
+  assert.equal(await cdp.evaluate("document.querySelector('#current-instruction').textContent"),
+    await cdp.evaluate("document.querySelector('#route-status').textContent"));
+}
+
 async function completedRoute(cdp,before,fixture) {
   const state=fixture.response.status===200?'success':'error';
   await cdp.wait(`${requests}[${before}]?.done&&document.querySelector('#route-status').dataset.state===${quote(state)}`);
@@ -99,19 +105,30 @@ async function completedRoute(cdp,before,fixture) {
       d:g.geometry.coordinates.map(([x,y],i)=>`${i?'L':'M'}${x-origin[0]} ${origin[1]-y}`).join(' ')}));
     assert.deepEqual(await cdp.evaluate("[...document.querySelectorAll('#route-overlay .route-segment')].map(p=>({id:p.dataset.geometryId,d:p.getAttribute('d')}))"),expected);
   } else if(body.status!==200){
-    assert.equal(await cdp.evaluate("document.querySelectorAll('#route-overlay path').length"),0);
-    assert.equal(await cdp.evaluate("document.querySelector('#current-instruction').textContent"),
-      await cdp.evaluate("document.querySelector('#route-status').textContent"));
+    await assertRouteFailure(cdp);
   }
   return body;
 }
 
 async function submit(cdp,fixture) {
   const before=await cdp.evaluate(`${requests}.length`);
-  await cdp.evaluate(`document.querySelector('#route-origin').value=${quote(fixture.origin.unit_id)};
-    document.querySelector('#route-destination').value=${quote(fixture.destination.unit_id)};
-    document.querySelector('#route-profile').value=${quote(fixture.profile)};
-    document.querySelector('#route-form').requestSubmit();`);
+  await activateButton(cdp,'#route-clear');
+  const prompt = `${fixture.profile==='elevator_only'?'mobility ':''}directions from ${fixture.origin.unit_id} to ${fixture.destination.unit_id}`;
+  await cdp.evaluate(`document.querySelector('#assistant-input').value=${quote(prompt)};document.querySelector('#assistant-form').requestSubmit()`);
+  await waitOptions(cdp,fixture.origin.unit_id,fixture.profile,true);
+  assert.equal(await cdp.evaluate(`${requests}.length`),before);
+  await activateButton(cdp,'#route-submit');
+  if(fixture.response.status!==200) {
+    await cdp.wait("document.querySelector('#route-request-status').dataset.state==='error'");
+    if(await cdp.evaluate(`${requests}.length`)===before) {
+      await assertRouteFailure(cdp);
+      // A known unsupported draft is blocked locally. Verify the matching service failure independently.
+      const payload={origin:{unit_id:fixture.origin.unit_id},destination:{unit_id:fixture.destination.unit_id},profile:fixture.profile};
+      const response=await cdp.evaluate(`fetch('/demo/v1/route',{method:'POST',headers:{'Content-Type':'application/json'},body:${quote(JSON.stringify(payload))}}).then(r=>r.json())`);
+      compareRoute(response,fixture.response);
+      return response;
+    }
+  }
   return completedRoute(cdp,before,fixture);
 }
 
@@ -161,8 +178,15 @@ async function availability(cdp,items,fixtures) {
     await activateButton(cdp,'#route-clear');
     const before=await cdp.evaluate(`${requests}.length`);
     await cdp.evaluate(`document.querySelector('#route-profile').value=${quote(item.profile)};
-      document.querySelector('#route-origin').value=${quote(item.origin_unit_id)};
-      document.querySelector('#route-origin').dispatchEvent(new Event('change'));`);
+      document.querySelector('#route-profile').dispatchEvent(new Event('change'));
+      document.querySelector('#route-origin-finder').open=true;`);
+    await cdp.wait(`[...document.querySelector('#route-origin-search-results').options].some(option=>option.value===${quote(item.origin_unit_id)})`);
+    await cdp.evaluate(`(() => {
+      const list = document.querySelector('#route-origin-search-results');
+      list.value = ${quote(item.origin_unit_id)};
+      list.dispatchEvent(new Event('change'));
+    })()`);
+    await activateButton(cdp,'#route-origin-search-choose');
     const body=await waitOptions(cdp,item.origin_unit_id,item.profile);
     assert.equal(await cdp.evaluate(`${requests}.length`),before,'origin selection must not automatically route');
     assert.equal(await cdp.evaluate("document.querySelector('#route-destination').value"),'');
@@ -190,6 +214,7 @@ async function run() {
   const cdp=new Cdp(proc);
   try {
     results.browser=await cdp.call('Browser.getVersion');
+    results.browserContainer = process.env.HOSTNAME;
     const {targetId}=await cdp.call('Target.createTarget',{url:'about:blank'});
     const {sessionId}=await cdp.call('Target.attachToTarget',{targetId,flatten:true});cdp.sessionId=sessionId;
     await cdp.call('Page.enable');
@@ -233,6 +258,7 @@ async function run() {
         if(connected.some(d=>d.unit_id===fixture.destination.unit_id)){
           const before=await cdp.evaluate(`${requests}.length`);
           await cdp.evaluate(`document.querySelector('#route-destination').value=${quote(fixture.destination.unit_id)};document.querySelector('#route-destination').dispatchEvent(new Event('change',{bubbles:true}));`);
+          await activateButton(cdp,'#route-submit');
           await completedRoute(cdp,before,fixture);record.mappedChoiceSelected=true;
           const walk=body.guidance?.steps.find(s=>s.kind==='walk');
           if(walk){await activateButton(cdp,`button[data-step-id="${walk.step_id}"]`);await assertSelected(cdp,body,walk);}

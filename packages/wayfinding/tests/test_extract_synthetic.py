@@ -50,3 +50,72 @@ def test_small_filegdb_roundtrip_preserves_attributes_and_dual_crs(tmp_path):
         extract_to_gpkg(source, output, overwrite=False)
     assert output.read_bytes() == before
     assert extract_to_gpkg(source, output, overwrite=True) == counts
+
+
+@pytest.mark.parametrize(
+    ("source_kind", "error"),
+    [
+        ("missing", FileNotFoundError),
+        ("regular_file", ValueError),
+        ("empty_directory", RuntimeError),
+    ],
+)
+def test_extract_overwrite_preserves_existing_output_for_bad_source(tmp_path, source_kind, error):
+    source = tmp_path / "source.gdb"
+    if source_kind == "regular_file":
+        source.touch()
+    elif source_kind == "empty_directory":
+        source.mkdir()
+    output = tmp_path / "accepted.gpkg"
+    output.write_bytes(b"accepted GeoPackage")
+
+    with pytest.raises(error):
+        extract_to_gpkg(source, output, overwrite=True)
+
+    assert output.read_bytes() == b"accepted GeoPackage"
+    assert set(tmp_path.iterdir()) == ({source, output} if source.exists() else {output})
+
+
+def test_extract_preserves_existing_output_after_partial_failure(tmp_path, monkeypatch):
+    from wayfinding.etl import extract
+
+    source = tmp_path / "source.gdb"
+    source.mkdir()
+    output = tmp_path / "accepted.gpkg"
+    output.write_bytes(b"accepted GeoPackage")
+
+    def write_then_fail(*, gpkg_path, target_layer, **kwargs):
+        if target_layer == "Facilities_26910":
+            gpkg_path.write_bytes(b"partial GeoPackage")
+            return 1
+        raise RuntimeError("fixture second layer failed")
+
+    monkeypatch.setattr(extract, "_extract_layer", write_then_fail)
+    with pytest.raises(RuntimeError, match="second layer failed"):
+        extract_to_gpkg(source, output, overwrite=True)
+
+    assert output.read_bytes() == b"accepted GeoPackage"
+    assert set(tmp_path.iterdir()) == {source, output}
+
+
+def test_extract_without_overwrite_preserves_output_that_appears_during_extraction(
+    tmp_path, monkeypatch
+):
+    from wayfinding.etl import extract
+
+    source = tmp_path / "source.gdb"
+    source.mkdir()
+    output = tmp_path / "output.gpkg"
+
+    def extract_with_competing_output(*, gpkg_path, target_layer, **kwargs):
+        if target_layer == "Facilities_26910":
+            output.write_bytes(b"competing output")
+        gpkg_path.write_bytes(b"candidate output")
+        return 1
+
+    monkeypatch.setattr(extract, "_extract_layer", extract_with_competing_output)
+    with pytest.raises(FileExistsError):
+        extract_to_gpkg(source, output)
+
+    assert output.read_bytes() == b"competing output"
+    assert set(tmp_path.iterdir()) == {source, output}
