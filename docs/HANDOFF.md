@@ -1,5 +1,19 @@
 # Handoff — Living Project State
 
+## Standing preservation orders and incident explanation (2026-11-20)
+
+The user requires E2E after every substantial change, no removals without
+explicit authorization, and cumulative additions or fixes to working behavior.
+These standing orders are recorded near the top of root `AGENTS.md` and in
+`docs/DOD.md`; they override conflicting historical plans/ADRs. Preserve normal
+user-journey tests alongside new workflows. See [the detailed incident report](reports/DT-034-POSTMORTEM.md)
+for the exact handler replacement, misleading acceptance tests, recovery issues
+and evidence limits. [DT-035](plans/DT-035.md) tracks this documentation delivery.
+Independent factual/policy review found no blockers. Fresh isolated default-click
+and API preservation E2E and a final post-policy port-18107 rehearsal exited 0.
+This delivery changed instructions/documentation only; the app remains at the
+verified DT-034 behavior and served hashes.
+
 ## Restored two-room click directions (2026-11-20)
 
 The user reported that clicking room A then B on port 18107 produced no

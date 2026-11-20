@@ -11,6 +11,11 @@ A ticket is Done when ALL of the following hold:
 
 1. A plan exists under `docs/plans/<ticket-id>.md` and every acceptance criterion is met, or has a
    `judge`-accepted deviation note.
+   The user's standing orders in `AGENTS.md` are mandatory: changes cumulatively
+   add working capability or fix an identified issue. Nothing may be removed
+   without explicit user authorization for that removal. An ADR, replacement UI
+   or passing revised test suite cannot supply that authorization. Preserve
+   established user-journey tests and normal-default interactions.
 2. Relevant behavioral tests failed before implementation (record RED evidence; preserve test-first
    commits where practical without committing inherited unrelated work); the full suite is green;
    coverage is at or above the per-package floor listed below.
@@ -25,6 +30,14 @@ A ticket is Done when ALL of the following hold:
    build changes include source-to-candidate pipeline verification. Any failed or unrun required
    E2E means the ticket is incomplete. Recording the run's evidence afterward does not change the
    runnable state or require a second run.
+   Additionally, end-to-end test after every substantial change before proceeding
+   to another substantial change, rather than deferring E2E until final delivery.
+   Exercise both established workflows and the changed workflow; record explicit
+   user authorization for any removal. An alternate successful workflow does not
+   prove that the established workflow was preserved. Use isolated test services
+   to avoid interfering with the live demo and its admission limits.
+   Where live services use repository source binds, isolate unverified source
+   edits as well as test services so work in progress is not served accidentally.
 5. No new external network dependency; no personal or user data leaves SFU-controlled
    infrastructure. After the digest-pinned build image is pulled or preloaded, gates and ETL targets
    perform no package installation or other network access.

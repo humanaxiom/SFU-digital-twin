@@ -9,6 +9,36 @@ ADR-0017. DT-018/ADR-0012 describe the underlying route guidance. See
 `docs/plans/DT-023.md` for the subsequent Burnaby building expansion and
 the handoff for current gate and demo status.
 
+## User standing orders — preserve working behavior (2026-11-20)
+
+- End-to-end test after every substantial change, before proceeding to another
+  substantial change or calling that change complete. Retain the stricter final
+  delivery E2E requirement below, including small and documentation-only changes.
+- Nothing gets removed unless explicitly authorized by the user. Preserve working
+  features, user workflows, defaults, controls, interfaces, project files and test
+  coverage. Changes must cumulatively add to what works or fix an identified issue.
+- A refactor, redesign, accepted ADR, replacement feature, passing test suite or
+  broad implementation request is not explicit authorization to remove existing
+  capability. If a proposed fix requires a removal, identify the exact working
+  behavior and obtain authorization for that removal before implementing it.
+- Keep established user-journey acceptance tests alongside new-feature tests.
+  Exercise normal defaults and the user's actual clicks, not only an alternate
+  path that reaches the same backend. Do not rewrite a baseline test to bless a
+  removed workflow without the user's explicit authorization for that removal.
+- Record the preserved workflows, any expressly authorized removals, and fresh
+  Docker browser/API evidence for each substantial change. A failed or unrun
+  required E2E leaves that change incomplete. Do not run competing suites through
+  the live demo's shared client address; use isolated test services and reserve
+  the live published port for a short final rehearsal.
+- When a live demo serves a repository source bind, keep unverified edits in an
+  isolated checkout/source snapshot. An isolated test container that shares the
+  edited live source is not source isolation. Verify the candidate before making
+  its changes active in the live demo, then perform the final published-port check.
+
+These standing orders take precedence over conflicting historical plans and
+ADRs. The incident and corrective controls are recorded in
+[the DT-034 postmortem](docs/reports/DT-034-POSTMORTEM.md).
+
 ## Architecture and boundaries
 
 - Containerized GDAL/Python ETL produces a dual-CRS GeoPackage and contracted

@@ -4,6 +4,13 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — preservation orders and incident explanation
+
+- Recorded the user's standing orders: E2E after each substantial change, no
+  removals without explicit authorization, and cumulative additions or fixes.
+  Established normal-default acceptance journeys must remain protected alongside
+  new workflows. [Detailed incident report](docs/reports/DT-034-POSTMORTEM.md)
+
 ## Unreleased — restore two-room click directions
 
 - Map and room-list clicks again choose A then B and automatically show mapped
