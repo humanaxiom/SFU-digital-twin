@@ -297,6 +297,14 @@ An already-open tab keeps its loaded client code across server updates; open
 `/index.html` on the running demo's origin as a fresh document to load the current
 client (for the navigation candidate, `http://127.0.0.1:18107/index.html`).
 
+After one fresh load installs the update safeguard, **Check for app updates** in
+**Data and limitations** checks the navigation code without resetting your route.
+Checks also run when returning to a visible tab, at most once per minute. If a
+different version is observed, **Open updated app in a new tab** leaves this tab's
+route intact; the new tab starts fresh. Failed checks stay unverified. This checks
+JavaScript code only; page markup or styling changes still need a fresh tab.
+[Safeguard contract and evidence](docs/reports/DT-038.md)
+
 To show directions, choose a building and floor, click a starting room A, then
 click a connected destination B on the map or in the room list. Directions appear
 automatically. You can change floors between A and B. Further room clicks keep A

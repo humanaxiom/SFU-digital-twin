@@ -25,6 +25,12 @@
     </details>
   </header>
 
+  <section id="client-update-notice" class="client-update-notice" role="status" hidden>
+    <p>A different app version was observed. This tab keeps your route and selections.</p>
+    <a id="open-updated-app" href="/index.html" target="_blank" rel="noopener">Open updated app in a new tab</a>
+    <p class="muted">The new tab starts fresh. Keep this tab to retain your current route.</p>
+  </section>
+
   <main>
     <section class="map-panel" aria-label="Campus and floor maps">
       <nav class="quick-navigation" aria-label="Buildings and floors">
@@ -232,6 +238,9 @@
         <p>Room details show source classifications. Physical accessibility is unverified.</p>
         <p>Routes use only measured graph geometry between approximate anchors. There is no public map geometry, nearest search, travel-time estimate, live-status, or LLM capability.</p>
         <p>Door width, path width, slope, surface, powered doors, closures, opening hours, door access, and elevator status are not verified.</p>
+        <button id="check-client-update" type="button">Check for app updates</button>
+        <p id="client-update-status" role="status" data-state="unknown">App version not verified. Open a fresh app tab if controls do not respond.</p>
+        <p class="muted">Checks navigation code updates. Page markup or styling changes require a fresh tab.</p>
         <p>Artifact SHA-256: <code id="artifact-hash">Loading…</code></p>
         <p>Graph SHA-256: <code id="graph-hash">Loading…</code></p>
       </details>

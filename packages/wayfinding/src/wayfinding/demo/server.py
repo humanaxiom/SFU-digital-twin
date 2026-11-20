@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -274,6 +275,10 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             if path in STATIC_FILES and not target.query:
                 self._static(path)
                 return
+            if path == "/demo/v1/client" and not target.query:
+                raw = Path(__file__).with_name("static").joinpath("app.js").read_bytes()
+                self._json(200, {"protocol": 1, "script_sha256": hashlib.sha256(raw).hexdigest()})
+                return
             if path == "/demo/v1/route-options":
                 self._get_route_options(target.query)
                 return
@@ -507,6 +512,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     def _is_get_route(path: str) -> bool:
         return path in STATIC_FILES or path in {
             "/demo/v1/health",
+            "/demo/v1/client",
             "/demo/v1/campus",
             "/demo/v1/facilities",
             "/demo/v1/levels",
@@ -520,7 +526,11 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     def _static(self, path: str) -> None:
         name, content_type = STATIC_FILES[path]
         static_dir = Path(__file__).with_name("static")
-        self._send_bytes(200, content_type, (static_dir / name).read_bytes())
+        body = (static_dir / name).read_bytes()
+        if path == "/app.js":
+            revision = hashlib.sha256(body).hexdigest()
+            body += f'\n;setLoadedClientRevision("{revision}");\n'.encode("ascii")
+        self._send_bytes(200, content_type, body)
 
     @staticmethod
     def _valid_route_payload(payload: Any) -> bool:

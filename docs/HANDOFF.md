@@ -1,5 +1,32 @@
 # Handoff — Living Project State
 
+## Retained-tab update safeguards (DT-038, 2026-11-20)
+
+The user confirmed the fresh `/index.html` works and supplied an AQ6000/263-room
+screenshot, then selected update/recovery safeguards for the next iteration.
+That confirmation does not identify the original retained tab's transport cause.
+
+Port 18107 now identifies the exact loaded app.js bytes and checks for a different
+served script initially, manually under **Data and limitations**, and when a tab
+returns visible (automatic checks at most once per minute; no polling). The check
+has a five-second headers/body deadline and reports failures as unverified.
+A sticky observed-change notice offers a separate fresh tab, preserving the old
+tab's route, endpoints, floor, inspection, instruction and zoom. No automatic reload.
+
+Full Docker package: **704 passed, 16 documented skips, 87.54% coverage**. Lint,
+types, artifact QA and launcher gates passed, as did the new retained-tab/race/
+timeout/mobile/new-tab E2E and unchanged two-click, Preview, floor-recovery and
+four-fixture canonical browser/API E2Es. Live manual update checks preserved the
+real SH route. Exact live AQ floor switches took 578/634 ms, all 263 rooms kept.
+[Contract](adr/0029-loaded-client-update-notice.md), [plan](plans/DT-038.md),
+[complete evidence and identities](reports/DT-038.md).
+
+Independent gpt-6-astra final review approved local delivery with no blockers.
+Only the main navigation service restarted, after isolated verification; artifacts,
+ASB Python process and proxy were retained. This first checker covers JavaScript
+code changes, not HTML/CSS-only changes. Tabs predating the checker need one fresh
+load at `http://127.0.0.1:18107/index.html`. No data rebuild or publication occurred.
+
 ## Bounded floor-request recovery (DT-037, 2026-11-20)
 
 The user reported a retained tab waiting on AQ 6000 while showing AQ 3000, with

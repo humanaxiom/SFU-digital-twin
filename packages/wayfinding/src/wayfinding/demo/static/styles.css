@@ -276,3 +276,10 @@ footer { padding: .7rem 1.5rem; color: var(--muted); background: var(--surface);
 #route-draft-status, #route-request-status, #room-route-status { overflow-wrap: anywhere; }
 #route-request-status[data-state="error"] { color: #8b1720; }
 #route-request-status[data-state="pending"] { color: #634b0a; }
+
+.client-update-notice { padding: .8rem 1rem; border-bottom: 2px solid var(--gold); background: #fff3cd; overflow-wrap: anywhere; }
+.client-update-notice p { margin: 0 0 .5rem; }
+.client-update-notice a { display: inline-block; min-height: 44px; padding: .65rem 0; color: var(--teal-dark); font-weight: 700; }
+.client-update-notice .muted { margin-bottom: 0; }
+#check-client-update { min-height: 44px; padding: .5rem .7rem; border: 1px solid var(--teal); border-radius: 4px; color: var(--teal-dark); background: white; cursor: pointer; }
+#client-update-status { margin-top: .7rem; }

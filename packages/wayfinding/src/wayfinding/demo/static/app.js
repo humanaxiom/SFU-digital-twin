@@ -1815,6 +1815,83 @@ document.querySelector("#campus-zoom-in").addEventListener("click", () => zoomCa
 document.querySelector("#campus-zoom-out").addEventListener("click", () => zoomCampus(1.5));
 document.querySelector("#campus-reset").addEventListener("click", resetCampusCamera);
 
+let loadedClientRevision = null;
+let clientUpdatePending = null;
+let clientChangeObserved = false;
+let clientUpdateLastStarted = 0;
+
+function showClientUpdateState(state, message) {
+  const status = document.querySelector("#client-update-status");
+  if (status) {
+    status.dataset.state = state;
+    status.textContent = message;
+  }
+  const notice = document.querySelector("#client-update-notice");
+  if (notice && clientChangeObserved) notice.hidden = false;
+}
+
+function checkClientUpdate() {
+  if (clientUpdatePending) return clientUpdatePending;
+  if (!loadedClientRevision) {
+    showClientUpdateState("unknown", "Unable to verify this tab's app version. Open a fresh app tab.");
+    return Promise.resolve();
+  }
+  clientUpdateLastStarted = Date.now();
+  showClientUpdateState(clientChangeObserved ? "changed" : "checking",
+    clientChangeObserved ? "A different app version was observed. Checking again…" : "Checking for app updates…");
+  const button = document.querySelector("#check-client-update");
+  if (button) button.disabled = true;
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error("App update check timed out."));
+    }, 5000);
+  });
+  clientUpdatePending = (async () => {
+    try {
+      const body = await Promise.race([
+        request("/demo/v1/client", {signal: controller.signal}), deadline,
+      ]);
+      if (!body || body.protocol !== 1 || typeof body.script_sha256 !== "string"
+          || !/^[a-f0-9]{64}$/.test(body.script_sha256)) {
+        throw new Error("Unrecognized app version response.");
+      }
+      if (body.script_sha256 !== loadedClientRevision) clientChangeObserved = true;
+      showClientUpdateState(clientChangeObserved ? "changed" : "current",
+        clientChangeObserved ? "A different app version was observed. This tab keeps its route."
+          : "This tab is running the current navigation code.");
+    } catch (_) {
+      showClientUpdateState(clientChangeObserved ? "changed" : "unknown",
+        clientChangeObserved ? "A different app version was observed. Unable to check again; this tab keeps its route."
+          : "Unable to check for app updates. You can try again; this tab keeps its route.");
+    } finally {
+      clearTimeout(timer);
+      clientUpdatePending = null;
+      if (button) button.disabled = false;
+    }
+  })();
+  return clientUpdatePending;
+}
+
+// The server appends this call with the digest of the exact raw script it read.
+// A subsequent endpoint fetch must never stand in for this loaded identity.
+function setLoadedClientRevision(revision) {
+  if (loadedClientRevision !== null || !/^[a-f0-9]{64}$/.test(revision)) return;
+  loadedClientRevision = revision;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && Date.now() - clientUpdateLastStarted >= 60000) {
+      void checkClientUpdate();
+    }
+  });
+  void checkClientUpdate();
+}
+
+document.querySelector("#check-client-update")?.addEventListener("click", () => {
+  void checkClientUpdate();
+});
+
 async function initialize() {
   try {
     const [health, facilities, levels, campus] = await Promise.all([

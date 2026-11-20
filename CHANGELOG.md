@@ -4,6 +4,14 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — retained-tab app update safeguards
+
+- Tabs can check for changed navigation code without resetting a route. A bounded
+  check reports unknown failures, and an observed-change notice opens a separate
+  fresh app tab only when requested. Loaded-code identity, sticky notices and
+  retained navigation are tested. One fresh load installs this safeguard; HTML/CSS
+  changes alone remain outside its scope. [Verification](docs/reports/DT-038.md)
+
 ## Unreleased — stalled floor request recovery
 
 - A floor request that stalls during headers or body delivery now reaches the
