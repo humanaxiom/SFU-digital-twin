@@ -2,6 +2,15 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+assert.ok(fs.existsSync('/.dockerenv'), 'Run through Docker.');
+
+function routeResponse({origin, destination, profile}) {
+  return {
+    status: 200, profile, origin, destination,
+    guidance: {version: 'dt018-guidance-v1', status: 'unavailable', distance_m: null,
+      warnings: [], steps: [], geometries: [], markers: [], visits: [], transitions: []},
+  };
+}
 
 function client() {
   const nodes = new Map();
@@ -15,6 +24,7 @@ function client() {
           dataset: {}, attributes: {}, children: [],
           addEventListener(name, callback) { this.handlers[name] = callback; },
           replaceChildren(...children) { this.children = children; },
+          append(...children) { this.children.push(...children); },
           setAttribute(key, value) { this.attributes[key] = String(value); },
           removeAttribute(key) { delete this.attributes[key]; },
           querySelectorAll() { return []; },
@@ -39,7 +49,7 @@ function client() {
       payload: JSON.parse(options.body), resolve,
     }));
     renderRoute = (body, options) => { rendered.push(body); renderOptions.push(options); };
-    routeOrigin.value = 'A'; routeDestination.value = 'B'; routeProfile.value = 'default';
+    editRouteDraft({origin: 'A', destination: 'B'});
   `, context);
   return {context, nodes, run: code => vm.runInContext(code, context)};
 }
@@ -48,18 +58,20 @@ function client() {
   const first = client();
   const pending = first.run('submitSelectedRoute()');
   first.nodes.get('#route-profile').value = 'elevator_only';
-  const changed = first.nodes.get('#route-profile').handlers.change();
-  assert.equal(first.context.requests.length, 2, 'profile change must recompute the selected pair');
+  first.nodes.get('#route-profile').handlers.change();
+  assert.equal(first.context.requests.length, 1, 'profile edit must not submit a replacement');
+  const changed = first.run('submitSelectedRoute()');
+  assert.equal(first.context.requests.length, 2, 'explicit Preview submits the edited profile');
   assert.equal(first.context.requests[1].payload.profile, 'elevator_only');
-  first.context.requests[1].resolve({profile: 'elevator_only'});
+  first.context.requests[1].resolve(routeResponse(first.context.requests[1].payload));
   await changed;
-  first.context.requests[0].resolve({profile: 'default'});
+  first.context.requests[0].resolve(routeResponse(first.context.requests[0].payload));
   await pending;
   assert.deepEqual(Array.from(first.context.rendered, value => value.profile), ['elevator_only']);
 
   const second = client();
   second.run(`
-    routeDestination.value = ''; routeSelection = 'origin_selected';
+    editRouteDraft({destination: ''});
     selectUnit = () => new Promise(resolve => { globalThis.inspected = resolve; });
   `);
   const selection = second.run("activateRouteEndpoint('B')");
@@ -73,35 +85,49 @@ function client() {
   }
   await check('manual incomplete pair retains origin', async () => {
     const manual = client();
-    manual.run(`routeSelection = 'complete'; routeDestination.value = ''; selectUnit = async () => true;`);
+    manual.run("editRouteDraft({destination: ''}); selectUnit = async () => true;");
     await manual.run('submitSelectedRoute()');
-    const selected = manual.run("activateRouteEndpoint('C')");
-    await Promise.resolve();
+    await manual.run("activateRouteEndpoint('C')");
+    assert.equal(manual.run('routeDestination.value'), '', 'inspection alone cannot fill To');
+    await manual.run("activateRouteDestination('C')");
     assert.equal(manual.run('routeOrigin.value'), 'A');
     assert.equal(manual.run('routeDestination.value'), 'C');
+    assert.equal(manual.context.requests.length, 0);
+    const selected = manual.run('submitSelectedRoute()');
     assert.equal(manual.context.requests.length, 1);
-    manual.context.requests[0].resolve({status: 200});
+    manual.context.requests[0].resolve(routeResponse(manual.context.requests[0].payload));
     await selected;
   });
-  await check('invalid mobility chat clears previous route', async () => {
+  await check('same-room mobility draft preserves the previous route', async () => {
     const chat = client();
-    chat.run(`activeRoute = {status: 200, profile: 'default'}; routeSelection = 'complete';`);
+    chat.run(`activeRoute = {status: 200, profile: 'default'};
+      committedRouteSnapshot = {origin:'A',destination:'B',profile:'default'};
+      routeUnits = [{unit_id:'A',room_id:'AQ1001'}, {unit_id:'B',room_id:'AQ1002'}];
+      refreshRouteOptions = () => {};`);
     chat.nodes.get('#assistant-input').value = 'wheelchair directions from A to A';
     await chat.nodes.get('#assistant-form').handlers.submit({preventDefault() {}});
-    assert.equal(chat.run('activeRoute'), null);
-    assert.equal(chat.nodes.get('#route-accessibility').hidden, false);
-    assert.match(chat.nodes.get('#route-status').textContent, /distinct/i);
+    await chat.run('submitSelectedRoute()');
+    assert.equal(chat.run('activeRoute.profile'), 'default');
+    assert.equal(chat.nodes.get('#route-accessibility').hidden, true);
+    assert.equal(chat.nodes.get('#route-profile-help').hidden, false);
+    assert.match(chat.nodes.get('#route-request-status').textContent, /distinct/i);
     assert.equal(chat.context.requests.length, 0);
   });
-  await check('valid chat clears previous route while pending', async () => {
+  await check('assistant-confirmed route preserves the previous route while pending', async () => {
     const chat = client();
-    chat.run(`activeRoute = {status: 200, profile: 'default'}; routeSelection = 'complete';`);
+    chat.run(`activeRoute = {status: 200, profile: 'default'};
+      committedRouteSnapshot = {origin:'A',destination:'B',profile:'default'};
+      routeUnits = [{unit_id:'A',room_id:'AQ1001'}, {unit_id:'B',room_id:'AQ1002'}];
+      refreshRouteOptions = () => {};`);
     chat.nodes.get('#assistant-input').value = 'wheelchair directions from A to B';
-    const pendingChat = chat.nodes.get('#assistant-form').handlers.submit({preventDefault() {}});
-    assert.equal(chat.run('activeRoute'), null);
-    assert.equal(chat.run('routeSelection'), 'request_pending');
-    chat.context.requests[0].resolve({status: 200, profile: 'elevator_only'});
+    await chat.nodes.get('#assistant-form').handlers.submit({preventDefault() {}});
+    assert.equal(chat.context.requests.length, 0);
+    const pendingChat = chat.run('submitSelectedRoute()');
+    assert.equal(chat.run('activeRoute.profile'), 'default');
+    assert.equal(chat.nodes.get('#route-request-status').dataset.state, 'pending');
+    chat.context.requests[0].resolve(routeResponse(chat.context.requests[0].payload));
     await pendingChat;
+    assert.equal(chat.run('committedRouteSnapshot.profile'), 'elevator_only');
   });
   await check('newest floor owns the scene', async () => {
     const scene = client();
@@ -129,13 +155,13 @@ function client() {
     const campus = client();
     const route = campus.run('submitSelectedRoute()');
     campus.run('showCampus()');
-    campus.context.requests[0].resolve({status: 200, profile: 'default'});
+    campus.context.requests[0].resolve(routeResponse(campus.context.requests[0].payload));
     await route;
     assert.equal(campus.context.rendered.length, 1, 'latest route result remains available');
     assert.equal(campus.context.renderOptions[0].follow, false, 'acceptance cannot navigate over newer campus intent');
     assert.equal(campus.nodes.get('#campus-view').hidden, false);
     assert.equal(campus.nodes.get('#floor-view').hidden, true);
-    assert.equal(campus.run('routeSelection'), 'complete');
+    assert.equal(campus.nodes.get('#route-request-status').dataset.state, 'success');
   });
   assert.deepEqual(failures, []);
   console.log('Route state regressions passed');

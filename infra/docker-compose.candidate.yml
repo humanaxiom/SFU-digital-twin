@@ -6,6 +6,7 @@ x-external-image: &external-image nginx@sha256:65645c7bb6a0661892a8b03b89d074320
 services:
   demo:
     image: *build-image
+    restart: unless-stopped
     working_dir: /workspace
     environment:
       PYTHONPATH: /workspace/packages/wayfinding/src
@@ -32,6 +33,7 @@ services:
 
   external:
     image: *external-image
+    restart: unless-stopped
     user: "101:101"
     init: true
     read_only: true

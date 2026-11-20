@@ -35,6 +35,19 @@ const transitionDeparture = document.querySelector("#transition-departure");
 const transitionArrival = document.querySelector("#transition-arrival");
 const routeDiagnostics = document.querySelector("#route-diagnostics");
 const routeOptionsStatus = document.querySelector("#route-options-status");
+const endpointSearches = Object.fromEntries(["origin", "destination"].map((role) => {
+  const id = `route-${role}-search`;
+  return [role, {
+    role,
+    finder: document.querySelector(`#route-${role}-finder`),
+    query: document.querySelector(`#${id}`),
+    building: document.querySelector(`#${id}-building`),
+    floor: document.querySelector(`#${id}-floor`),
+    results: document.querySelector(`#${id}-results`),
+    status: document.querySelector(`#${id}-status`),
+    choose: document.querySelector(`#${id}-choose`),
+  }];
+}));
 const unavailableGuidanceMessage = "A directions preview is unavailable for this route. See route details for the data checks.";
 let facilitiesById = new Map();
 // Navigation identity is state-owned; select values are event inputs only.
@@ -49,10 +62,15 @@ const retryScene = document.querySelector("#retry-scene");
 const returnToRoute = document.querySelector("#return-to-route");
 let allLevels = [];
 let routeUnits = [];
+let searchableRooms = null;
 let activeRoute = null;
+const routeDraft = { origin: "", destination: "", profile: "default", revision: 0 };
+let committedRouteSnapshot = null;
+let submittedRouteSnapshot = null;
 let activeStep = 0;
 let routeSelection = "empty";
 let requestGeneration = 0;
+let endpointSelectionRevision = 0;
 let sceneGeneration = 0;
 let currentScene = null;
 let manualPreview = false;
@@ -60,12 +78,14 @@ let previewVisitId = null;
 let mapFit = "floor";
 let mapOrigin = [0, 0];
 let availabilityGeneration = 0;
+let routeAvailabilityState = "empty";
 let routeAvailability = null;
 let routeAvailabilityOrigin = "";
 let routeAvailabilityProfile = "";
 let routeAvailabilityPendingOrigin = "";
 let routeAvailabilityPendingProfile = "";
 let routeAvailabilitySettled = Promise.resolve();
+let routeAvailabilityRequest = null;
 let settleRouteAvailability = () => {};
 let routeUiState = "empty";
 const campusView = document.querySelector("#campus-view");
@@ -310,11 +330,32 @@ function setStatus(message, sceneMessage = false) {
   mapStatus.textContent = message;
 }
 
+function showInspectionRows(rows) {
+  unitDetails.replaceChildren(...rows.map(([term, value]) => {
+    const row = document.createElement("div");
+    const label = document.createElement("dt");
+    const detail = document.createElement("dd");
+    label.textContent = term;
+    detail.textContent = value;
+    row.append(label, detail);
+    return row;
+  }));
+}
+
 async function selectUnit(unitId, focusMap = false) {
   const revision = ++navigationState.roomRevision;
   const intent = navigationState.intentRevision;
   const levelId = currentScene?.level.level_id;
   navigationState.selectedUnitId = unitId;
+  const unit = routeUnits.find(item => item.unit_id === unitId);
+  const identity = [["Room", unit?.room_id || unitId], ["Floor", floorLabel(unit?.level_id || levelId)]];
+  showInspectionRows([...identity, ["Record details", "Loading room details…"]]);
+  document.querySelector(".facts").open = true;
+  document.querySelectorAll(".unit-shape, .landmark-shape").forEach(node => {
+    node.classList.toggle("selected", node.dataset.unitId === unitId);
+  });
+  if (focusMap) document.querySelector(`[data-unit-id="${CSS.escape(unitId)}"]`)?.focus();
+  updateRoomActions();
   const isCurrent = () => revision === navigationState.roomRevision
     && intent === navigationState.intentRevision
     && navigationState.selectedUnitId === unitId
@@ -322,45 +363,39 @@ async function selectUnit(unitId, focusMap = false) {
   try {
     const body = await request(`/demo/v1/units/${encodeURIComponent(unitId)}`);
     if (!isCurrent()) return false;
-    document.querySelectorAll(".unit-shape").forEach((node) => node.classList.toggle("selected", node.dataset.unitId === unitId));
     const rows = [
-      ["Room", body.room_id || "Not assigned"], ["Category", body.category || "Not recorded"],
-      ["Use type", body.use_type || "Not recorded"],
-      ["Destination tag", body.accessible === null ? "Unknown" : String(body.accessible)],
-      ["Verified by", body.verified_by || "Not recorded"], ["Verified date", body.verified_date || "Not recorded"],
+      ["Room", body.room_id || "Not assigned"],
+      ["Recorded category", body.category || "Not recorded"],
+      ["Source use type", body.use_type || "Not recorded"],
+      ["Physical accessibility", "Unverified. This demo has no physical accessibility survey for this room."],
     ];
-    unitDetails.replaceChildren(...rows.map(([term, value]) => {
-      const row = document.createElement("div"), label = document.createElement("dt"), detail = document.createElement("dd");
-      label.textContent = term; detail.textContent = value;
-      row.append(label, detail); return row;
-    }));
-    document.querySelector(".facts").open = true;
-    setStatus(`Selected room ${body.room_id || body.unit_id}. Destination metadata does not describe path accessibility.`);
-    if (focusMap) document.querySelector(`[data-unit-id="${CSS.escape(unitId)}"]`)?.focus();
+    showInspectionRows(rows);
+    setStatus(`Selected room ${body.room_id || body.unit_id}.`);
     return true;
   } catch (error) {
-    if (isCurrent()) setStatus(`Could not load room details: ${error.message}`);
+    if (isCurrent()) {
+      showInspectionRows([...identity, ["Record details", "Room details are unavailable."]]);
+      setStatus(`Could not load room details: ${error.message}`);
+    }
     return false;
   }
 }
 
 function updateEndpointStates() {
-  const hasCurrentAvailability = routeAvailability instanceof Map
-    && routeAvailabilityOrigin === routeOrigin.value
-    && routeAvailabilityProfile === routeProfile.value;
+  const availabilityByUnit = currentRouteAvailability();
   document.querySelectorAll("[data-unit-id]").forEach((node) => {
-    const isOrigin = node.dataset.unitId === routeOrigin.value;
-    const isDestination = node.dataset.unitId === routeDestination.value;
-    const availability = hasCurrentAvailability ? routeAvailability.get(node.dataset.unitId) : null;
+    if (node.id === "room-start-here" || node.id === "room-directions-here") return;
+    const isOrigin = node.dataset.unitId === (committedRouteSnapshot || routeDraft).origin;
+    const isDestination = node.dataset.unitId === (committedRouteSnapshot || routeDraft).destination;
+    const availability = availabilityByUnit?.get(node.dataset.unitId);
     const isConnected = !isOrigin && availability === "connected";
-    const isUnavailable = !isOrigin && Boolean(availability) && availability !== "connected";
+    const isUnavailable = !isOrigin && !isDestination && Boolean(availability) && availability !== "connected";
     node.classList.toggle("route-origin", isOrigin);
     node.classList.toggle("route-destination", isDestination);
     node.classList.toggle("route-connected", isConnected);
     node.classList.toggle("route-unavailable", isUnavailable);
-    if (node.tagName?.toLowerCase() === "button") node.disabled = isUnavailable;
-    if (isUnavailable) node.setAttribute("aria-disabled", "true");
-    else node.removeAttribute("aria-disabled");
+    if (node.tagName?.toLowerCase() === "button") node.disabled = false;
+    node.removeAttribute("aria-disabled");
     if (isOrigin) node.setAttribute("aria-current", "Origin A selected");
     else if (isDestination) node.setAttribute("aria-current", "Destination B selected");
     else node.removeAttribute("aria-current");
@@ -377,9 +412,14 @@ function cancelPendingRouteScene() {
 
 function clearRoute(clearEndpoints = true) {
   requestGeneration += 1;
-  navigationState.roomRevision += 1;
+  navigationState.assistantRevision += 1;
+  endpointSelectionRevision += 1;
   cancelPendingRouteScene();
   activeRoute = null;
+  committedRouteSnapshot = null;
+  submittedRouteSnapshot = null;
+  document.querySelector("#route-request-status").textContent = "";
+  document.querySelector("#route-request-status").dataset.state = "empty";
   activeStep = 0;
   manualPreview = false;
   previewVisitId = null;
@@ -388,11 +428,13 @@ function clearRoute(clearEndpoints = true) {
   floorJourney.replaceChildren();
   routeDiagnostics.textContent = "No route requested.";
   setRouteState("empty");
-  routeStatus.textContent = "Choose two rooms, or select them on the map.";
+  routeStatus.textContent = "Choose two rooms, then select Preview route.";
   updateGuidanceControls();
   if (navigationState.sceneStatus !== "loading") restoreRenderedFloor();
   renderRouteOverlay(currentScene?.level.level_id);
   if (clearEndpoints) {
+    Object.assign(routeDraft, { origin: "", destination: "", profile: "default", revision: routeDraft.revision + 1 });
+    routeProfile.value = "default";
     routeOrigin.value = "";
     routeDestination.value = "";
     routeSelection = "empty";
@@ -403,6 +445,7 @@ function clearRoute(clearEndpoints = true) {
     settleRouteAvailability();
     settleRouteAvailability = () => {};
     routeAvailabilitySettled = Promise.resolve();
+    routeAvailabilityRequest = null;
     routeAvailabilityPendingOrigin = "";
     routeAvailabilityPendingProfile = "";
     renderDestinationOptions();
@@ -410,64 +453,112 @@ function clearRoute(clearEndpoints = true) {
     routeOptionsStatus.textContent = "Choose a starting room to see mapped connections.";
   }
   updateEndpointStates();
+  renderRouteIdentity();
 }
 
+function currentRouteAvailability() {
+  return routeAvailability instanceof Map
+    && routeAvailabilityOrigin === routeDraft.origin
+    && routeAvailabilityProfile === routeDraft.profile ? routeAvailability : null;
+}
+
+function rejectUnavailableDestination(unitId) {
+  const availability = currentRouteAvailability();
+  if (!availability || availability.get(unitId) === "connected") return false;
+  const outcome = availability.get(unitId);
+  setStatus(`${roomLabel(unitId)}: ${destinationSearchLabels[outcome] || "Connection status unknown"}${outcome === "same_anchor" ? "; no walking path is represented" : ""}. Choose a connected destination or edit From.`);
+  return true;
+}
+
+// Room inspection never chooses an endpoint implicitly.
 async function activateRouteEndpoint(unitId, focusMap = false) {
-  document.querySelector("#directions-panel").open = true;
-  if (routeSelection === "complete" || routeSelection === "failed") {
-    const retainedOrigin = routeOrigin.value;
-    clearRoute(false);
-    routeDestination.value = "";
-    routeSelection = retainedOrigin ? "origin_selected" : "empty";
-    updateEndpointStates();
+  // Inspecting retained geometry must not cancel the floor the user is loading.
+  if (navigationState.sceneStatus === "loading" && !navigationState.pendingStep) {
+    navigationState.intentRevision += 1;
+  } else {
+    beginNavigation("floor");
+    const displayed = allLevels.find(level => level.level_id === currentScene?.level.level_id);
+    if (displayed) selectFloorControls(displayed);
   }
-  if (routeSelection === "empty" || !routeOrigin.value) {
-    retainEndpointOption(routeOrigin, unitId);
-    routeOrigin.value = unitId;
-    routeDestination.value = "";
-    routeSelection = "origin_selected";
-    updateEndpointStates();
-    refreshRouteOptions();
-    setStatus("Origin A set. Select a distinct room for destination B.");
-    await selectUnit(unitId, focusMap);
-    return;
-  }
-  if (unitId === routeOrigin.value) {
-    setStatus("That room is already origin A; select a distinct destination B.");
-    return;
-  }
-  if (unitId !== routeOrigin.value) {
-    const pendingOrigin = routeOrigin.value;
-    const pendingProfile = routeProfile.value;
-    while (routeAvailabilityPendingOrigin === pendingOrigin
-      && routeAvailabilityPendingProfile === pendingProfile) {
-      const pendingAvailability = routeAvailabilitySettled;
-      await pendingAvailability;
-      if (routeOrigin.value !== pendingOrigin || routeProfile.value !== pendingProfile) return;
-      if (routeAvailabilitySettled === pendingAvailability) break;
-    }
-    const hasCurrentAvailability = routeAvailability instanceof Map
-      && routeAvailabilityOrigin === routeOrigin.value
-      && routeAvailabilityProfile === routeProfile.value;
-    if (hasCurrentAvailability && routeAvailability.get(unitId) !== "connected") {
-      setStatus(`${roomLabel(unitId)} has no mapped connection from ${roomLabel(routeOrigin.value)}. Choose a highlighted room, or Clear to choose another start.`);
-      routeSelection = "origin_selected";
-      updateEndpointStates();
-      return;
-    }
-    retainEndpointOption(routeDestination, unitId);
-    routeDestination.value = unitId;
-    routeSelection = "request_pending";
-    updateEndpointStates();
-    const generation = ++requestGeneration;
-    const origin = routeOrigin.value;
-    const profile = routeProfile.value;
-    void selectUnit(unitId, focusMap);
-    await requestRoute(origin, unitId, profile, generation);
-  }
+  manualPreview = Boolean(guidanceStep());
+  updateGuidanceControls();
+  return selectUnit(unitId, focusMap);
 }
 
+async function activateRouteDestination(unitId) {
+  const revision = ++endpointSelectionRevision;
+  const origin = routeDraft.origin;
+  const profile = routeDraft.profile;
+  while (routeAvailabilityPendingOrigin === origin && routeAvailabilityPendingProfile === profile) {
+    const pending = routeAvailabilitySettled;
+    await pending;
+    if (revision !== endpointSelectionRevision || routeDraft.origin !== origin || routeDraft.profile !== profile) return;
+    if (pending === routeAvailabilitySettled) break;
+  }
+  if (unitId === origin || rejectUnavailableDestination(unitId)) return;
+  editRouteDraft({ destination: unitId });
+}
+
+function routeSnapshotLabel(snapshot) {
+  const label = unitId => {
+    const unit = routeUnits.find(item => item.unit_id === unitId);
+    return unit ? `${roomLabel(unitId)} (${floorLabel(unit.level_id)})` : "Not selected";
+  };
+  return `From ${label(snapshot.origin)} → To ${label(snapshot.destination)} · ${snapshot.profile === "elevator_only" ? "Elevator only; stairs excluded. Accessibility is not verified" : "Stairs or elevators"}`;
+}
+
+function renderRouteIdentity() {
+  const identity = committedRouteSnapshot ? `Displayed route: ${routeSnapshotLabel(committedRouteSnapshot)}.` : "No committed route.";
+  document.querySelector("#route-committed-identity").textContent = identity;
+  document.querySelector("#map-route-identity").textContent = identity;
+  for (const id of ["#route-committed-identity", "#map-route-identity"]) {
+    const node = document.querySelector(id);
+    node.dataset.originUnitId = committedRouteSnapshot?.origin || "";
+    node.dataset.destinationUnitId = committedRouteSnapshot?.destination || "";
+    node.dataset.profile = committedRouteSnapshot?.profile || "";
+  }
+  const differs = committedRouteSnapshot && ["origin", "destination", "profile"].some(key => routeDraft[key] !== committedRouteSnapshot[key]);
+  document.querySelector("#route-draft-status").textContent = differs
+    ? "Route changes not applied. Select Preview route to apply this draft."
+    : committedRouteSnapshot ? "Draft matches the displayed route." : "Draft only. Select Preview route to request directions.";
+  document.querySelector("#route-profile-help").hidden = routeDraft.profile !== "elevator_only";
+  routeAccessibility.hidden = !committedRouteSnapshot || committedRouteSnapshot.profile !== "elevator_only";
+  updateRoomActions();
+}
+
+function editRouteDraft(changes) {
+  const previousOrigin = routeDraft.origin;
+  const previousProfile = routeDraft.profile;
+  Object.assign(routeDraft, changes);
+  routeDraft.revision += 1;
+  endpointSelectionRevision += 1;
+  retainEndpointOption(routeOrigin, routeDraft.origin);
+  retainEndpointOption(routeDestination, routeDraft.destination);
+  routeOrigin.value = routeDraft.origin;
+  routeDestination.value = routeDraft.destination;
+  routeProfile.value = routeDraft.profile;
+  routeSelection = routeDraft.origin ? "origin_selected" : "empty";
+  if (previousOrigin !== routeDraft.origin || previousProfile !== routeDraft.profile) void refreshRouteOptions();
+  updateEndpointStates();
+  for (const search of Object.values(endpointSearches)) renderEndpointSearch(search);
+  renderRouteIdentity();
+}
+
+function updateRoomActions() {
+  const unitId = navigationState.selectedUnitId;
+  const selected = routeUnits.some(unit => unit.unit_id === unitId);
+  document.querySelector("#room-start-here").disabled = !selected;
+  document.querySelector("#room-start-here").dataset.unitId = unitId || "";
+  const outcome = currentRouteAvailability()?.get(unitId);
+  const destination = document.querySelector("#room-directions-here");
+  destination.dataset.unitId = unitId || "";
+  destination.disabled = !selected || unitId === routeDraft.origin || Boolean(outcome && outcome !== "connected");
+  document.querySelector("#room-route-status").textContent = !selected ? "Inspect a room to edit the route draft."
+    : `${roomLabel(unitId)} · ${destinationSearchLabels[outcome] || (routeAvailabilityState === "pending" ? "Connection check in progress" : "Connection status unknown")}.`;
+}
 function selectLandmark(item, marker) {
+  navigationState.selectedUnitId = null;
+  updateRoomActions();
   navigationState.roomRevision += 1;
   document.querySelectorAll(".unit-shape, .landmark-shape").forEach((node) => {
     node.classList.toggle("selected", node === marker);
@@ -674,9 +765,7 @@ function selectFloorControls(level) {
   updateFacilities();
   populateFloorOptions();
   if (navigationState.context !== "route") renderRouteCatalog();
-  if (routeOrigin.value && routeSelection === "origin_selected") {
-    refreshRouteOptions(routeOrigin.value, routeProfile.value);
-  }
+
 }
 
 async function selectLevel(levelId) {
@@ -724,6 +813,93 @@ function roomLabel(unitId) {
   return routeUnits.find((unit) => unit.unit_id === unitId)?.room_id || "Unnamed room";
 }
 
+function initializeEndpointSearches() {
+  const levelsById = new Map(allLevels.map(level => [level.level_id, level]));
+  const labelCounts = new Map();
+  searchableRooms = routeUnits.map((unit) => {
+    const facilityId = levelsById.get(unit.level_id)?.facility_id;
+    const building = facilitiesById.get(facilityId);
+    const label = `${unit.room_id || "Room ID not recorded"} · ${floorLabel(unit.level_id)}`;
+    labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+    const fields = [unit.room_id, facilityId, building?.name, building?.code]
+      .filter(Boolean).map(value => value.toLowerCase());
+    return { unit, facilityId, buildingName: building?.name, label, fields };
+  });
+  for (const room of searchableRooms) {
+    if (labelCounts.get(room.label) > 1) room.label += ` · ${room.unit.unit_id}`;
+  }
+  for (const search of Object.values(endpointSearches)) {
+    search.building.replaceChildren(option("", "All buildings"), ...Array.from(facilitiesById.values(), (building) =>
+      option(building.facility_id, [building.code, building.name].filter(Boolean).join(" · ") || building.facility_id)));
+    renderSearchFloorOptions(search);
+    renderEndpointSearch(search);
+  }
+}
+
+function renderSearchFloorOptions(search) {
+  const selectedLevel = search.floor.value;
+  const levels = allLevels.filter(level => !search.building.value || level.facility_id === search.building.value);
+  search.floor.replaceChildren(option("", "All floors"), ...levels.map(level => option(level.level_id, floorLabel(level.level_id))));
+  search.floor.value = levels.some(level => level.level_id === selectedLevel) ? selectedLevel : "";
+  search.floor.disabled = !levels.length;
+}
+
+const destinationSearchLabels = {
+  connected: "Mapped connection",
+  disconnected: "No mapped connection",
+  same_anchor: "Same route point",
+  endpoint_unavailable: "No mapped route point",
+  starting_room: "Starting room",
+};
+
+function renderEndpointSearch(search) {
+  if (!search.finder.open || !searchableRooms) return;
+  const query = search.query.value.trim().toLowerCase();
+  const words = query ? query.split(/\s+/) : [];
+  const facilityId = search.building.value;
+  const levelId = search.floor.value;
+  const priorChoice = search.results.value;
+  const isDestination = search.role === "destination";
+  const availability = isDestination ? currentRouteAvailability() : null;
+  const matches = searchableRooms.filter(({ unit, facilityId: roomFacilityId, fields }) =>
+    (!facilityId || roomFacilityId === facilityId) && (!levelId || unit.level_id === levelId)
+    && words.every(word => fields.some(field => field.includes(word))));
+  const options = matches.map(({ unit, label, buildingName }) => {
+    const outcome = isDestination && unit.unit_id === routeDraft.origin ? "starting_room" : availability?.get(unit.unit_id);
+    const stateLabel = destinationSearchLabels[outcome];
+    const item = option(unit.unit_id, [label, stateLabel].filter(Boolean).join(" · "));
+    item.dataset.description = [label, buildingName, stateLabel].filter(Boolean).join(" · ");
+    if (outcome) item.dataset.availability = outcome;
+    item.disabled = Boolean(outcome) && outcome !== "connected";
+    return item;
+  });
+  if (availability) options.sort((a, b) => Number(b.dataset.availability === "connected") - Number(a.dataset.availability === "connected"));
+  search.results.replaceChildren(...options);
+  search.results.value = priorChoice;
+  search.results.disabled = !matches.length;
+  updateSearchChoice(search);
+}
+
+function updateSearchChoice(search) {
+  const [selected] = search.results.selectedOptions;
+  const count = search.results.options.length;
+  search.choose.disabled = !selected || selected.disabled;
+  const messages = [count ? `${count} ${count === 1 ? "room matches" : "rooms match"}.` : "No rooms match this search."];
+  if (count && search.role === "destination" && !currentRouteAvailability()) {
+    if (!routeDraft.origin) messages.push("Choose a starting room to check connections.");
+    else if (routeAvailabilityState === "pending") messages.push("Checking mapped connections…");
+    else messages.push("Connection status is unknown.");
+  }
+  if (selected) messages.push(`${selected.dataset.description}.`);
+  search.status.textContent = messages.join(" ");
+}
+
+function chooseSearchedRoom(search) {
+  const [choice] = search.results.selectedOptions;
+  if (!choice || choice.disabled) return;
+  if (search.role === "destination") return activateRouteDestination(choice.value);
+  editRouteDraft({ origin: choice.value });
+}
 function setRouteState(state) {
   routeUiState = state;
   // Attribute API also works in the small network-state regression harness.
@@ -1079,63 +1255,119 @@ function renderRoute(body, { follow = true } = {}) {
   }
 }
 
-async function requestRoute(origin, destination, profile, generation) {
+function validRouteResponse(body, snapshot) {
+  if (body?.status !== 200 || body.origin?.unit_id !== snapshot.origin
+    || body.destination?.unit_id !== snapshot.destination || body.profile !== snapshot.profile) return false;
+  const guidance = body.guidance;
+  if (!guidance || guidance.version !== "dt018-guidance-v1"
+    || !["available", "limited", "unavailable"].includes(guidance.status)
+    || !(guidance.distance_m === null || (Number.isFinite(guidance.distance_m) && guidance.distance_m >= 0))
+    || !Array.isArray(guidance.warnings) || !guidance.warnings.every(value => typeof value === "string")) return false;
+  const collections = ["steps", "visits", "transitions", "geometries", "markers"];
+  if (collections.some(key => !Array.isArray(guidance[key])
+    || guidance[key].some(item => !item || typeof item !== "object"))) return false;
+  const ids = (items, key) => items.every(item => typeof item[key] === "string" && item[key].length)
+    && new Set(items.map(item => item[key])).size === items.length;
+  if (!ids(guidance.steps, "step_id") || !ids(guidance.visits, "visit_id")
+    || !ids(guidance.transitions, "transition_id") || !ids(guidance.geometries, "geometry_id")
+    || !ids(guidance.markers, "marker_id")) return false;
+  const point = value => Array.isArray(value) && value.length >= 2 && value.slice(0, 2).every(Number.isFinite);
+  if (guidance.markers.some(marker => !point(marker.coordinates))
+    || guidance.geometries.some(item => item.geometry?.type !== "LineString"
+      || !Array.isArray(item.geometry.coordinates) || item.geometry.coordinates.length < 2
+      || !item.geometry.coordinates.every(point))) return false;
+  return guidance.steps.every(step => typeof step.instruction === "string"
+    && Array.isArray(step.geometry_ids) && Array.isArray(step.marker_ids)
+    && step.geometry_ids.every(id => guidance.geometries.some(item => item.geometry_id === id))
+    && step.marker_ids.every(id => guidance.markers.some(item => item.marker_id === id))
+    && guidance.visits.some(visit => visit.visit_id === step.visit_id)
+    && (!step.transition_id || guidance.transitions.some(item => item.transition_id === step.transition_id)));
+}
+async function requestRoute(origin, destination, profile, generation, navigationIntent = navigationState.intentRevision) {
   document.querySelector("#directions-panel").open = true;
-  cancelPendingRouteScene();
-  const navigationIntent = navigationState.intentRevision;
-  activeRoute = null;
-  manualPreview = false;
-  previewVisitId = null;
-  routeSteps.replaceChildren();
-  floorJourney.replaceChildren();
-  routeDiagnostics.textContent = "Route request in progress.";
-  updateGuidanceControls();
-  if (navigationState.sceneStatus !== "loading") restoreRenderedFloor();
-  renderRouteOverlay(currentScene?.level.level_id);
-  routeAccessibility.hidden = profile !== "elevator_only";
-  refreshRouteOptions(origin, profile);
+  const snapshot = Object.freeze({ origin, destination, profile });
+  submittedRouteSnapshot = snapshot;
+  const requestStatus = document.querySelector("#route-request-status");
+  const describeFailure = reason => {
+    requestStatus.textContent = `Preview failed: ${routeSnapshotLabel(snapshot)}. ${reason}${activeRoute ? " The previous route remains displayed." : ""}`;
+    requestStatus.dataset.state = "error";
+    if (!activeRoute) {
+      setRouteState("error");
+      routeStatus.textContent = reason;
+    }
+    updateGuidanceControls();
+    renderRouteIdentity();
+  };
   if (!origin || !destination || origin === destination) {
-    routeSelection = origin ? "origin_selected" : "empty";
-    setRouteState("empty");
-    routeStatus.textContent = "Choose two distinct endpoints. Select origin A and destination B.";
-    currentInstruction.textContent = routeStatus.textContent;
+    describeFailure("Choose two distinct rooms.");
     return;
   }
   routeSelection = "request_pending";
-  setRouteState("pending");
-  routeStatus.textContent = "Finding a mapped route…";
+  requestStatus.dataset.state = "pending";
+  requestStatus.textContent = `Preview pending: ${routeSnapshotLabel(snapshot)}.`;
+  if (!activeRoute) {
+    setRouteState("pending");
+    routeStatus.textContent = "Finding a mapped route…";
+  }
   updateGuidanceControls();
+  const matchingRequest = routeAvailabilityRequest?.origin === origin && routeAvailabilityRequest?.profile === profile
+    ? routeAvailabilityRequest : null;
+  const availabilityMap = matchingRequest ? await matchingRequest.result
+    : routeAvailabilityOrigin === origin && routeAvailabilityProfile === profile ? routeAvailability : null;
+  if (generation !== requestGeneration) return;
+  const availability = availabilityMap?.get(destination);
+  if (!availabilityMap) requestStatus.textContent = `Preview pending: ${routeSnapshotLabel(snapshot)}. Connection status is unknown; requesting route validation.`;
+  if (availability && availability !== "connected") {
+    describeFailure(destinationSearchLabels[availability] + (availability === "same_anchor" ? "; no walking path is represented." : "."));
+    return;
+  }
   try {
     const body = await request("/demo/v1/route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        origin: { unit_id: origin },
-        destination: { unit_id: destination },
-        profile: profile,
-      }),
+      body: JSON.stringify({ origin: { unit_id: origin }, destination: { unit_id: destination }, profile }),
     });
     if (generation !== requestGeneration) return;
+    if (body.status !== 200) {
+      const error = new Error(body.code || "Directions unavailable");
+      error.payload = body;
+      throw error;
+    }
+    if (!validRouteResponse(body, snapshot)) throw new Error("The route response does not match this preview or has invalid guidance. Please try again.");
     routeSelection = "complete";
-    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
+    requestStatus.dataset.state = "success";
+    requestStatus.textContent = `Preview applied: ${routeSnapshotLabel(snapshot)}.`;
+    const follow = navigationIntent === navigationState.intentRevision;
+    cancelPendingRouteScene();
+    committedRouteSnapshot = snapshot;
+    renderRoute(body, { follow });
+    renderRouteIdentity();
+    updateEndpointStates();
   } catch (error) {
     if (generation !== requestGeneration) return;
-    const body = error.payload || { status: 500, code: error.message, profile: profile };
-    if (!body.profile) body.profile = profile;
     routeSelection = "failed";
-    renderRoute(body, { follow: navigationIntent === navigationState.intentRevision });
+    const reasons = {
+      disconnected: "No mapped connection between these rooms.",
+      no_elevator_only_route: "No mapped route without stairs is available.",
+      endpoint_unavailable: "A mapped route point is unavailable.",
+      unknown_endpoint: "One of these rooms was not found.",
+      ambiguous_endpoint: "The room identity is ambiguous.",
+    };
+    describeFailure(reasons[error.payload?.code] || error.message || "Directions unavailable.");
   }
 }
-
 function setAvailabilityState(state, origin = "", profile = "") {
+  routeAvailabilityState = state;
   routeOptionsStatus.setAttribute?.("data-state", state);
   routeOptionsStatus.setAttribute?.("data-origin-unit-id", origin);
   routeOptionsStatus.setAttribute?.("data-profile", profile);
+  renderEndpointSearch(endpointSearches.destination);
+  updateRoomActions();
 }
 
 function renderDestinationOptions(availability = null, origin = "") {
   if (!routeUnits.length) return;
-  const selected = routeDestination.value;
+  const selected = routeDraft.destination;
   const makeOption = (unit, state) => {
     const node = option(unit.unit_id, `${unit.room_id || "Unnamed room"} · ${floorLabel(unit.level_id)}`);
     if (state) node.dataset.availability = state;
@@ -1174,7 +1406,7 @@ function renderDestinationOptions(availability = null, origin = "") {
 
 function renderRouteCatalog() {
   if (!routeUnits.length) return;
-  const selected = routeOrigin.value;
+  const selected = routeDraft.origin;
   const units = routeUnits.filter(unit => unit.level_id === navigationState.requestedLevelId);
   const children = [option("", "Select start A")];
   const floors = allLevels.filter(level => level.level_id === navigationState.requestedLevelId);
@@ -1192,11 +1424,7 @@ function renderRouteCatalog() {
   }
   routeOrigin.replaceChildren(...children);
   routeOrigin.value = selected;
-  const availability = routeAvailability instanceof Map
-    && routeAvailabilityOrigin === selected
-    && routeAvailabilityProfile === routeProfile.value
-    ? routeAvailability : null;
-  renderDestinationOptions(availability, selected);
+  renderDestinationOptions(currentRouteAvailability(), selected);
 }
 
 function retainEndpointOption(select, unitId) {
@@ -1205,11 +1433,12 @@ function retainEndpointOption(select, unitId) {
   if (unit) select.append(option(unit.unit_id, `${unit.room_id || "Unnamed room"} · ${floorLabel(unit.level_id)}`));
 }
 
-async function refreshRouteOptions(origin = routeOrigin.value, profile = routeProfile.value) {
+async function refreshRouteOptions(origin = routeDraft.origin, profile = routeDraft.profile) {
   const generation = ++availabilityGeneration;
   settleRouteAvailability();
   settleRouteAvailability = () => {};
   routeAvailabilitySettled = Promise.resolve();
+  routeAvailabilityRequest = null;
   routeAvailabilityPendingOrigin = "";
   routeAvailabilityPendingProfile = "";
   routeAvailability = null;
@@ -1222,17 +1451,20 @@ async function refreshRouteOptions(origin = routeOrigin.value, profile = routePr
     routeOptionsStatus.textContent = "Choose a starting room to see mapped connections.";
     return;
   }
-  setAvailabilityState("pending", origin, profile);
   routeAvailabilityPendingOrigin = origin;
   routeAvailabilityPendingProfile = profile;
   let finishAvailability;
   const settled = new Promise((resolve) => { finishAvailability = resolve; });
   routeAvailabilitySettled = settled;
+  let finishRequest;
+  const result = new Promise(resolve => { finishRequest = resolve; });
+  // Preview owns this network result even after the editable draft moves on.
+  routeAvailabilityRequest = { origin, profile, result };
   settleRouteAvailability = finishAvailability;
   routeOptionsStatus.textContent = "Checking mapped connections...";
+  setAvailabilityState("pending", origin, profile);
   try {
     const body = await request(`/demo/v1/route-options?origin_unit_id=${encodeURIComponent(origin)}&profile=${encodeURIComponent(profile)}`);
-    if (generation !== availabilityGeneration || routeOrigin.value !== origin || routeProfile.value !== profile) return;
     const allowed = ["connected", "same_anchor", "disconnected", "endpoint_unavailable"];
     if (body.version !== "route-options-v1" || body.origin_unit_id !== origin
       || body.profile !== profile || !Array.isArray(body.destinations)
@@ -1243,6 +1475,8 @@ async function refreshRouteOptions(origin = routeOrigin.value, profile = routePr
     const expected = routeUnits.filter((unit) => unit.unit_id !== origin);
     if (availability.size !== expected.length || body.destinations.length !== expected.length
       || expected.some((unit) => !availability.has(unit.unit_id))) throw new Error("Incomplete route choices");
+    finishRequest(availability);
+    if (generation !== availabilityGeneration || routeDraft.origin !== origin || routeDraft.profile !== profile) return;
     routeAvailability = availability;
     routeAvailabilityOrigin = origin;
     routeAvailabilityProfile = profile;
@@ -1253,14 +1487,14 @@ async function refreshRouteOptions(origin = routeOrigin.value, profile = routePr
     let help = `${connected} mapped ${connected === 1 ? "destination" : "destinations"} from ${roomLabel(origin)}. Choose destination B.`;
     if (!connected) help = `0 mapped routes from ${roomLabel(origin)} with this route option. The map has no connected destination with a walking path.`;
     if (sameAnchor) help += ` ${sameAnchor} ${sameAnchor === 1 ? "room shares" : "rooms share"} the starting route point, with no walking path drawn.`;
-    const chosen = availability.get(routeDestination.value);
+    const chosen = availability.get(routeDraft.destination);
     if (chosen === "disconnected") help += " Your selected destination has no mapped connection.";
     if (chosen === "endpoint_unavailable") help += " Your selected destination has no mapped route point.";
-    help += " Only mapped destinations are offered. Door connections and accessibility are not verified.";
+    help += " Room search shows connection status. Door connections and accessibility are not verified.";
     routeOptionsStatus.textContent = help;
     setAvailabilityState("ready", origin, profile);
   } catch (error) {
-    if (generation !== availabilityGeneration || routeOrigin.value !== origin || routeProfile.value !== profile) return;
+    if (generation !== availabilityGeneration || routeDraft.origin !== origin || routeDraft.profile !== profile) return;
     renderDestinationOptions();
     routeAvailability = null;
     routeAvailabilityOrigin = "";
@@ -1272,6 +1506,7 @@ async function refreshRouteOptions(origin = routeOrigin.value, profile = routePr
     routeOptionsStatus.textContent = `${reason} You can still choose any room and request directions.`;
     setAvailabilityState("error", origin, profile);
   } finally {
+    finishRequest(null);
     finishAvailability();
     if (routeAvailabilitySettled === settled) {
       routeAvailabilityPendingOrigin = "";
@@ -1282,13 +1517,9 @@ async function refreshRouteOptions(origin = routeOrigin.value, profile = routePr
 }
 
 function submitSelectedRoute() {
-  clearRoute(false);
-  const origin = routeOrigin.value;
-  const destination = routeDestination.value;
-  updateEndpointStates();
-  return requestRoute(origin, destination, routeProfile.value, ++requestGeneration);
+  const { origin, destination, profile } = routeDraft;
+  return requestRoute(origin, destination, profile, ++requestGeneration);
 }
-
 function parseExactDirections(message) {
   const match = message.trim().match(/^(?:(wheelchair|mobility|accessible|step-free)\s+)?directions\s+from\s+(\S+)\s+to\s+(\S+)$/i);
   if (!match) return null;
@@ -1305,7 +1536,7 @@ function resolveRouteUnitId(identifier) {
     unit.unit_id.toUpperCase() === normalized
     || (unit.room_id && unit.room_id.toUpperCase() === normalized)
   ));
-  return matches.length === 1 ? matches[0].unit_id : identifier;
+  return matches.length === 1 ? matches[0].unit_id : null;
 }
 
 routeForm.addEventListener("submit", async (event) => {
@@ -1313,28 +1544,39 @@ routeForm.addEventListener("submit", async (event) => {
   await submitSelectedRoute();
 });
 
-routeOrigin.addEventListener("change", submitSelectedRoute);
-routeDestination.addEventListener("change", submitSelectedRoute);
+routeOrigin.addEventListener("change", () => editRouteDraft({ origin: routeOrigin.value }));
+routeDestination.addEventListener("change", () => editRouteDraft({ destination: routeDestination.value }));
+for (const search of Object.values(endpointSearches)) {
+  search.finder.addEventListener("toggle", () => renderEndpointSearch(search));
+  search.query.addEventListener("input", () => renderEndpointSearch(search));
+  search.building.addEventListener("change", () => {
+    renderSearchFloorOptions(search);
+    renderEndpointSearch(search);
+  });
+  search.floor.addEventListener("change", () => renderEndpointSearch(search));
+  search.results.addEventListener("change", () => updateSearchChoice(search));
+  search.choose.addEventListener("click", () => chooseSearchedRoom(search));
+}
 routeClear.addEventListener("click", () => {
   clearRoute();
-  routeStatus.textContent = "Route endpoints cleared. Select origin A.";
+  routeStatus.textContent = "Route cleared. Choose From and To, then select Preview route.";
 });
-routeSwap.addEventListener("click", async () => {
-  const origin = routeOrigin.value;
-  const destination = routeDestination.value;
-  if (!origin || !destination || origin === destination) return;
-  retainEndpointOption(routeOrigin, destination);
-  retainEndpointOption(routeDestination, origin);
-  routeOrigin.value = destination;
-  routeDestination.value = origin;
-  await submitSelectedRoute();
+routeSwap.addEventListener("click", () => {
+  editRouteDraft({ origin: routeDraft.destination, destination: routeDraft.origin });
 });
-
-routeProfile.addEventListener("change", () => {
-  routeAccessibility.hidden = true;
-  return submitSelectedRoute();
+routeProfile.addEventListener("change", () => editRouteDraft({ profile: routeProfile.value }));
+document.querySelector("#room-start-here").addEventListener("click", () => {
+  if (navigationState.selectedUnitId) {
+    document.querySelector("#directions-panel").open = true;
+    editRouteDraft({ origin: navigationState.selectedUnitId });
+  }
 });
-
+document.querySelector("#room-directions-here").addEventListener("click", () => {
+  if (navigationState.selectedUnitId) {
+    document.querySelector("#directions-panel").open = true;
+    return activateRouteDestination(navigationState.selectedUnitId);
+  }
+});
 assistantForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const assistantRevision = ++navigationState.assistantRevision;
@@ -1344,14 +1586,13 @@ assistantForm.addEventListener("submit", async (event) => {
   if (directionRequest) {
     const origin = resolveRouteUnitId(directionRequest.origin);
     const destination = resolveRouteUnitId(directionRequest.destination);
-    retainEndpointOption(routeOrigin, origin);
-    retainEndpointOption(routeDestination, destination);
-    routeOrigin.value = origin;
-    routeDestination.value = destination;
-    routeProfile.value = directionRequest.profile;
-    updateEndpointStates();
-    assistantResponse.textContent = "Rendering the deterministic route result below.";
-    await requestRoute(origin, destination, directionRequest.profile, ++requestGeneration);
+    if (!origin || !destination) {
+      assistantResponse.textContent = "A room was not found or is ambiguous. Choose exact rooms using From and To search; the draft has not changed.";
+      return;
+    }
+    editRouteDraft({ origin, destination, profile: directionRequest.profile });
+    document.querySelector("#directions-panel").open = true;
+    assistantResponse.textContent = `Draft prepared: ${routeSnapshotLabel(routeDraft)}. Select Preview route to request directions.`;
     return;
   }
   const assistantIntent = navigationState.intentRevision;
@@ -1451,9 +1692,13 @@ async function initialize() {
     const units = await request("/demo/v1/units");
     routeUnits = units.units;
     renderRouteCatalog();
+    initializeEndpointSearches();
+    renderRouteIdentity();
+    updateEndpointStates();
   } catch (error) {
     setStatus(error.message);
     document.querySelector("#campus-status").textContent = `Campus pilot unavailable: ${error.message}`;
+    for (const search of Object.values(endpointSearches)) search.status.textContent = "The room catalog is unavailable.";
   }
 }
 

@@ -1,10 +1,9 @@
 # SFU Indoor Wayfinding — Design Workspace
 
-**November 20 documentation checkpoint.** This branch records work verified in
-the local implementation workspace on top of `5ca5186`. Its Git snapshot carries
-the documentation, decisions and reports. The newer client, ETL, launcher and
-TLS changes described below are separate local files. Reproduction commands for
-those increments require that implementation workspace and the named artifacts.
+**November 20 wayfinding checkpoint.** This review branch carries the client,
+ETL, tests, launchers, TLS and recovery configuration verified on top of
+`5ca5186`, alongside their decisions and reports. To reproduce the checks,
+provide the documented Docker images and the named local datasets or artifacts.
 
 The locally verified client supports building-scoped floors, searchable route
 endpoints and explicit Preview. The next increment addresses the remaining

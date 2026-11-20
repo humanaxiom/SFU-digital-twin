@@ -292,11 +292,6 @@ def test_compose_source_etl_uses_repository_local_legacy_gdb_mount():
         ("type", "artifact"),
         ("dataqa", "artifact"),
         ("dataqa-source", "source-etl"),
-        ("etl-extract", "source-etl"),
-        ("etl-normalise", "artifact"),
-        ("etl-graph-raw", "artifact"),
-        ("etl-graph-transitions", "artifact"),
-        ("etl-graph-contract", "artifact"),
     ],
 )
 def test_make_normal_target_uses_capability_service_and_pythonpath(target: str, service: str):

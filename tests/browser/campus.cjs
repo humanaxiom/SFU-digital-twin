@@ -56,13 +56,16 @@ async function exerciseCampus(cdp, screenshot, label, width) {
   assert.deepEqual((await cdp.evaluate("[...document.querySelector('#level-select').options].map(item=>item.value)")).sort(),
     facility.levels.map(item=>item.level_id).sort(), 'floor choices contain only this building exact levels');
   const selectedAfter = await cdp.evaluate("document.querySelector('#level-select').value");
+  await cdp.wait(`!document.querySelector('#floor-view').hidden
+    && document.querySelector('#viewing-floor').dataset.levelId===${JSON.stringify(selectedAfter)}
+    && !document.querySelector('#map-status').textContent.includes('Loading')`);
+  await cdp.evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
   assert.equal(await cdp.evaluate("window.__campusRequests.filter(url=>url.includes('/scene')).length"), displayedBefore === selectedAfter ? 0 : 1,
     'building selection loads its floor or reuses that exact displayed scene');
-  assert.deepEqual(await cdp.evaluate("window.__campusRequests.filter(url=>url.includes('/route'))"), [],
+  assert.deepEqual(await cdp.evaluate("window.__campusRequests.filter(url=>url==='/demo/v1/route')"), [],
     'building selection opens its remembered floor without requesting a route');
   await cdp.evaluate("window.fetch=window.__campusOriginalFetch");
   assert.equal(await cdp.evaluate("document.querySelector('#map-context').textContent"), 'Floor');
-  await cdp.wait("!document.querySelector('#floor-view').hidden && !document.querySelector('#map-status').textContent.includes('Loading')");
   const synchronizedImage = await screenshot(cdp, `${label}-campus-synchronized`, false);
   const floors = await cdp.evaluate("[...document.querySelectorAll('#floor-buttons [data-level-id]')].map(n=>n.dataset.levelId)");
   assert.deepEqual([...floors].sort(), facility.levels.map(l=>l.level_id).sort());

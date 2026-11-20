@@ -164,39 +164,99 @@ async function routeCatalog(originId, profile = "default") {
   })()`);
 }
 
+async function roomAction(unitId, button, activate = pointerClick) {
+  await cdp.wait(`document.querySelector(${quote(button)})?.dataset.unitId===${quote(unitId)}`);
+  await activate(button);
+}
+
+async function chooseStart(fixture) {
+  await clickRoom(fixture.originLevelId, fixture.originId);
+  await roomAction(fixture.originId, "#room-start-here");
+}
+
+async function previewDestination(unitId, activate = pointerClick) {
+  await roomAction(unitId, "#room-directions-here", activate);
+  await cdp.wait(`document.querySelector('#route-destination').value===${quote(unitId)}`);
+  await activate("#route-submit");
+}
+
 async function exerciseSupersededAvailability(fixture) {
   await clearRoute();
   await openBuilding(fixture.facilityId);
   await cdp.evaluate("window.__holdRouteOptions=true");
-  await clickRoom(fixture.originLevelId, fixture.originId);
-  await cdp.wait("window.__heldRouteOptions.length===1");
-  await pointerClick(`#floor-buttons [data-level-id=${quote(fixture.destinationLevelId)}]`);
-  await sceneReady(fixture.destinationLevelId);
-  await cdp.wait("window.__heldRouteOptions.length===2");
-  const beforeDestinationClick = await cdp.evaluate("window.__routeCalls.length");
-  await pointerClick(`#room-list [data-unit-id=${quote(fixture.destinationId)}]`);
-  await cdp.evaluate("window.__heldRouteOptions.shift()()");
-  await new Promise(resolve => setTimeout(resolve, 150));
-  assert.equal(await cdp.evaluate("window.__routeCalls.length"), beforeDestinationClick,
-    `${fixture.name}: stale availability completion must not release destination POST`);
-  await cdp.evaluate("window.__holdRouteOptions=false; window.__heldRouteOptions.shift()()");
-  await cdp.wait(`window.__routeCalls.length>${beforeDestinationClick}
-    && window.__routeCalls.at(-1).done && window.__routeCalls.at(-1).status===200
-    && document.querySelector('#route-status')?.dataset.state==='success'`);
-  assert.equal((await routeState()).origin, fixture.originId, `${fixture.name}: superseded availability must retain A`);
-  result.checks.push(`${fixture.name}: destination waits through a superseded same-origin availability request`);
+  const before = await cdp.evaluate("window.__routeCalls.length");
+  await chooseStart(fixture);
+  await cdp.wait("window.__heldRouteOptions.length>0");
+  await clickRoom(fixture.destinationLevelId, fixture.destinationId);
+  await roomAction(fixture.destinationId, "#room-start-here");
+  await cdp.wait(`document.querySelector('#route-origin').value===${quote(fixture.destinationId)} && window.__heldRouteOptions.length>=2`);
+  await cdp.evaluate("window.__holdRouteOptions=false; window.__heldRouteOptions.pop()()");
+  await cdp.wait(`document.querySelector('#route-options-status').dataset.state==='ready' && document.querySelector('#route-options-status').dataset.originUnitId===${quote(fixture.destinationId)}`);
+  await cdp.evaluate("window.__heldRouteOptions.splice(0).forEach(release=>release())");
+  await cdp.wait("window.__optionsInFlight===0");
+  assert.equal((await routeState()).origin,fixture.destinationId);
+  assert.equal(await cdp.evaluate("document.querySelector('#route-options-status').dataset.originUnitId"),fixture.destinationId);
+  assert.equal(await cdp.evaluate("window.__routeCalls.length"),before);
+  result.checks.push(`${fixture.name}: superseded availability keeps the newer draft origin without routing`);
 }
 
+async function keyboardActivate(selector) {
+  await cdp.evaluate(`(() => {
+    const node = document.querySelector(${quote(selector)});
+    if (!node?.checkVisibility?.() || node.disabled) throw new Error('Unavailable keyboard control');
+    node.scrollIntoView({block: 'center'});
+    node.focus();
+  })()`);
+  await cdp.call("Input.dispatchKeyEvent", { type: "keyDown", text: "\r", unmodifiedText: "\r", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await cdp.call("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+}
+
+async function exerciseClickIntent(fixture, width, keyboard) {
+  await cdp.call("Emulation.setDeviceMetricsOverride", { width, height: width === 1440 ? 1000 : 844, deviceScaleFactor: 1, mobile: width < 500 });
+  await clearRoute();
+  await openBuilding(fixture.facilityId);
+  await cdp.evaluate("window.__holdRouteResponses=true");
+  await chooseStart(fixture);
+  await cdp.wait("document.querySelector('#route-options-status').dataset.state==='ready'");
+  await pointerClick(`#floor-buttons [data-level-id=${quote(fixture.destinationLevelId)}]`);
+  await sceneReady(fixture.destinationLevelId);
+  const before = await cdp.evaluate("({posts: window.__routeCalls.length})");
+  const activate = keyboard ? keyboardActivate : pointerClick;
+  await activate(`#room-list [data-unit-id=${quote(fixture.destinationId)}]`);
+  await previewDestination(fixture.destinationId, activate);
+  await cdp.wait("window.__heldRouteResponses.length===1");
+  before.details = await cdp.evaluate("window.__unitCalls.length");
+  await activate(`#floor-buttons [data-level-id=${quote(fixture.explorationLevelId)}]`);
+  await sceneReady(fixture.explorationLevelId);
+  await cdp.evaluate("window.__holdRouteResponses=false; window.__heldRouteResponses.shift()()");
+  await cdp.wait(`window.__routeCalls.length>${before.posts} && window.__routeCalls.at(-1).done
+    && document.querySelector('#route-status')?.dataset.state==='success'`);
+  const state = await routeState();
+  assert.equal(state.viewedFloor, fixture.explorationLevelId, "Delayed B must not steal newer floor navigation");
+  assert.equal(state.origin, fixture.originId);
+  assert.equal(state.destination, fixture.destinationId);
+  assert.equal(await cdp.evaluate(`window.__unitCalls.slice(${before.details}).some(url=>url.endsWith(${quote('/' + encodeURIComponent(fixture.destinationId))}))`), false,
+    "Superseded B must not start obsolete room-detail inspection");
+  assert.equal(await cdp.evaluate("document.querySelector('#return-to-route').checkVisibility()"), true,
+    "Retained route must offer Return to route");
+  const screenshot = await cdp.call("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  fs.writeFileSync(path.join(outputDir, `click-intent-${fixture.name}-${width}.png`), Buffer.from(screenshot.data, "base64"));
+  await activate("#return-to-route");
+  await sceneReady(fixture.originLevelId);
+  assert.equal((await routeState()).routeState, "success", "Return retains the accepted route");
+  result.checks.push(`${fixture.name} ${width}px ${keyboard ? 'keyboard' : 'pointer'}: delayed B retains newer floor, suppresses obsolete details, and Return restores route`);
+}
 async function exerciseBuilding(fixture) {
   await clearRoute();
   await openBuilding(fixture.facilityId);
-  await clickRoom(fixture.originLevelId, fixture.originId);
+  await chooseStart(fixture);
 
   // This is deliberately immediate: no route-options readiness wait is allowed
   // between selecting A and changing to the destination floor.
   await pointerClick(`#floor-buttons [data-level-id=${quote(fixture.destinationLevelId)}]`);
   await sceneReady(fixture.destinationLevelId);
   await pointerClick(`#room-list [data-unit-id=${quote(fixture.destinationId)}]`);
+  await previewDestination(fixture.destinationId);
   await cdp.wait(`document.querySelector('#route-status')?.dataset.state==='success'
     && document.querySelector('#route-destination')?.value===${quote(fixture.destinationId)}`);
   const successCalls = await routeCallFor(fixture.destinationId);
@@ -218,6 +278,7 @@ async function exerciseBuilding(fixture) {
 
   const beforeCompletedReplacement = await cdp.evaluate("window.__routeCalls.length");
   await clickRoom(replacementUnit.level_id, replacement.unit_id);
+  await previewDestination(replacement.unit_id);
   await cdp.wait(`window.__routeCalls.length>${beforeCompletedReplacement}
     && window.__routeCalls.at(-1).done && window.__routeCalls.at(-1).status===200
     && document.querySelector('#route-status')?.dataset.state==='success'
@@ -228,15 +289,17 @@ async function exerciseBuilding(fixture) {
   await cdp.evaluate("window.__failNextRoute=true");
   const beforeSyntheticFailure = await cdp.evaluate("window.__routeCalls.length");
   await clickRoom(fixture.destinationLevelId, fixture.destinationId);
+  await previewDestination(fixture.destinationId);
   await cdp.wait(`window.__routeCalls.length>${beforeSyntheticFailure}
     && window.__routeCalls.at(-1).done && window.__routeCalls.at(-1).status===409
-    && document.querySelector('#route-status')?.dataset.state==='error'`);
+    && document.querySelector('#route-request-status')?.dataset.state==='error'`);
   const failedReplacementState = await routeState();
   assert.equal(failedReplacementState.origin, fixture.originId, `${fixture.name}: failed replacement must retain A`);
   assert.equal(failedReplacementState.destination, fixture.destinationId, `${fixture.name}: failed replacement must retain B`);
 
   const beforeFailedRetry = await cdp.evaluate("window.__routeCalls.length");
   await clickRoom(replacementUnit.level_id, replacement.unit_id);
+  await previewDestination(replacement.unit_id);
   await cdp.wait(`window.__routeCalls.length>${beforeFailedRetry}
     && window.__routeCalls.at(-1).done && window.__routeCalls.at(-1).status===200
     && document.querySelector('#route-status')?.dataset.state==='success'
@@ -248,27 +311,38 @@ async function exerciseBuilding(fixture) {
   // Reset to the same origin, then inspect an actual disconnected destination.
   // It must be visibly disabled and must never submit a doomed route request.
   await clearRoute();
-  await clickRoom(fixture.originLevelId, fixture.originId);
+  await chooseStart(fixture);
   await cdp.wait(`document.querySelector('#route-options-status')?.dataset.state==='ready'
     && document.querySelector('#route-origin')?.value===${quote(fixture.originId)}`);
   const catalog = await routeCatalog(fixture.originId);
-  const disconnected = catalog.options.destinations.find(item => (
+  const disconnectedChoices = catalog.options.destinations.filter(item => (
     item.availability === "disconnected"
-    && catalog.units[item.unit_id]
-    && catalog.units[item.unit_id].level_id.startsWith(fixture.facilityId + "_")
+    && catalog.units[item.unit_id]?.level_id
     && catalog.units[item.unit_id].level_id !== fixture.originLevelId
   ));
-  assert.ok(disconnected, `${fixture.name}: catalog must include a disconnected cross-floor destination`);
+  const sameBuilding = disconnectedChoices.find(item => (
+    catalog.units[item.unit_id].level_id.startsWith(fixture.facilityId + "_")
+  ));
+  const disconnected = sameBuilding || disconnectedChoices[0];
+  assert.ok(disconnected, `${fixture.name}: catalog must include a disconnected destination`);
   const disconnectedUnit = catalog.units[disconnected.unit_id];
-  assert.ok(disconnectedUnit.level_id, `${fixture.name}: disconnected destination must have a recorded floor`);
+  if (!sameBuilding) {
+    const disconnectedFacility = await cdp.evaluate(`(async () => {
+      const response = await fetch('/demo/v1/levels').then(result => result.json());
+      return response.levels.find(level => level.level_id === ${quote(disconnectedUnit.level_id)})?.facility_id;
+    })()`);
+    assert.ok(disconnectedFacility, `${fixture.name}: disconnected room must have a known building`);
+    await openBuilding(disconnectedFacility);
+  }
 
   await pointerClick(`#floor-buttons [data-level-id=${quote(disconnectedUnit.level_id)}]`);
   await sceneReady(disconnectedUnit.level_id);
   const disconnectedSelector = `#room-list [data-unit-id=${quote(disconnected.unit_id)}]`;
-  assert.equal(await cdp.evaluate(`document.querySelector(${quote(disconnectedSelector)})?.disabled`), true,
-    `${fixture.name}: known disconnected room must be disabled`);
+  assert.equal(await cdp.evaluate(`document.querySelector(${quote(disconnectedSelector)})?.disabled`), false,
+    `${fixture.name}: disconnected rooms remain inspectable`);
   const beforeBlockedClick = await cdp.evaluate("window.__routeCalls.length");
   await pointerClick(disconnectedSelector);
+  await cdp.wait(`document.querySelector('#room-directions-here').dataset.unitId===${quote(disconnected.unit_id)} && document.querySelector('#room-directions-here').disabled`);
   await new Promise(resolve => setTimeout(resolve, 150));
   const blockedState = await routeState();
   assert.equal(await cdp.evaluate("window.__routeCalls.length"), beforeBlockedClick,
@@ -276,7 +350,9 @@ async function exerciseBuilding(fixture) {
   assert.equal(blockedState.origin, fixture.originId, `${fixture.name}: blocked destination must retain original A`);
   assert.equal(blockedState.destination, "", `${fixture.name}: blocked destination must not become B`);
 
+  if (!sameBuilding) await openBuilding(fixture.facilityId);
   await clickRoom(fixture.destinationLevelId, fixture.destinationId);
+  await previewDestination(fixture.destinationId);
   await cdp.wait(`document.querySelector('#route-status')?.dataset.state==='success'
     && document.querySelector('#route-destination')?.value===${quote(fixture.destinationId)}`);
   const retryCalls = await routeCallFor(fixture.destinationId);
@@ -291,9 +367,10 @@ async function exerciseBuilding(fixture) {
     connected: fixture.destinationId,
     replacement: replacement.unit_id,
     disconnectedLevel: disconnectedUnit.level_id,
+    disconnectedInSameBuilding: Boolean(sameBuilding),
     routeCalls: await cdp.evaluate("window.__routeCalls.slice()"),
   });
-  result.checks.push(`${fixture.name}: disconnected rooms are disabled and a connected room routes while A remains fixed`);
+  result.checks.push(`${fixture.name}: disconnected rooms can be inspected, and only a mapped destination can be previewed`);
 }
 
 async function main() {
@@ -303,7 +380,7 @@ async function main() {
   await cdp.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await cdp.call("Page.addScriptToEvaluateOnNewDocument", { source: `
     window.__errors=[]; window.__routeCalls=[]; window.__failNextRoute=false;
-    window.__holdRouteOptions=false; window.__heldRouteOptions=[];
+    window.__optionsInFlight=0; window.__holdRouteOptions=false; window.__heldRouteOptions=[]; window.__unitCalls=[]; window.__holdRouteResponses=false; window.__heldRouteResponses=[];
     addEventListener('error', event => __errors.push(String(event.message || event.error)));
     addEventListener('unhandledrejection', event => __errors.push(String(event.reason)));
     const originalFetch = window.fetch.bind(window);
@@ -312,8 +389,11 @@ async function main() {
       const url = String(typeof input === 'string' ? input : input.url);
       const method = String(init.method || input.method || 'GET').toUpperCase();
       if (method === 'GET' && url.includes('/demo/v1/route-options') && window.__holdRouteOptions) {
+        window.__optionsInFlight++;
         await new Promise(resolve => window.__heldRouteOptions.push(resolve));
+        try { return await originalFetch(...args); } finally { window.__optionsInFlight--; }
       }
+      if (method === 'GET' && url.includes('/demo/v1/units/')) window.__unitCalls.push(url);
       let payload = null;
       if (method === 'POST' && url.includes('/demo/v1/route')) {
         try { payload = JSON.parse(init.body || 'null'); } catch (error) { payload = {parseError: String(error)}; }
@@ -328,6 +408,7 @@ async function main() {
       const response = failThisRoute
         ? new Response(JSON.stringify({status:409,code:'disconnected',profile:payload?.profile||'default'}), {status:409,headers:{'Content-Type':'application/json'}})
         : await originalFetch(...args);
+      if (call && window.__holdRouteResponses) await new Promise(resolve => window.__heldRouteResponses.push(resolve));
       if (call) {
         call.status = response.status;
         const body = await response.clone().json().catch(() => null);
@@ -347,6 +428,7 @@ async function main() {
   const fixtures = [
     {
       name: "AQ",
+      explorationLevelId: "SFU_BURNABY_QUAD_3000",
       facilityId: "SFU_BURNABY_QUAD",
       originLevelId: "SFU_BURNABY_QUAD_2000",
       originId: "SFU_BURNABY_QUAD_2000_2035.2",
@@ -355,6 +437,7 @@ async function main() {
     },
     {
       name: "SH",
+      explorationLevelId: "SFU_BURNABY_STRAND_2000",
       facilityId: "SFU_BURNABY_STRAND",
       originLevelId: "SFU_BURNABY_STRAND_1000",
       originId: "SFU_BURNABY_STRAND_1000_1036",
@@ -362,6 +445,30 @@ async function main() {
       destinationId: "SFU_BURNABY_STRAND_3000_3050.1",
     },
   ];
+  const room = fixtures[0];
+  await openBuilding(room.facilityId);
+  await clickRoom(room.originLevelId, room.originId);
+  await cdp.wait("document.querySelector('#unit-details').innerText.includes('2035.2') && document.querySelector('#unit-details').innerText.includes('Physical accessibility')");
+  const detailText = await cdp.evaluate("document.querySelector('#unit-details').innerText");
+  assert.match(detailText, /physical accessibility/i);
+  assert.match(detailText, /unverified/i);
+  assert.doesNotMatch(detailText, /destination tag|verified by|verified date/i);
+  result.checks.push("AQ2035.2 room details distinguish recorded use from unverified physical accessibility");
+  await exerciseClickIntent(fixtures[0], 1440, false);
+  await exerciseClickIntent(fixtures[1], 390, true);
+  await exerciseClickIntent(fixtures[0], 320, true);
+  await clearRoute();
+  await openBuilding(room.facilityId);
+  await keyboardActivate(`#floor-buttons [data-level-id=${quote(room.originLevelId)}]`);
+  await sceneReady(room.originLevelId);
+  await keyboardActivate(`#room-list [data-unit-id=${quote(room.originId)}]`);
+  await cdp.wait("document.querySelector('.facts').open && document.querySelector('#unit-details').innerText.includes('2035.2') && document.querySelector('#unit-details').innerText.includes('Physical accessibility')");
+  const mobileDetails = await cdp.evaluate("document.querySelector('#unit-details').innerText");
+  assert.match(mobileDetails, /physical accessibility/i);
+  assert.match(mobileDetails, /unverified/i);
+  assert.ok(await cdp.evaluate("document.querySelector('#unit-details').scrollWidth <= document.querySelector('#unit-details').clientWidth + 1"));
+  result.checks.push("AQ2035.2 room details readable after keyboard selection at 320px");
+  await cdp.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await exerciseSupersededAvailability(fixtures[0]);
   for (const fixture of fixtures) await exerciseBuilding(fixture);
   result.routeCalls = await cdp.evaluate("window.__routeCalls.slice()");

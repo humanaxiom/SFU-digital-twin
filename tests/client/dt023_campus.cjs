@@ -34,8 +34,8 @@ run(`campusData={bounds:[500000,5400000,500300,5400200],facilities:[
 facilitiesById = new Map(campusData.facilities.map(item => [item.facility_id, item]));
 initializeFloorControls(campusData.facilities.flatMap(item => item.levels));
 selectFloorControls(allLevels.find(level => level.level_id === 'AQ2'));
-activeRoute={fixture:'retained'};routeOrigin.value='roomA';routeDestination.value='roomB';
-routeProfile.value='elevator_only';
+activeRoute={fixture:'retained'};
+editRouteDraft({origin:'roomA',destination:'roomB',profile:'elevator_only'});
 renderCampus();showCampus();`);
 assert.equal(nodes.get('#campus-view').hidden,false);
 assert.equal(nodes.get('#floor-view').hidden,true);
@@ -55,9 +55,9 @@ assert.equal(nodes.get('#facility-select').value,'SH');
 assert.equal(nodes.get('#level-select').value,'');
 assert.equal(nodes.get('#level-select').disabled,true);
 assert.equal(run('activeRoute.fixture'),'retained');
-assert.equal(run('routeOrigin.value'),'roomA');
-assert.equal(run('routeDestination.value'),'roomB');
-assert.equal(run('routeProfile.value'),'elevator_only');
+assert.equal(run('routeDraft.origin'),'roomA');
+assert.equal(run('routeDraft.destination'),'roomB');
+assert.equal(run('routeDraft.profile'),'elevator_only');
 // A building uses its own remembered exact floor, initially its recorded order zero.
 run("selectCampusBuilding('AQ'); selectFloorControls(allLevels.find(level => level.level_id === 'AQ2')); selectCampusBuilding('ECC')");
 assert.equal(nodes.get('#facility-select').value,'ECC');
@@ -114,7 +114,10 @@ assert.ok(box.every(Number.isFinite)&&box[2]>=300&&box[3]>=200);
  assert.equal(nodes.get('#campus-view').hidden,false,'wait for actual route floor before leaving campus');
  assert.equal(run('routeUiState'),'pending');
  assert.equal(nodes.get('#facility-select').value,'ECC','pending route must not restore hidden AQ controls');
- run("selectCampusBuilding('AQ');selectCampusBuilding('LIB');selectCampusBuilding('ECC');pendingRoute({status:200})");
+ run(`selectCampusBuilding('AQ');selectCampusBuilding('LIB');selectCampusBuilding('ECC');
+   pendingRoute({status:200,profile:'default',origin:{unit_id:'roomA'},destination:{unit_id:'roomB'},levels:[],
+     guidance:{version:'dt018-guidance-v1',status:'unavailable',distance_m:null,warnings:[],transitions:[],
+       geometries:[],markers:[],visits:[],steps:[]}})`);
  await route;
  // Valid route completion may be retained, but it must not change map context.
  assert.equal(run('routeRendered'),1,'latest valid route is accepted without stealing exploration');
@@ -122,8 +125,8 @@ assert.ok(box.every(Number.isFinite)&&box[2]>=300&&box[3]>=200);
  assert.equal(nodes.get('#facility-select').value,'ECC');
  assert.equal(nodes.get('#level-select').value,'ECC0');
  assert.equal(nodes.get('#map-context').textContent,'Building');
- assert.equal(run('routeOrigin.value'),'roomA');
- assert.equal(run('routeDestination.value'),'roomB');
- assert.equal(run('routeProfile.value'),'elevator_only');
+ assert.equal(run('routeDraft.origin'),'roomA');
+ assert.equal(run('routeDraft.destination'),'roomB');
+ assert.equal(run('routeDraft.profile'),'elevator_only');
  console.log('PASS campus search, camera, no-level coverage, retained route and stale scene/route');
 })().catch(error=>{console.error(error);process.exitCode=1;});

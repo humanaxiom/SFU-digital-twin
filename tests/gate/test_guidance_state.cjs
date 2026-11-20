@@ -358,4 +358,5 @@ function client() {
     assert.ok(svg.attributes.viewBox.split(' ').map(Number).every(v=>Math.abs(v)<100));
   });
   assert.deepEqual(failures, []);
+  console.log('Guidance state regressions passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

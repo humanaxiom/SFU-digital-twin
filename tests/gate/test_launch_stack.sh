@@ -17,7 +17,18 @@ printf '%s\n' "$*" >> "$DOCKER_LOG"
 case "$*" in
     "compose version") exit 0 ;;
     "ps --format {{.Ports}}") printf '%s\n' "${FAKE_DOCKER_PORTS:-}" ;;
+    "ps -a --format "*) printf '%s\n' "${FAKE_DOCKER_ROWS:-}" ;;
     *"config --services") echo fixture ;;
+    *"-p sfudt-sh-navigation-candidate up -d --wait demo external")
+        if [ "${FAKE_CHECK_PUBLIC_ENV:-0}" = 1 ]; then
+            for value in "${WAYFINDING_CANDIDATE_RUN-unset}" "${WAYFINDING_BROWSER_BUILD_IMAGE-unset}" \
+                "${WAYFINDING_CANDIDATE_BIND_ADDRESS-unset}" "${WAYFINDING_CANDIDATE_PORT-unset}" \
+                "${WAYFINDING_EXTERNAL_BIND_ADDRESS-unset}" "${WAYFINDING_EXTERNAL_PORT-unset}" \
+                "${WAYFINDING_TLS_CERT_DIR-unset}"; do
+                [ "$value" = unset ] || { echo 'FAIL: public Compose inherited a deployment override' >&2; exit 29; }
+            done
+        fi
+        exit "${FAKE_PUBLIC_EXIT:-0}" ;;
     *"up -d --wait"*) exit 0 ;;
     *" down --remove-orphans"*) exit 0 ;;
     *" exec -T artifact "*)
@@ -57,13 +68,71 @@ run_launcher() {
 assert_contains() {
     output=$1
     expected=$2
-    printf '%s\n' "$output" | grep -F "$expected" >/dev/null || {
+    printf '%s\n' "$output" | grep -F -- "$expected" >/dev/null || {
         echo "FAIL: expected output to contain: $expected" >&2
         exit 1
     }
 }
 
-output=$(FAKE_DOCKER_PORTS='0.0.0.0:18000->5432/tcp' run_launcher --dry-run)
+: > "$DOCKER_LOG"
+output=$(run_launcher --dry-run)
+assert_contains "$output" '-p sfudt-sh-navigation-candidate up -d --wait demo external'
+assert_contains "$output" "$ROOT_DIR/infra/wayfinding-public.env"
+assert_contains "$output" "-f $ROOT_DIR/infra/docker-compose.candidate.yml -f $ROOT_DIR/infra/docker-compose.public-tls.yml"
+assert_contains "$output" 'https://sfuai.ca:8017/'
+if grep -F ' up ' "$DOCKER_LOG" >/dev/null; then
+    echo 'FAIL: dry-run started a service' >&2; exit 1
+fi
+: > "$DOCKER_LOG"
+run_launcher >/dev/null
+grep -F -- '-p sfudt-sh-navigation-candidate up -d --wait demo external' "$DOCKER_LOG" >/dev/null
+grep -F -- "-f $ROOT_DIR/infra/docker-compose.candidate.yml -f $ROOT_DIR/infra/docker-compose.public-tls.yml" "$DOCKER_LOG" >/dev/null
+: > "$DOCKER_LOG"
+run_launcher --no-public-demo >/dev/null
+if grep -F 'sfudt-sh-navigation-candidate' "$DOCKER_LOG" >/dev/null; then
+    echo 'FAIL: opt-out touched public demo' >&2; exit 1
+fi
+set +e
+FAKE_PUBLIC_EXIT=23 run_launcher >/dev/null 2>&1
+public_status=$?
+set -e
+[ "$public_status" -eq 23 ] || { echo "FAIL: public failure lost exit 23: $public_status" >&2; exit 1; }
+: > "$DOCKER_LOG"
+if FAKE_DOCKER_ROWS='sfudt-sh-navigation-candidate|/other/compose.yml|' run_launcher >"$TMP_DIR/public-ownership.out" 2>&1; then
+    echo 'FAIL: launcher took over another public project' >&2; exit 1
+fi
+if grep -F ' up ' "$DOCKER_LOG" >/dev/null; then
+    echo 'FAIL: public ownership refusal occurred after startup mutation' >&2; exit 1
+fi
+(
+    export WAYFINDING_CANDIDATE_RUN=poison WAYFINDING_BROWSER_BUILD_IMAGE=poison
+    export WAYFINDING_CANDIDATE_BIND_ADDRESS=poison WAYFINDING_CANDIDATE_PORT=12345
+    export WAYFINDING_EXTERNAL_BIND_ADDRESS=poison WAYFINDING_EXTERNAL_PORT=12346
+    export WAYFINDING_TLS_CERT_DIR=poison
+    FAKE_CHECK_PUBLIC_ENV=1 run_launcher >/dev/null
+    [ "$WAYFINDING_EXTERNAL_PORT" = 12346 ] || { echo 'FAIL: launcher changed caller environment' >&2; exit 1; }
+    [ "$WAYFINDING_TLS_CERT_DIR" = poison ] || { echo 'FAIL: launcher changed caller certificate directory' >&2; exit 1; }
+)
+
+owned="sfudt-wayfinding-18000|$ROOT_DIR/infra/docker-compose.yml|0.0.0.0:18007->8080/tcp"
+output=$(FAKE_DOCKER_ROWS="$owned" FAKE_BUSY_PORTS=18007 run_launcher --dry-run)
+assert_contains "$output" 'Compose project:             sfudt-wayfinding-18000'
+output=$(FAKE_DOCKER_ROWS="sfudt-wayfinding-18010|$ROOT_DIR/infra/docker-compose.yml|0.0.0.0:18017->8080/tcp" FAKE_BUSY_PORTS=18017 run_launcher --dry-run)
+assert_contains "$output" 'Compose project:             sfudt-wayfinding-18010'
+output=$(FAKE_DOCKER_ROWS="sfudt-wayfinding-18000|$ROOT_DIR/infra/docker-compose.yml|" run_launcher --dry-run)
+assert_contains "$output" 'Compose project:             sfudt-wayfinding-18000'
+if FAKE_DOCKER_ROWS="$owned
+other|/other/compose.yml|0.0.0.0:18003->8080/tcp" run_launcher --dry-run >"$TMP_DIR/conflict.out" 2>&1; then
+    echo 'FAIL: existing project conflict created a duplicate stack' >&2; exit 1
+fi
+if FAKE_DOCKER_ROWS="$owned" FAKE_BUSY_PORTS=18003 run_launcher --dry-run >"$TMP_DIR/host-conflict.out" 2>&1; then
+    echo 'FAIL: existing project ignored an unrelated host listener' >&2; exit 1
+fi
+if FAKE_DOCKER_ROWS='sfudt-wayfinding-18000|/other/compose.yml|' run_launcher --dry-run >"$TMP_DIR/ownership.out" 2>&1; then
+    echo 'FAIL: launcher took over another checkout project' >&2; exit 1
+fi
+
+output=$(FAKE_DOCKER_PORTS='0.0.0.0:18000->5432/tcp' FAKE_DOCKER_ROWS='other|/other/compose.yml|0.0.0.0:18000->5432/tcp' run_launcher --dry-run)
 assert_contains "$output" 'Compose project:             sfudt-wayfinding-18010'
 assert_contains "$output" 'DTWIN_NEO4J_BOLT_HOST_PORT   18016'
 

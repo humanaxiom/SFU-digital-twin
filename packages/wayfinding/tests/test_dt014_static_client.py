@@ -106,7 +106,7 @@ def test_elevator_only_disclosure_is_complete_and_never_overclaims():
     assert "guaranteed step-free" not in text
 
 
-def test_elevator_only_disclosure_is_hidden_by_default_and_tracks_result_profile():
+def test_elevator_only_disclosure_is_hidden_by_default_and_tracks_committed_profile():
     html = _asset("index.html")
     javascript = _asset("app.js")
     disclosure = re.search(
@@ -119,14 +119,10 @@ def test_elevator_only_disclosure_is_hidden_by_default_and_tracks_result_profile
     assert re.search(r"\bhidden(?:\s|=|$)", disclosure.group("attrs"))
     assert "elevators only; stairs excluded" in disclosure.group("body").lower()
     assert re.search(
-        r"routeAccessibility\.hidden\s*=\s*body\.profile\s*!==\s*[\"']elevator_only[\"']",
+        r"routeAccessibility\.hidden\s*=\s*!committedRouteSnapshot\s*\|\|\s*"
+        r"committedRouteSnapshot\.profile\s*!==\s*[\"']elevator_only[\"']",
         javascript,
-    ), "successes and failures must render disclosure from the response profile"
-    assert re.search(
-        r"routeProfile\.addEventListener\([\"']change[\"'][\s\S]*?"
-        r"routeAccessibility\.hidden\s*=\s*true",
-        javascript,
-    ), "switching profiles must immediately remove a stale elevator-only disclosure"
+    ), "qualify the displayed elevator-only route independently of its draft"
 
 
 def test_route_ui_keeps_legacy_provenance_and_has_no_external_or_deferred_capabilities():

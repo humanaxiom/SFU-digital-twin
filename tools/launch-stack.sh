@@ -10,6 +10,7 @@ LOCAL_IMAGE=0
 BUILD=0
 TEST=0
 DRY_RUN=0
+NO_PUBLIC_DEMO=0
 PORT_BLOCK_SIZE=10
 MACHINE_NAME=$(hostname)
 
@@ -31,7 +32,8 @@ Options:
   --attempts COUNT     Port blocks to scan (default: 50)
   --local-image        Include docker-compose.local.yml beside the Compose file
   --build              Build images before starting services
-    --test               Run test, lint, type, and data-QA gates after startup
+  --test              Run test, lint, type, and data-QA gates after startup
+  --no-public-demo    Skip starting the public candidate (does not stop it)
   --dry-run            Resolve configuration and print the launch command only
   -h, --help           Show this help
 EOF
@@ -47,6 +49,7 @@ while [ "$#" -gt 0 ]; do
         --build) BUILD=1; shift ;;
         --test) TEST=1; shift ;;
         --dry-run) DRY_RUN=1; shift ;;
+        --no-public-demo) NO_PUBLIC_DEMO=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -73,6 +76,14 @@ docker compose version >/dev/null 2>&1 || {
     exit 1
 }
 [ -f "$COMPOSE_FILE" ] || { echo "Compose file not found: $COMPOSE_FILE" >&2; exit 1; }
+COMPOSE_FILE="$(CDPATH= cd -- "$(dirname -- "$COMPOSE_FILE")" && pwd)/$(basename -- "$COMPOSE_FILE")"
+PUBLIC_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../infra" && pwd)
+if [ "$NO_PUBLIC_DEMO" -eq 0 ]; then
+    [ -f "$PUBLIC_DIR/wayfinding-public.env" ] && [ -f "$PUBLIC_DIR/docker-compose.candidate.yml" ] \
+        && [ -f "$PUBLIC_DIR/docker-compose.public-tls.yml" ] || {
+        echo 'Public demo deployment configuration is missing.' >&2; exit 1;
+    }
+fi
 
 set -- -f "$COMPOSE_FILE"
 compose_has_placeholder=0
@@ -94,12 +105,48 @@ if [ "$use_local_image" -eq 1 ]; then
     set -- "$@" -f "$LOCAL_OVERRIDE"
 fi
 
-docker_ports=$(docker ps --format '{{.Ports}}')
+docker_rows=$(docker ps -a --format '{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.config_files"}}|{{.Ports}}')
+if [ "$NO_PUBLIC_DEMO" -eq 0 ]; then
+    while IFS='|' read -r row_project row_files row_ports; do
+        [ "$row_project" = sfudt-sh-navigation-candidate ] || continue
+        case ",$row_files," in
+            *,"$PUBLIC_DIR/docker-compose.candidate.yml",*) ;;
+            *) echo 'Public Compose project belongs to another configuration.' >&2; exit 1 ;;
+        esac
+    done <<EOF
+$docker_rows
+EOF
+fi
+# Labels bind reuse to this checkout; names alone must not adopt another checkout.
+project_exists() {
+    existing_project=0
+    while IFS='|' read -r row_project row_files row_ports; do
+        [ "$row_project" = "$candidate_project" ] || continue
+        case ",$row_files," in
+            *,"$COMPOSE_FILE",*) existing_project=1 ;;
+            *) echo "Compose project $candidate_project belongs to another configuration." >&2; exit 1 ;;
+        esac
+    done <<EOF
+$docker_rows
+EOF
+}
 port_is_free() {
     port=$1
-    if printf '%s\n' "$docker_ports" | grep -Eq ":${port}->"; then
-        return 1
-    fi
+    owned_port=0
+    while IFS='|' read -r row_project row_files row_ports; do
+        case "$row_ports" in
+            *":$port->"*)
+                [ "$row_project" = "$candidate_project" ] || return 1
+                case ",$row_files," in
+                    *,"$COMPOSE_FILE",*) owned_port=1 ;;
+                    *) return 1 ;;
+                esac
+                ;;
+        esac
+    done <<EOF
+$docker_rows
+EOF
+    [ "$owned_port" -eq 0 ] || return 0
     if command -v ss >/dev/null 2>&1; then
         ! ss -H -ltn "sport = :$port" 2>/dev/null | grep -q .
     elif command -v netstat >/dev/null 2>&1; then
@@ -113,9 +160,24 @@ port_is_free() {
 }
 
 selected_base=
+# Prefer an already-created block, even when an earlier block has become free.
 attempt=0
 while [ "$attempt" -lt "$ATTEMPTS" ]; do
     candidate=$((BASE_PORT + attempt * PORT_BLOCK_SIZE))
+    [ $((candidate + 7)) -le 65535 ] || break
+    candidate_project="$PROJECT_NAME-$candidate"
+    project_exists
+    if [ "$existing_project" -eq 1 ]; then
+        selected_base=$candidate
+        break
+    fi
+    attempt=$((attempt + 1))
+done
+existing_base=$selected_base
+attempt=0
+while [ "$attempt" -lt "$ATTEMPTS" ]; do
+    candidate=${existing_base:-$((BASE_PORT + attempt * PORT_BLOCK_SIZE))}
+    candidate_project="$PROJECT_NAME-$candidate"
     if [ $((candidate + 7)) -gt 65535 ]; then
         break
     fi
@@ -131,6 +193,10 @@ while [ "$attempt" -lt "$ATTEMPTS" ]; do
     if [ "$block_free" -eq 1 ]; then
         selected_base=$candidate
         break
+    fi
+    if [ -n "$existing_base" ]; then
+        echo "Existing Compose project $candidate_project has a conflicting host port; refusing to create a duplicate." >&2
+        exit 1
     fi
     attempt=$((attempt + 1))
 done
@@ -189,6 +255,26 @@ else
     echo 'WARNING: Trusted LAN demo only. No authentication and no TLS. Restrict the port with the host firewall and stop the stack after use.'
 fi
 
+start_public_demo() {
+    [ "$NO_PUBLIC_DEMO" -eq 0 ] || return 0
+    echo 'Public demo URL: https://sfuai.ca:8017/ (local edge 18087; private candidate 18107)'
+    if [ "$DRY_RUN" -eq 1 ]; then
+        printf 'Dry run: docker compose --project-directory %s --env-file %s -f %s -f %s -p sfudt-sh-navigation-candidate up -d --wait demo external\n' \
+            "$PUBLIC_DIR" "$PUBLIC_DIR/wayfinding-public.env" "$PUBLIC_DIR/docker-compose.candidate.yml" "$PUBLIC_DIR/docker-compose.public-tls.yml"
+    else
+        (
+            # The checked-in deployment file fixes NAT ports and candidate identity.
+            # Isolate these overrides without changing the caller/developer environment.
+            unset WAYFINDING_CANDIDATE_RUN WAYFINDING_BROWSER_BUILD_IMAGE \
+                WAYFINDING_CANDIDATE_BIND_ADDRESS WAYFINDING_CANDIDATE_PORT \
+                WAYFINDING_EXTERNAL_BIND_ADDRESS WAYFINDING_EXTERNAL_PORT WAYFINDING_TLS_CERT_DIR
+            docker compose --project-directory "$PUBLIC_DIR" --env-file "$PUBLIC_DIR/wayfinding-public.env" \
+                -f "$PUBLIC_DIR/docker-compose.candidate.yml" -f "$PUBLIC_DIR/docker-compose.public-tls.yml" \
+                -p sfudt-sh-navigation-candidate up -d --wait demo external
+        )
+    fi
+}
+
 if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$build_local_image" -eq 1 ]; then
         compose_dir=$(dirname -- "$COMPOSE_FILE")
@@ -201,6 +287,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     printf ' -p %s up -d --wait' "$selected_project"
     [ "$BUILD" -eq 0 ] || printf ' --build'
     printf '\n'
+    start_public_demo
     [ "$TEST" -eq 0 ] || print_gate_commands "$@"
     exit 0
 fi
@@ -219,6 +306,7 @@ else
     docker compose "$@" -p "$selected_project" up -d --wait
 fi
 docker compose "$@" -p "$selected_project" ps
+start_public_demo
 
 if [ "$TEST" -eq 1 ]; then
     echo 'Running test gate...'

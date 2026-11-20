@@ -1,9 +1,8 @@
 # SFU Indoor Wayfinding oral history
 
 This history follows the repository from its August 2026 inception through the
-November 20 Stage C delivery. The November documentation checkpoint records the
-later local client, build and deployment increments. A clean checkout of this
-documentation branch has the earlier `5ca5186` implementation. This history
+November 20 Stage C delivery. The November review branch collects the client,
+build and deployment increments developed on top of `5ca5186`. This history
 reconstructs what happened from Git, plans,
 accepted architecture decisions, delivery reports, and recorded feedback. The
 [handoff](HANDOFF.md) is the place to resume work, and the [definition of

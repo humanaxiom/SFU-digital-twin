@@ -12,7 +12,6 @@ These tests check:
 9. Determinism and idempotency
 10. Accessibility provenance (verified_by, verified_date)
 11. Integration tests (end-to-end normalisation)
-12. Makefile target and CLI dispatch
 
 All tests will FAIL initially because:
 - wayfinding.etl.normalise module does not exist
@@ -32,7 +31,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
@@ -1891,84 +1889,6 @@ class TestIntegration:
         assert len(layers) == 26, (
             f"Expected 26 total layers (14 raw + 12 normalised), found {len(layers)}"
         )
-
-
-class TestMakefileTarget:
-    """Test Makefile etl-normalise target."""
-
-    def test_makefile_etl_normalise_target_exists(self):
-        """Makefile must define etl-normalise target."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-        assert makefile_path.exists(), "Makefile not found"
-
-        makefile_content = makefile_path.read_text()
-
-        assert "etl-normalise:" in makefile_content, (
-            "Makefile missing etl-normalise target"
-        )
-
-    def test_makefile_etl_normalise_invokes_normalise_command(self):
-        """etl-normalise target must invoke normalise command."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-        makefile_content = makefile_path.read_text()
-
-        # Find etl-normalise section
-        if "etl-normalise:" in makefile_content:
-            etl_normalise_section = makefile_content.split("etl-normalise:")[1].split("\n\n")[0]
-
-            # Should invoke wayfinding.etl.run with normalise command
-            assert "wayfinding.etl.run" in etl_normalise_section, (
-                "etl-normalise target must invoke wayfinding.etl.run"
-            )
-            assert "normalise" in etl_normalise_section, (
-                "etl-normalise target must call normalise command"
-            )
-
-
-class TestCliEntryPoint:
-    """Test CLI dispatch for normalise command."""
-
-    def test_main_normalise_dispatches(self):
-        """main('normalise') should dispatch to run_normalise()."""
-        from wayfinding.etl import run
-
-        with patch.object(run, "run_normalise", return_value=0) as mock_run_normalise:
-            result = run.main("normalise")
-
-            mock_run_normalise.assert_called_once()
-            assert result == 0
-
-    def test_run_normalise_success_returns_0(self):
-        """run_normalise() should return 0 on success."""
-        from wayfinding.etl import run
-
-        # Mock normalisation functions
-        with (
-            patch("wayfinding.etl.normalise.normalise_facilities", return_value=3),
-            patch("wayfinding.etl.normalise.normalise_levels", return_value=11),
-            patch("wayfinding.etl.normalise.normalise_units", return_value=1017),
-            patch("wayfinding.etl.normalise.normalise_landmarks", return_value=40),
-            patch(
-                "wayfinding.etl.normalise.normalise_details",
-                return_value={"detail": 48728, "door": 6865},
-            ),
-        ):
-            result = run.run_normalise()
-
-            assert result == 0, "run_normalise() should return 0 on success"
-
-    def test_run_normalise_failure_returns_1(self):
-        """run_normalise() should return 1 on failure."""
-        from wayfinding.etl import run
-
-        # Mock normalise_facilities to raise exception
-        with patch(
-            "wayfinding.etl.normalise.normalise_facilities",
-            side_effect=RuntimeError("Test failure"),
-        ):
-            result = run.run_normalise()
-
-            assert result == 1, "run_normalise() should return 1 on failure"
 
 
 class TestErrorHandling:

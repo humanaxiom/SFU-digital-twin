@@ -13,3 +13,4 @@ def test_route_state_regressions():
         capture_output=True, text=True, timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "Route state regressions passed" in result.stdout, result.stdout + result.stderr

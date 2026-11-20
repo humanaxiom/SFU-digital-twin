@@ -60,17 +60,5 @@ dataqa-source:
 
 etl: rebuild
 
-etl-extract:
-	docker compose $(COMPOSE_FILES) run --rm source-etl env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run extract
-
-etl-normalise:
-	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run normalise
-
-etl-graph-raw:
-	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run graph-raw
-
-etl-graph-transitions:
-	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run graph-transitions
-
-etl-graph-contract:
-	docker compose $(COMPOSE_FILES) run --rm artifact env PYTHONPATH=/workspace/packages/wayfinding/src python -m wayfinding.etl.run graph-contract
+etl-extract etl-normalise etl-graph-raw etl-graph-transitions etl-graph-contract:
+	@printf '%s\n' "'$@' is retired. Use 'make etl RUN_ID=<unused-id>' for an isolated rebuild." >&2; exit 1

@@ -9,6 +9,8 @@ from osgeo import ogr
 from shapely import wkb
 from shapely.geometry import LineString, MultiLineString
 
+from wayfinding.etl.multipart import reconstruct_pathway
+
 ENDPOINT_MODE = "endpoint-v1"
 EXACT_MODE = "exact-shared-vertices-v1"
 DEFAULT_MODE = EXACT_MODE
@@ -46,6 +48,7 @@ def node_shared_vertices(
     candidate.graph["topology_mode"] = EXACT_MODE
     audit: dict[str, Any] = {
         "version": "dt022-topology-audit-v1",
+        "multipart_reconstruction": graph.graph.get("multipart_reconstruction", {}),
         "topology_mode": EXACT_MODE,
         "split_feature_count": 0,
         "junctions": [],
@@ -59,7 +62,8 @@ def node_shared_vertices(
     for u, v, key, data in candidate.edges(keys=True, data=True):
         if data.get("mode") == "pathway":
             feature_edges[str(data["feature_id"])].append((u, v, key))
-    rows = {row["feature_id"]: row for row in pathways}
+    rows = {row["feature_id"]: row for row in pathways
+            if ("PW", row["feature_id"], "start") in node_map}
     owners: dict[Any, set[str]] = defaultdict(set)
     interiors: dict[Any, list[tuple[str, int]]] = defaultdict(list)
     cells: dict[Any, set[Any]] = defaultdict(set)
@@ -141,7 +145,7 @@ def node_shared_vertices(
         # unchanged multipart geometry for which no complete span claim is made.
         for u, v, key in edges:
             data = candidate[u][v][key]
-            spans = [_span(fid, 0, len(coords) - 1)] if coords else []
+            spans = row.get("segment_spans", [_span(fid, 0, len(coords) - 1)] if coords else [])
             if coords:
                 data["geometry"] = LineString(coords[::-1] if key.endswith("_R") else coords)
             data.update(
@@ -193,7 +197,8 @@ def node_shared_vertices(
         ):
             physical_id = f"{fid}:v{start}-{end}"
             geometry = LineString(coords[start : end + 1])
-            spans = [_span(fid, start, end)]
+            spans = (row["segment_spans"][start:end] if "segment_spans" in row
+                     else [_span(fid, start, end)])
             data = {
                 "feature_id": physical_id,
                 "source_feature_id": fid,
@@ -213,7 +218,8 @@ def node_shared_vertices(
                 source_spans=reverse_spans(spans),
                 **data,
             )
-            pieces.append({"physical_id": physical_id, **spans[0], "length_3d": allocated})
+            pieces.append({"physical_id": physical_id, **spans[0],
+                           "source_spans": spans, "length_3d": allocated})
         for index, node in zip(indices, nodes, strict=False):
             if node not in node_attrs:
                 z = coords[index][2]
@@ -260,8 +266,18 @@ def apply_exact_noding(
         geometry = wkb.loads(bytes(feature.GetGeometryRef().ExportToWkb()))
         if not isinstance(geometry, (LineString, MultiLineString)):
             raise ValueError("Unsupported pathway geometry for topology")
+        spans = None
         coords = None
-        if isinstance(geometry, LineString):
+        if isinstance(geometry, MultiLineString) and len(geometry.geoms) > 1:
+            try:
+                direction = (
+                    feature.GetField("TRAVEL_DIRECTION")
+                    if feature.GetFieldIndex("TRAVEL_DIRECTION") >= 0 else None
+                )
+                coords, spans = reconstruct_pathway(geometry, direction)
+            except ValueError:
+                continue
+        elif isinstance(geometry, LineString):
             coords = list(geometry.coords)
         elif isinstance(geometry, MultiLineString) and len(geometry.geoms) == 1:
             coords = list(geometry.geoms[0].coords)
@@ -270,7 +286,10 @@ def apply_exact_noding(
                 "feature_id": str(feature.GetFID()),
                 "level_id": feature.GetField("LEVEL_ID"),
                 "coordinates": coords,
-                "endpoints": extract_endpoints(geometry),
+                "endpoints": ((coords[0], coords[-1]) if coords and spans
+                              else extract_endpoints(geometry)),
+                **({"segment_spans": [dict(span, feature_id=str(feature.GetFID()))
+                                     for span in spans]} if spans else {}),
                 "length_3d": feature.GetField("LENGTH_3D"),
             }
         )
@@ -292,3 +311,7 @@ def apply_exact_noding(
             )
     dataset = None
     return node_shared_vertices(graph, node_map, node_attrs, pathways, transitions)
+
+
+
+

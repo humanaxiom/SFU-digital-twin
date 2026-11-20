@@ -1,0 +1,9 @@
+# Isolated restart-policy verification; never publish the live demo's host ports.
+services:
+  demo:
+    ports: !override []
+    volumes:
+      - ../tests/gate/recovery-demo.sh:/workspace/tests/gate/recovery-demo.sh:ro
+    command: ["sh", "/workspace/tests/gate/recovery-demo.sh", "start"]
+  external:
+    ports: !override []

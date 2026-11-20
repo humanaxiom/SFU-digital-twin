@@ -10,6 +10,7 @@ def test_campus_context_state():
     root = Path(__file__).resolve().parents[3]
     result = subprocess.run(
         [node, "tests/client/dt023_campus.cjs"], cwd=root,
-        capture_output=True, text=True, check=False,
+        capture_output=True, text=True, check=False, timeout=10,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "PASS campus" in result.stdout, result.stdout + result.stderr

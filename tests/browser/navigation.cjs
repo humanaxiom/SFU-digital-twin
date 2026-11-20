@@ -152,10 +152,14 @@ async function main() {
     await pointerClick(`#floor-buttons [data-level-id=\"${originLevel.level_id}\"]`);
     await sceneReady(originLevel.level_id);
     await pointerClick(`#room-list [data-unit-id=\"${fixture.origin.unit_id}\"]`);
+    await pointerClick('#room-start-here');
     await cdp.wait(`document.querySelector('#route-origin').value===${quote(fixture.origin.unit_id)}&&document.querySelector('#route-options-status').dataset.state==='ready'`);
     assert.ok(await cdp.evaluate(`!!document.querySelector('#route-destination option[value=${quote(fixture.destination.unit_id)}]')`), "mapped destination must be selectable");
     await cdp.evaluate(`window.__holdRoute=true;window.__releaseRoute=null;window.__routeOriginalFetch=window.fetch;window.fetch=async(...args)=>{const response=await window.__routeOriginalFetch(...args);if(String(args[0])==='/demo/v1/route'){await new Promise(resolve=>window.__releaseRoute=resolve);}return response;}`);
-    await cdp.evaluate(`document.querySelector('#route-profile').value=${quote(fixture.profile)};const destination=document.querySelector('#route-destination');destination.value=${quote(fixture.destination.unit_id)};destination.dispatchEvent(new Event('change',{bubbles:true}))`);
+    await cdp.evaluate(`document.querySelector('#route-profile').value=${quote(fixture.profile)};document.querySelector('#route-profile').dispatchEvent(new Event('change'))`);
+    await cdp.wait(`document.querySelector('#route-options-status').dataset.state==='ready' && document.querySelector('#route-options-status').dataset.profile===${quote(fixture.profile)}`);
+    await cdp.evaluate(`const destination=document.querySelector('#route-destination');destination.value=${quote(fixture.destination.unit_id)};destination.dispatchEvent(new Event('change',{bubbles:true}))`);
+    await keyboardActivate('#route-submit');
     await cdp.wait("typeof window.__releaseRoute==='function'");
     const target = data.levels.find(level => level.level_id !== fixture.origin.level_id);
     await pointerClick(`#building-buttons [data-building-id=\"${target.facility_id}\"]`);

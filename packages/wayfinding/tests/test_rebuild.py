@@ -9,6 +9,18 @@ import pytest
 from wayfinding.etl import rebuild
 
 
+def _runtime(marker):
+    files = {"packages/wayfinding/src/wayfinding/etl/graph.py": marker * 64}
+    return {
+        "image_id": f"sha256:{marker * 64}",
+        "image_reference": "wayfinding-build:local",
+        "python": "3.12.0",
+        "gdal": "GDAL 3.8.0",
+        "code_sha256": rebuild._digest(files),
+        "code_files": files,
+    }
+
+
 @pytest.fixture
 def sandbox(tmp_path, monkeypatch):
     root = tmp_path / "experiments"
@@ -21,7 +33,7 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.setattr(
         rebuild, "LEGACY_SHA256", rebuild.hash_directory(source)["sha256"]
     )
-    monkeypatch.setattr(rebuild, "runtime_identity", lambda: {"image_id": "test-image"})
+    monkeypatch.setattr(rebuild, "runtime_identity", lambda: _runtime("a"))
 
     def extract(gdb_path, gpkg_path, overwrite=False):
         assert not overwrite
@@ -48,8 +60,10 @@ def test_extraction_preserves_raw_and_refuses_reuse(sandbox):
     assert manifest["path_base"] == "run_directory"
     assert manifest["source"]["sha256"] == rebuild.LEGACY_SHA256
     assert manifest["build_config"] == {"topology_mode": rebuild.EXACT_MODE}
-    with pytest.raises(FileExistsError):
+    manifest_before = (run / "run.json").read_bytes()
+    with pytest.raises(FileExistsError, match="Run already exists"):
         rebuild.extract_run("first")
+    assert (run / "run.json").read_bytes() == manifest_before
     assert raw.read_bytes() == b"raw extraction"
 
 
@@ -198,6 +212,77 @@ def test_complete_staged_build_and_comparison(tiny_pipeline):
     assert (tiny_pipeline[0] / "comparisons/left--right.json").exists()
     with pytest.raises(FileExistsError):
         rebuild.compare_runs("left", "right")
+
+
+def test_compare_independently_sealed_historical_runs(tiny_pipeline, monkeypatch, capsys):
+    manifests = {}
+    for name, marker, topology in (
+        ("left", "a", rebuild.ENDPOINT_MODE), ("right", "b", rebuild.EXACT_MODE),
+    ):
+        monkeypatch.setattr(rebuild, "runtime_identity", lambda marker=marker: _runtime(marker))
+        run = rebuild.extract_run(name, topology)
+        if name == "left":
+            manifest = json.loads((run / "run.json").read_text())
+            manifest.pop("build_config")
+            rebuild._checkpoint(run, manifest)
+        rebuild.derive_run(name)
+        rebuild.finalize_run(name)
+        manifests[name] = (run / "run.json").read_bytes()
+
+    monkeypatch.setattr(rebuild, "runtime_identity", lambda: _runtime("c"))
+    with pytest.raises(ValueError, match="toolchain"):
+        rebuild._load("left", "complete")
+
+    def refuse_pickle(*args):
+        pytest.fail("Historical comparison must not load a pickle")
+
+    monkeypatch.setattr(rebuild.pickle, "load", refuse_pickle)
+    assert rebuild.main(["compare", "--left", "left", "--right", "right"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["equivalent"]
+    assert result["source_equal"]
+    assert not result["artifact_bytes_equal"]
+    assert not result["code_equal"]
+    for name, marker in (("left", "a"), ("right", "b")):
+        document = json.loads(manifests[name])
+        assert (tiny_pipeline[0] / name / "run.json").read_bytes() == manifests[name]
+        assert result[f"{name}_manifest_sha256"] == document["manifest_sha256"]
+        assert result[f"{name}_runtime"] == _runtime(marker)
+        assert result[f"{name}_artifacts"] == document["artifacts"]
+
+
+@pytest.mark.parametrize("tamper", ["fingerprint", "artifact", "source", "unfinished"])
+def test_compare_rejects_invalid_historical_run(tiny_pipeline, monkeypatch, tamper):
+    for name in ("left", "right"):
+        run = rebuild.extract_run(name)
+        rebuild.derive_run(name)
+        rebuild.finalize_run(name)
+    manifest = json.loads((run / "run.json").read_text())
+    if tamper == "fingerprint":
+        manifest["runtime"]["code_files"] = {"changed.py": "b" * 64}
+    elif tamper == "artifact":
+        (run / rebuild.SEMANTICS).write_text("{}")
+    elif tamper == "source":
+        manifest["source"]["sha256"] = "b" * 64
+    else:
+        manifest["source_reverified"] = False
+    rebuild._checkpoint(run, manifest)
+    monkeypatch.setattr(rebuild, "runtime_identity", lambda: _runtime("c"))
+    with pytest.raises(ValueError, match={
+        "fingerprint": "runtime fingerprint", "artifact": "Artifact hash mismatch",
+        "source": "Unreviewed source", "unfinished": "requires final source verification",
+    }[tamper]):
+        rebuild.compare_runs("left", "right")
+    assert not (tiny_pipeline[0] / "comparisons").exists()
+
+
+def test_toolchain_drift_blocks_finalization(tiny_pipeline, monkeypatch):
+    run = rebuild.extract_run("drift-final")
+    rebuild.derive_run("drift-final")
+    monkeypatch.setattr(rebuild, "runtime_identity", lambda: _runtime("b"))
+    with pytest.raises(ValueError, match="toolchain"):
+        rebuild.finalize_run("drift-final")
+    assert json.loads((run / "run.json").read_text())["state"] == "derived"
 
 
 def test_legacy_manifest_without_build_config_uses_endpoint_topology(tiny_pipeline):

@@ -1,4 +1,4 @@
-"""RED client state-machine and route-entry parity contracts for DT-015."""
+"""Static route controls and authored geometry contracts."""
 
 import re
 from html.parser import HTMLParser
@@ -11,108 +11,55 @@ STATIC_DIR = WORKSPACE_ROOT / "packages/wayfinding/src/wayfinding/demo/static"
 class _Parser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
-        self.tags: list[tuple[str, dict[str, str | None]]] = []
+        self.controls: dict[str, dict[str, str | None]] = {}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.tags.append((tag, dict(attrs)))
+        attributes = dict(attrs)
+        if element_id := attributes.get("id"):
+            self.controls[element_id] = attributes
 
 
 def _asset(name: str) -> str:
     return (STATIC_DIR / name).read_text(encoding="utf-8")
 
 
-def _function_body(javascript: str, name: str) -> str:
-    match = re.search(
-        rf"(?:async\s+)?function\s+{re.escape(name)}\s*\([^)]*\)\s*\{{(?P<body>[\s\S]*?)\n\}}",
-        javascript,
-    )
-    assert match, f"app.js must define the shared {name} function"
-    return match.group("body")
+def test_preview_is_the_route_form_submit_and_other_actions_are_explicit():
+    html = _asset("index.html")
+    parser = _Parser()
+    parser.feed(html)
+    controls = parser.controls
+
+    assert re.search(r'<button id="route-submit" type="submit">Preview route</button>', html)
+    for element_id in ("route-swap", "route-clear", "room-start-here", "room-directions-here"):
+        assert controls[element_id]["type"] == "button"
+    for element_id in ("room-start-here", "room-directions-here"):
+        assert "disabled" in controls[element_id]
 
 
-def test_first_room_activation_sets_origin_without_request():
-    javascript = _asset("app.js")
-    activation = _function_body(javascript, "activateRouteEndpoint")
-
-    assert re.search(r"(?:empty|origin_selected|routeSelection)", javascript)
-    assert "routeOrigin.value" in activation
-    assert re.search(r"routeDestination\.value\s*=\s*[\"'][\"']", activation)
-    first_selection = re.search(
-        r"if\s*\([^)]*(?:empty|!\s*routeOrigin\.value)[^)]*\)\s*\{(?P<body>[\s\S]*?)\n\s*\}",
-        activation,
-    )
-    assert first_selection, "first activation must have an explicit origin-only transition"
-    assert "requestRoute(" not in first_selection.group("body")
-
-
-def test_second_distinct_room_activation_sets_destination_and_routes():
-    javascript = _asset("app.js")
-    activation = _function_body(javascript, "activateRouteEndpoint")
-    request_route = _function_body(javascript, "requestRoute")
-
-    assert re.search(
-        r"unitId\s*!==\s*routeOrigin\.value|routeOrigin\.value\s*!==\s*unitId",
-        activation,
-    )
-    assert "routeDestination.value" in activation
-    assert activation.count("requestRoute(") == 1
-    assert 'request("/demo/v1/route"' in request_route
-    assert all(
-        contract in request_route
-        for contract in (
-            "origin: { unit_id:",
-            "destination: { unit_id:",
-            "profile:",
-            "renderRoute(",
-        )
-    )
-
-
-def test_keyboard_room_activation_matches_pointer_state_machine():
-    javascript = _asset("app.js")
-
-    assert javascript.count("activateRouteEndpoint(item.unit_id") >= 3, (
-        "map clicks, Enter/Space, and room-list buttons must share endpoint activation"
-    )
-    assert re.search(r'event\.key\s*===\s*["\']Enter["\']', javascript)
-    assert re.search(r'event\.key\s*===\s*["\'] ["\']', javascript)
-    assert re.search(r"aria-live", _asset("index.html"), re.I)
-    assert re.search(
-        r"(?:origin|destination).*(?:selected|set)|(?:selected|set).*(?:origin|destination)",
-        javascript,
-        re.I,
-    )
-
-
-def test_endpoint_clear_swap_reselect_and_manual_select_fallback():
+def test_draft_and_committed_route_identity_have_distinct_announcements():
     parser = _Parser()
     parser.feed(_asset("index.html"))
-    ids = {attrs.get("id") for _tag, attrs in parser.tags}
-    javascript = _asset("app.js")
+    controls = parser.controls
 
-    assert {"route-clear", "route-swap"} <= ids
-    assert re.search(r"routeClear\.addEventListener|querySelector\([\"']#route-clear", javascript)
-    assert re.search(r"routeSwap\.addEventListener|querySelector\([\"']#route-swap", javascript)
-    assert re.search(r"routeOrigin\.addEventListener\([\"']change", javascript)
-    assert re.search(r"routeDestination\.addEventListener\([\"']change", javascript)
-    # Distinct/incomplete pair behavior is executed by test_takeover_client,
-    # rather than requiring one spelling of the conditional in source text.
-    assert re.search(r"(?:generation|requestGeneration)", javascript)
-    assert re.search(r"classList\.(?:toggle|add)\([^\n]*(?:origin|destination)", javascript)
+    for element_id in ("route-draft-status", "route-request-status", "room-route-status"):
+        assert controls[element_id]["role"] == "status"
+    for element_id in ("route-committed-identity", "map-route-identity"):
+        assert controls[element_id]["aria-live"] == "polite"
+    assert "map-route-identity" in (controls["floor-map"]["aria-describedby"] or "").split()
 
 
-def test_route_failure_clears_stale_overlay_and_keeps_disclosures():
-    javascript = _asset("app.js")
-    renderer = _function_body(javascript, "renderRoute")
+def test_draft_and_committed_accessibility_disclosures_have_distinct_controls():
+    html = _asset("index.html")
+    parser = _Parser()
+    parser.feed(html)
 
-    assert re.search(r"body\.status\s*!==\s*200", renderer)
-    assert re.search(r"activeRoute\s*=\s*null|replaceChildren\(\)", renderer)
-    assert "renderRouteOverlay(" in renderer
-    assert "routeAccessibility.hidden = body.profile !== \"elevator_only\"" in renderer
+    assert "hidden" in parser.controls["route-profile-help"]
+    assert "hidden" in parser.controls["route-accessibility"]
     assert all(
-        term in _asset("index.html").lower()
+        term in html.lower()
         for term in (
             "elevators only; stairs excluded",
+            "accessibility is not verified",
             "door width",
             "path width",
             "slope",
@@ -122,76 +69,11 @@ def test_route_failure_clears_stale_overlay_and_keeps_disclosures():
     )
 
 
-def test_assistant_success_renders_same_route_as_direct_request():
-    javascript = _asset("app.js")
-    assistant_submit = re.search(
-        r"assistantForm\.addEventListener\([\"']submit[\"'][\s\S]*?\n\}\);",
-        javascript,
-    )
-
-    assert assistant_submit
-    body = assistant_submit.group(0)
-    assert re.search(r"parseExactDirections|parseDirectionRequest", body)
-    assert "requestRoute(" in body
-    assert 'request("/demo/v1/assistant"' in body
-    assert re.search(r"if\s*\([^)]*(?:direction|routeRequest)", body)
-    assert re.search(r"(?:else|return)[\s\S]*request\([\"']/demo/v1/assistant", body)
-    assert _function_body(javascript, "requestRoute").count('request("/demo/v1/route"') == 1
-
-def test_assistant_room_aliases_resolve_to_full_unit_ids_before_selector_sync():
-    javascript = _asset("app.js")
-    resolver = _function_body(javascript, "resolveRouteUnitId")
-    assistant_submit = re.search(
-        r"assistantForm\.addEventListener\([\"']submit[\"'][\s\S]*?\n\}\);",
-        javascript,
-    )
-
-    assert assistant_submit
-    assert "routeUnits" in resolver
-    assert "unit_id" in resolver
-    assert "room_id" in resolver
-    assert assistant_submit.group(0).count("resolveRouteUnitId(") >= 2
-
-
-def test_assistant_failure_and_mobility_disclosure_match_route_service():
-    javascript = _asset("app.js")
-    parser_name = (
-        "parseExactDirections"
-        if "function parseExactDirections" in javascript
-        else "parseDirectionRequest"
-    )
-    parser = _function_body(javascript, parser_name)
-    request_route = _function_body(javascript, "requestRoute")
-
-    assert "elevator_only" in parser
-    assert "default" in parser
-    assert re.search(r"(?:mobility|elevator|accessible)", parser, re.I)
-    assert "renderRoute(" in request_route
-    assert re.search(r"catch[\s\S]*renderRoute\(", request_route)
-    assert 'request("/demo/v1/assistant"' not in request_route
-    assert "stairs" not in parser.lower() or "elevator_only" in parser
-
-
-def test_third_and_same_room_activations_are_deterministic_and_synchronized():
-    javascript = _asset("app.js")
-    activation = _function_body(javascript, "activateRouteEndpoint")
-
-    assert re.search(r"(?:complete|failed)", activation)
-    assert re.search(
-        r"unitId\s*===\s*routeOrigin\.value|routeOrigin\.value\s*===\s*unitId",
-        activation,
-    )
-    assert re.search(r"(?:return|no request)", activation, re.I)
-    assert all(control in activation for control in ("routeOrigin.value", "routeDestination.value"))
-    assert re.search(r"(?:activeRoute\s*=\s*null|clearRoute)", activation)
-
-
 def test_client_renders_service_geometry_only_without_synthetic_connectors():
     javascript = _asset("app.js")
 
     # Guidance geometries and their explicit step references are the only
-    # route spans the client should draw.  Keep this as a data-flow contract
-    # rather than coupling the test to renderer helper names.
+    # route spans the client should draw.
     assert "activeRoute?.guidance" in javascript or "activeRoute.guidance" in javascript
     assert "guidance.geometries" in javascript
     assert "step.geometry_ids" in javascript
@@ -199,10 +81,10 @@ def test_client_renders_service_geometry_only_without_synthetic_connectors():
     assert "svgPath(item" in javascript
     assert "pathData(geometry)" in javascript
 
-    # Room anchors, graph node IDs, and transitions may be displayed as
-    # labels/disclosures, but must not be used as inputs to path construction.
+    # Room anchors, graph node IDs, and transitions are not path inputs.
     assert not re.search(r"(?:centroid|anchor|node_id|edge_ids).*pathData", javascript, re.I)
     assert not re.search(r"(?:centroid|anchor|node_id|edge_ids).*svgPath", javascript, re.I)
+
 
 def test_mobile_route_controls_allow_panels_to_shrink_without_overflow():
     stylesheet = _asset("styles.css")

@@ -1,8 +1,7 @@
 # Roadmap
 
-This checkpoint reports progress in the local implementation workspace based on
-`5ca5186`. The documentation branch contains its plans and evidence. The later
-runnable increments are maintained separately in the workspace.
+This review checkpoint brings together the implementation, plans and local
+verification evidence for the increments developed on top of `5ca5186`.
 
 As of 2026-11-20 the SVG demo supports building-scoped floors, room search and explicit route preview. Stage C passed on the accepted artifacts and the isolated Strand candidate. **Next is Stage D** in the [DT-024 plan](plans/DT-024.md), followed by the integrated Stage E acceptance run. The [Preview report](reports/DT-024-PREVIEW.md) records the tested behavior. The [project oral history](ORAL-HISTORY.md) explains how the data and interface decisions developed.
 

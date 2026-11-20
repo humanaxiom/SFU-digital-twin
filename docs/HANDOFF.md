@@ -3,9 +3,10 @@
 ## Start here — 2026-11-20 checkpoint
 
 This record describes the locally verified wayfinding work on top of `5ca5186`.
-The documentation branch preserves the decisions and evidence. The later
-runtime, test, ETL and deployment files remain in the implementation workspace.
-Use that workspace with the named artifacts and test runs to reproduce a result.
+The review branch includes the corresponding runtime, tests, ETL, launchers,
+deployment configuration and decision records. Reproduction requires the named
+images and locally supplied artifacts. A Git push does not deploy a service or
+promote a routing artifact.
 
 | Track | Verified state | Next decision or action |
 | --- | --- | --- |
@@ -26,6 +27,32 @@ legacy source. Its graph, anchors and reachability for both profiles matched
 `dt017-legacy-20261119-b` (zero pairs gained or lost). Independent geometry QA
 matched all 19,058 forward contracted pathways to source spans. The semantic
 snapshot SHA-256 was `3227bbbb6261302ed681b39c305b2f7f322ab16c4b2cb2eaf82ee21fc1203544`.
+
+### Checkpoint verification record
+
+All runs below used Docker against the local implementation on top of `5ca5186`.
+The app used the local image `sha256:d7b70c51d54d661d2932aa7c5a2263d4af7f2168c17711bd05a67f4f5ad0851a`.
+
+| Command or probe | Exit | Identity and retained evidence |
+| --- | ---: | --- |
+| `node tests/browser/preview-route.cjs` | 0 | Demo `3db5cd8023a4`, Chromium `ddc4e90e2923`. Preview result SHA-256 `f34b13c32c08b95d8e57cb3303026d7a9c896bf2966b31ff7f370470244350ff` |
+| `node tests/browser/room-search.cjs` | 0 | Same demo, Chromium `83dd193ea904`. N05 result SHA-256 `10128718847335b285367c389a1eb910749ea70e49f443dd6a6d094bed9b35af` |
+| `./tools/rebuild.ps1 -Action Build -RunId dt017-history-20261120-v1 -LocalImage` | 0 | Extract `a4016dd77a8a`, derive `6bf2f7fbe74c`, finalize `2162c771f79e`. Manifest seal `aed2c309fd7c56d42c3654f67948d7af1642391d92cd2921cc6b0515849946af` |
+| Sealed comparison with `dt017-legacy-20261119-b` | 0 | Container `1aa9c5f82471`. Contracted graph hash `7812c031ed8c20bb92c047d825d5c1b073a5564ccc90cfd976d636b2e15a28a7` |
+| `python tools/dt017_geometry_audit.py --candidate dt017-history-20261120-v1` | 0 | Container `a8d47bb8cff1`. Both profiles gained 697 reachable pairs versus DT-033, zero losses. |
+| `pytest packages/wayfinding/tests -m source_dataqa --strict-markers --no-cov` in `source-etl` | 0 | `df9b14840752`, one selected test passed and 677 were deselected. The accepted-artifact guard also matched all 12 DT-033 file hashes. |
+| Accepted-artifact `tests/browser/demo.cjs` | 0 | Demo `c41ff8b39ce6`, Chromium `2e45eb4c9188`, 279 reads and 33 POSTs. `history-20261120-canonical/results.json` SHA-256 `98c199369b0f9ba1bbd4e6ee0c9e4093a86e787f60149e4dab1e9d04c215f86a` |
+
+The [Stage C report](reports/DT-024-PREVIEW.md) gives the pinned Chromium image and
+launch procedure. Full package-suite counts in the table above are the Stage C
+delivery results. This checkpoint added fresh application and rebuild replays.
+
+The rebuilt demo also served eight fixed routes and eight availability requests
+with HTTP 200 and the expected graph edge IDs, distances and availability. Strand’s
+elevator-only negative fixture returned HTTP 409. The first comprehensive
+rebuilt-browser run exited 1 after the desktop fixtures. It activated Preview
+before the destination draft was ready and recorded no route POST for that
+interaction. Its retained result SHA-256 is `1d07509ca128ad4f5df609a245caa7067db9cc7db5f403493c2067eadee4f0ac`.
 
 ## Current navigation work — explicit Preview route (2026-11-20)
 

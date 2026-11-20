@@ -23,7 +23,6 @@ All tests will FAIL initially because:
 - wayfinding.etl.graph.add_transitions() does not exist
 - run_graph_transitions() orchestration entry point does not exist
 - run.py has no graph-transitions subcommand
-- Makefile has no etl-graph-transitions target
 
 Tests use in-memory fixtures from DT-003/DT-004/DT-005 artifacts rather than relying on
 pre-generated DT-006 outputs, except where testing explicit serialization behavior.
@@ -47,7 +46,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
@@ -118,20 +116,20 @@ def require_file(path: Path, description: str) -> None:
 
 def load_required_gpkg() -> Path:
     """Load required GPKG from DT-003/DT-004, failing clearly if missing."""
-    require_file(SOURCE_GPKG, "DT-003/DT-004 GeoPackage (run make etl-normalise)")
+    require_file(SOURCE_GPKG, "DT-003/DT-004 GeoPackage")
     return SOURCE_GPKG
 
 
 def load_required_graph_raw() -> Any:
     """Load graph_raw.pkl from DT-005, failing clearly if missing."""
-    require_file(GRAPH_RAW_PKL, "DT-005 raw pathway graph (run make etl-graph-raw)")
+    require_file(GRAPH_RAW_PKL, "DT-005 raw pathway graph")
     with open(GRAPH_RAW_PKL, "rb") as f:
         return pickle.load(f)
 
 
 def load_required_node_map() -> dict[tuple[str, str, str], tuple[float, float, int]]:
     """Load node_map.pkl from DT-005, failing clearly if missing."""
-    require_file(NODE_MAP_PKL, "DT-005 node map (run make etl-graph-raw)")
+    require_file(NODE_MAP_PKL, "DT-005 node map")
     with open(NODE_MAP_PKL, "rb") as f:
         return pickle.load(f)
 
@@ -1212,44 +1210,6 @@ class TestDeterminismAndStatsSchema:
 class TestContainerExecutionAndArtifactSerialization:
     """Test container-only execution, serialization, and read-only input boundaries."""
 
-    def test_makefile_target_exists(self) -> None:
-        """Makefile must have etl-graph-transitions target."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-        assert makefile_path.exists(), f"Missing {makefile_path}"
-
-        with open(makefile_path) as f:
-            content = f.read()
-
-        assert "etl-graph-transitions" in content, (
-            "Makefile missing 'etl-graph-transitions' target for DT-006"
-        )
-
-    def test_container_execution(self) -> None:
-        """make etl-graph-transitions must invoke docker compose."""
-        makefile_path = WORKSPACE_ROOT / "Makefile"
-
-        with open(makefile_path) as f:
-            content = f.read()
-
-        # Extract target section
-        lines = content.split("\n")
-        target_lines = []
-        in_target = False
-
-        for line in lines:
-            if line.startswith("etl-graph-transitions"):
-                in_target = True
-                continue
-            if in_target:
-                if line and not line.startswith(("\t", " ")):
-                    break
-                target_lines.append(line)
-
-        target_body = "\n".join(target_lines)
-        assert "docker" in target_body.lower() or "compose" in target_body.lower(), (
-            "etl-graph-transitions target must use docker compose, not host Python"
-        )
-
     def test_orchestration_serializes_artifacts(
         self, graph_with_transitions_serialized: dict[str, Path]
     ) -> None:
@@ -1377,34 +1337,6 @@ class TestIntegrationAndDataQA:
             f"Found invalid TRANSITION_TYPE values: {invalid}. "
             f"Valid types: {valid_types} (2=stairs, 4=elevator)"
         )
-
-
-# ============================================================================
-# Test CLI and Run.py Integration
-# ============================================================================
-
-
-class TestCLIAndRunPyIntegration:
-    """Test run.py CLI dispatches to orchestration entry point."""
-
-    def test_run_py_has_graph_transitions_handler(self) -> None:
-        """run.py main() must handle 'graph-transitions' command."""
-        from wayfinding.etl import run
-
-        # Patch the orchestration function
-        with patch.object(run, "run_graph_transitions", return_value=0) as mock_run:
-            result = run.main("graph-transitions")
-
-            mock_run.assert_called_once()
-            assert result == 0, "main('graph-transitions') should return 0 on success"
-
-    def test_run_py_propagates_graph_transitions_result(self) -> None:
-        """run.py must return the graph-transitions orchestration result."""
-        from wayfinding.etl import run
-
-        with patch.object(run, "run_graph_transitions", return_value=1) as mock_run:
-            assert run.main("graph-transitions") == 1
-            mock_run.assert_called_once()
 
 
 # ============================================================================

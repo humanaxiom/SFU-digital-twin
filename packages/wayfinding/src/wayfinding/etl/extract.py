@@ -14,6 +14,7 @@ The EPSG:26910 layers are the source of truth for all routing and spatial operat
 
 import subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Literal
 
 # Source layers from the AIIM geodatabase
@@ -52,8 +53,8 @@ def extract_to_gpkg(
 
     Args:
         gdb_path: Path to source IndoorWayfinding.gdb (must exist, read-only)
-        gpkg_path: Output GeoPackage path (will be created/overwritten)
-        overwrite: If True, delete existing gpkg_path before extraction
+        gpkg_path: Output GeoPackage path
+        overwrite: If True, replace gpkg_path after all layers have been extracted and counted
 
     Returns:
         Dictionary mapping layer name to feature count for verification
@@ -62,15 +63,13 @@ def extract_to_gpkg(
         FileNotFoundError: If gdb_path does not exist
         RuntimeError: If ogr2ogr extraction fails for any layer
         PermissionError: If gdb_path is not readable or gpkg_path not writable
-        FileExistsError: If gpkg_path exists and overwrite=False
+        FileExistsError: If gpkg_path exists at start or installation and overwrite=False
     """
-    if gpkg_path.exists():
-        if not overwrite:
-            raise FileExistsError(
-                f"Output GeoPackage already exists: {gpkg_path}. "
-                f"Use overwrite=True to replace it."
-            )
-        gpkg_path.unlink()
+    if gpkg_path.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output GeoPackage already exists: {gpkg_path}. "
+            f"Use overwrite=True to replace it."
+        )
 
     if not gdb_path.exists():
         raise FileNotFoundError(f"Source GDB not found: {gdb_path}")
@@ -79,6 +78,21 @@ def extract_to_gpkg(
 
     gpkg_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Keep the prior output in place until all GDAL writes and counts succeed.
+    # Stage on the same filesystem so the completed file can be installed atomically.
+    with TemporaryDirectory(dir=gpkg_path.parent, prefix=".extract-") as staging:
+        candidate = Path(staging) / gpkg_path.name
+        feature_counts = _extract_layers(gdb_path, candidate)
+        if overwrite:
+            candidate.replace(gpkg_path)
+        else:
+            # An output created by another process during extraction wins.
+            gpkg_path.hardlink_to(candidate)
+        return feature_counts
+
+
+def _extract_layers(gdb_path: Path, gpkg_path: Path) -> dict[str, int]:
+    """Write and count every layer in a new GeoPackage."""
     feature_counts: dict[str, int] = {}
 
     for source_layer, base_name in zip(SOURCE_LAYERS, BASE_LAYER_NAMES, strict=True):

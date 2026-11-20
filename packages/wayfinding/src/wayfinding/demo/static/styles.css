@@ -99,7 +99,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(21rem, 25rem)
 .unit-shape.route-origin { fill: var(--teal); stroke-width: 2; stroke-dasharray: 5 2; }
 .unit-shape.route-destination { fill: var(--coral); stroke-width: 2; stroke-dasharray: 1 2; }
 .unit-shape.route-connected { stroke-width: 1.4; }
-.unit-shape.route-unavailable { fill: #e5e7e5; stroke: #9aa39f; cursor: not-allowed; opacity: .55; }
+.unit-shape.route-unavailable { fill: #e5e7e5; stroke: #9aa39f; cursor: pointer; opacity: .65; }
 .unit-shape.route-unavailable:hover, .unit-shape.route-unavailable:focus { fill: #e5e7e5; }
 .route-segment { fill: none; stroke: #b76a5e; stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 .route-halo { fill: none; stroke: white; stroke-width: 10; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -134,6 +134,17 @@ dd { margin: 0; overflow-wrap: anywhere; }
 form label { display: block; margin-bottom: .35rem; font: .8rem "Trebuchet MS", sans-serif; color: var(--muted); }
 button[type="submit"] { padding: .55rem 1rem; border: 0; border-radius: 4px; color: white; background: var(--teal); cursor: pointer; }
 .route-controls { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .4rem .7rem; align-items: center; }
+.endpoint-search { border-top: 1px solid var(--line); }
+.endpoint-search summary { color: var(--teal-dark); }
+.endpoint-search[open] { padding-bottom: .75rem; }
+.endpoint-search + #route-form { margin-top: .5rem; }
+.endpoint-search :is(input, select) { width: 100%; min-height: 44px; }
+.endpoint-search [size] { padding: .25rem; font-size: .85rem; }
+.endpoint-search [size] option { padding: .35rem .25rem; }
+.endpoint-search-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: .5rem 0; }
+.endpoint-search label, .endpoint-search p { display: block; margin: 0 0 .25rem; color: var(--muted); font-size: .85rem; }
+.endpoint-search p { margin: .4rem 0; overflow-wrap: anywhere; }
+.endpoint-search button { min-height: 44px; padding: .5rem .65rem; border: 1px solid var(--teal); border-radius: 4px; color: var(--teal-dark); background: white; cursor: pointer; }
 .route-panel form { display: grid; gap: .75rem; }
 .route-options-status { margin: 0; padding: .65rem .75rem; border-left: 3px solid var(--teal); background: #edf4f1; font-size: .85rem; line-height: 1.45; }
 .route-options-status[data-state="error"] { border-color: var(--coral); background: #f8e9e4; }
@@ -250,3 +261,8 @@ footer { padding: .7rem 1.5rem; color: var(--muted); background: var(--surface);
   .campus-disclosure { margin-bottom: .4rem; }
   #campus-heading { font-size: 1rem; margin-bottom: .3rem; }
 }
+
+.route-identity { font-weight: 600; overflow-wrap: anywhere; margin: .5rem 0; }
+#route-draft-status, #route-request-status, #room-route-status { overflow-wrap: anywhere; }
+#route-request-status[data-state="error"] { color: #8b1720; }
+#route-request-status[data-state="pending"] { color: #634b0a; }
