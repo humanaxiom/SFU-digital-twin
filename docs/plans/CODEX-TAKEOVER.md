@@ -1,5 +1,10 @@
 # Codex takeover assessment and plan
 
+The September assessment below is retained as the takeover baseline. For the
+November checkpoint, start with the [handoff](../HANDOFF.md), the [oral history](../ORAL-HISTORY.md)
+and the [Stage D resumption plan](DT-024.md). The [November repository review](../../REPOSITORY-REVIEW.md)
+predates the DT-031–033 fixes and the isolated DT-017 reconstruction.
+
 Date: 2026-09-10
 Status: Local fixes, clean full gates and Docker-only browser checks passed; published-image access, CI activation and physical LAN acceptance remain open. See docs/reports/CODEX-TAKEOVER.md for current evidence.
 Baseline: HEAD `998c477`, plus the existing DT-015 working tree (14 modified files and two untracked files at review start).

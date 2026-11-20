@@ -1,6 +1,10 @@
 # Roadmap
 
-Current client increment: **[DT-024 navigation overhaul](plans/DT-024.md)**. Stage A/B implements the navigation foundation; searchable endpoint drafts (C), synchronized journeys/mobile (D) and integrated acceptance (E) remain pending. [ADR-0017](adr/0017-navigation-state-and-journey.md) defines the contract; the [phase report](reports/DT-024-PHASE-AB.md) records verification. This improves the existing SVG demo and does not complete the future MapLibre phase or promote routing data.
+This checkpoint reports progress in the local implementation workspace based on
+`5ca5186`. The documentation branch contains its plans and evidence. The later
+runnable increments are maintained separately in the workspace.
+
+As of 2026-11-20 the SVG demo supports building-scoped floors, room search and explicit route preview. Stage C passed on the accepted artifacts and the isolated Strand candidate. **Next is Stage D** in the [DT-024 plan](plans/DT-024.md), followed by the integrated Stage E acceptance run. The [Preview report](reports/DT-024-PREVIEW.md) records the tested behavior. The [project oral history](ORAL-HISTORY.md) explains how the data and interface decisions developed.
 
 Tracks the delivery phases in
 [docs/02-system-design.md §11](02-system-design.md#11-delivery-phases) against actual status. Kept
@@ -10,17 +14,17 @@ in sync by `doc-writer` after every `judge` APPROVE; the authoritative narrative
 | Phase | Deliverable | Status |
 | --- | --- | --- |
 | 0 | Data profiling, system design, harness scaffolding | ✅ Complete |
-| 1 | ETL → GeoPackage + contracted graph + build report | DT-016 isolated rebuild/source review implemented; DT-017 geometry/source reconciliation next; production promotion open |
+| 1 | ETL → GeoPackage + contracted graph + build report | DT-016/033 isolated builds verified. DT-017 legacy candidate accepted for local review. Revised-source admission and artifact promotion remain open. |
 | 2 | Routing core: profiles, A*, accessible invariant tests | Bounded DT-014 demo implemented; broader phase deferred |
-| 3 | Turn-by-turn instruction generator | DT-018 local guidance/UI verified with fresh browser E2E; DT-017 geometry-quality correction remains separate |
+| 3 | Turn-by-turn instruction generator | DT-018 guidance and DT-024 draft/Preview verified locally. Remaining journey and mobile interactions are tracked in Stage D. |
 | 4 | FastAPI service + search index + tiles | Not started |
 | 5 | MapLibre web client with floor picker and accessible toggle | Not started |
 | 6 | Assistant orchestrator, tool schemas, guardrails, eval suite | Not started |
 | 7 | QR anchor origins; hooks for a future positioning provider | Not started |
 
-Current plans: [DT-016](plans/DT-016.md), [DT-017](plans/DT-017.md),
-[DT-018 route UI](plans/DT-018.md), and
-[DT-023 campus overview/interbuilding routing](plans/DT-023.md).
+Active and reference plans include [DT-024 navigation](plans/DT-024.md),
+[DT-017 source reconciliation](plans/DT-017.md), [DT-023 campus coverage](plans/DT-023.md),
+[DT-016 isolated builds](plans/DT-016.md) and [DT-018 route guidance](plans/DT-018.md).
 DT-023 Stage 0 coverage audit and bounded Stage 1 overview passed fresh Docker
 gates and candidate/accepted browser/API E2E. Remaining Stage 0 GIS reconciliation, outdoor
 routing and campus expansion remain open.

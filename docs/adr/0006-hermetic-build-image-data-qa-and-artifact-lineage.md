@@ -3,6 +3,8 @@
 Status: accepted
 Date: 2026-09-01
 
+[ADR-0024](0024-retire-fixed-output-etl.md) supersedes the individual fixed-output stage commands described below.
+
 ## Context
 
 DT-007 exposes three build-boundary gaps that must be resolved before implementation continues:
@@ -45,8 +47,7 @@ image: ghcr.io/<sfu-project>/wayfinding-build@sha256:<published-digest>
 ```
 
 Compose must not define a `build:` fallback for normal execution. After the digest-pinned image has
-been pulled or preloaded, `make test`, `make lint`, `make type`, `make dataqa`, and DT-007's
-`make etl-graph-contract` perform no `apt`, `pip`, `uv`, or other network installation. Source code
+been pulled or preloaded, `make test`, `make lint`, `make type`, `make dataqa`, and the isolated rebuild perform no `apt`, `pip`, `uv`, or other network installation. Source code
 is mounted from the checkout and imported through `PYTHONPATH`; it is not installed at target
 runtime.
 
@@ -63,7 +64,7 @@ Compose defines two capabilities from the same pinned image:
 - `artifact` mounts the repository and `build/:rw`, but has no source GDB mount. Normalisation,
   graph construction, contraction, tests, lint, type checking, and artifact data-QA use it.
 
-`etl-graph-contract` and `dataqa` must run on `artifact`. Absence of `/data/IndoorWayfinding.gdb` is
+Contraction runs on `artifact-build` and `dataqa` runs on `artifact`. Absence of `/data/IndoorWayfinding.gdb` is
 part of their contract, not merely a convention. The Docker socket is not mounted into either
 service.
 

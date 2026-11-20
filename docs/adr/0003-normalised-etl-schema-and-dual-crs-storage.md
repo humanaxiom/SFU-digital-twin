@@ -3,6 +3,12 @@
 Status: Accepted  
 Date: 2026-08-30
 
+Accessibility interpretation and display are superseded by
+[ADR-0023](0023-facilities-evidence-and-legacy-tags.md). The historical
+`accessible` and `verified_*` fields preserve category-mapping provenance;
+they do not establish audited destination suitability or a verification date.
+In particular, a derived false value is not an explicit negative source claim.
+
 ## Context
 
 DT-004 (Normalise Tables) transforms the 14 raw extracted layers from DT-003 into a normalised

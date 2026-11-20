@@ -229,8 +229,7 @@ edge_cost = length_3d / speed(profile, mode) + penalty(profile, mode)
 | `elevator_only` | **elevator only**, accessibility unverified | 1.0 m/s | elevator +45 s wait |
 | `fewest_transfers` | stairs, elevator | 1.35 m/s | +120 s per level change |
 
-`DELAY` is ignored — it is 99.5 % null (gap **G4**). The elevator wait is a configuration constant,
-not a data value, and is documented as such in the API response.
+`DELAY` is ignored — it is 99.5 % null (gap **G4**). The example speeds and waits above are uncalibrated design assumptions. Facilities has no approved standards for them. The current API reports mapped distance and supplies no travel-time estimate.
 
 ### 4.2 Elevator-only mode — exactly what it does and does not claim
 
@@ -544,14 +543,30 @@ All tests run in the same container as the ETL.
 
 ## 12. Open questions for stakeholders
 
-1. Can Facilities supply a **closures / after-hours restrictions feed**? Without it the router can
-   direct users through locked doors (gap **G9**).
-2. Is an **accessibility survey** (door widths, powered doors, elevator dimensions) feasible? It is
-   the single highest-value data addition and would let the accessible profile make real claims
-   instead of a stairs-exclusion claim (gaps **G1**, **G3**).
-3. Are **elevator outage** notifications available? With only 21 elevator transitions, one outage can
-   sever step-free connectivity entirely.
-4. Will more buildings be delivered as AIIM extracts in the same schema? The ETL assumes yes (gap **G8**).
-5. Is there an authoritative **room-name/alias** source (department names, "Halpern Centre") to enrich
-   the search index beyond `ROOM_ID`?
-6. What are the acceptable elevator-wait and walking-speed constants for the accessible profile?
+Facilities provided the following information for [DT-032](plans/DT-032.md).
+
+1. **Closures and after-hours access.** Facilities has no closures or after-hours restrictions feed.
+   Campus Security may know door schedules and locks. The Facilities app supports manual designation
+   of restricted, closed, and construction areas. The export and integration fields are unconfirmed.
+   For gap **G9**, confirm the responsible owner and whether records can reliably identify the
+   affected place, effective period, and update source. The demo cannot confirm current access.
+2. **Accessibility survey.** Facilities has locations of automatic doors. A detailed accessibility
+   survey, including door and path widths and elevator dimensions, is future work (gaps **G1**, **G3**).
+   Confirm coverage, survey method, and provenance before using any additional records in the demo.
+   Existing room values may come from use-type mappings or legacy defaults. Keep physical accessibility
+   unverified under [ADR-0023](adr/0023-facilities-evidence-and-legacy-tags.md). An elevator-only route
+   excludes stairs from the mapped graph.
+3. **Elevator outages.** Outages sometimes appear in SNAP or on physical notices. Facilities has no
+   automated authoritative feed. Confirm an owner and a reliable way to identify individual elevators
+   and the effective outage period before planning a live integration. The demo cannot confirm current
+   elevator service.
+4. **Future building extracts.** The current room/building schema is consistent. AIIM here refers to
+   Esri's ArcGIS Indoors Information Model used by the existing source. Confirm whether a future
+   export can supply the same layers, keys, coordinate reference system, and update information before
+   treating it as compatible (gap **G8**).
+5. **Identifiers and aliases.** The official fields are Building ID, Building Name, Building Acronym,
+   and Room ID. Department and common names are maintained manually as supplementary labels. Confirm
+   ownership and an export keyed by the official identifiers before adding aliases to search.
+6. **Walking speeds and elevator waits.** Facilities supplied no standards for either value. Section
+   4 describes design assumptions for future work. The demo reports graph distance and has no
+   calibrated travel-time estimates.

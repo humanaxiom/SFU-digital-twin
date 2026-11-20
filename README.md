@@ -1,6 +1,14 @@
 # SFU Indoor Wayfinding — Design Workspace
 
-Current client work: [DT-024](docs/plans/DT-024.md) is being delivered in phases under [ADR-0017](docs/adr/0017-navigation-state-and-journey.md). The first increment implements building-scoped floors, explicit floor entry and protection against stale navigation responses. Searchable endpoint drafts and synchronized journeys remain pending. See the [phase A/B report](docs/reports/DT-024-PHASE-AB.md) for verification and delivery limits.
+**November 20 documentation checkpoint.** This branch records work verified in
+the local implementation workspace on top of `5ca5186`. Its Git snapshot carries
+the documentation, decisions and reports. The newer client, ETL, launcher and
+TLS changes described below are separate local files. Reproduction commands for
+those increments require that implementation workspace and the named artifacts.
+
+The locally verified client supports building-scoped floors, searchable route
+endpoints and explicit Preview. The next increment addresses the remaining
+journey and mobile interactions. [DT-024 plan](docs/plans/DT-024.md) · [Stage C evidence](docs/reports/DT-024-PREVIEW.md)
 
 The [compact navigation follow-up](docs/reports/DT-024-COMPACT.md) adds visible
 building/floor buttons, direct room-map entry and a filterable room list, reducing
@@ -29,6 +37,7 @@ hashes and the revised pathways that still need facility/level reconciliation.
 | [docs/03-harness-design.md](docs/03-harness-design.md) | The AI-agent delivery harness this repo is built with — subagents, slash commands, gates |
 | [docs/generated/](docs/generated) | Raw tool output backing every number in the docs |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | Living project state — read first every session |
+| [Project oral history](docs/ORAL-HISTORY.md) | Chronological account of the decisions, failed assumptions, corrections and open questions |
 | [docs/DOD.md](docs/DOD.md) | Definition of Done / merge gate contract |
 | [docs/SDLC.md](docs/SDLC.md) · [docs/ROADMAP.md](docs/ROADMAP.md) | How a ticket moves end to end; phase status at a glance |
 | [docs/adr/](docs/adr) | Architecture decision records |
@@ -37,8 +46,8 @@ hashes and the revised pathways that still need facility/level reconciliation.
 ## Agent harness
 
 Shared operating instructions live in [AGENTS.md](AGENTS.md); current status lives in
-[docs/HANDOFF.md](docs/HANDOFF.md). Codex is taking over the inherited DT-015 work using
-plan → failing tests → implementation → gates → documentation → final review.
+[docs/HANDOFF.md](docs/HANDOFF.md). The shared delivery workflow uses a ticket
+plan, failing tests, implementation, Docker gates, documentation and independent review.
 Copilot's specialist roles and prompts remain available as optional adapters under
 [`.github/`](.github). The historical design is in
 [docs/03-harness-design.md](docs/03-harness-design.md).
@@ -140,8 +149,20 @@ remains tracked separately in DT-017.
 Make equivalents are `make etl RUN_ID=legacy-01 REBUILD_OPTIONS=--local-image`,
 `make source-review RUN_ID=source-review-01 REBUILD_OPTIONS=--local-image`, and
 `make compare-builds RUN_ID=legacy-01 OTHER_RUN_ID=legacy-02 REBUILD_OPTIONS=--local-image`.
-`make etl` now runs the complete isolated build; individual `etl-*` stage targets
-retain their existing accepted-output behavior.
+Choose an unused run ID for every build. The legacy individual stage targets and
+the fixed-output Python stage CLI are retired. Use the isolated rebuild commands
+above to create a complete candidate and its verification manifest.
+
+New builds reconstruct unambiguous multipart pathways using exact native 3D
+endpoints and retain source part and vertex references. A snapped node can keep
+two paths connected while their unequal native endpoints prevent merging their
+geometries. The older published demo artifacts retain their original behavior.
+See [ADR-0025](docs/adr/0025-exact-multipart-pathways.md).
+
+Compare can read completed, sealed runs made with different code. It verifies
+both artifact ledgers before comparing semantic snapshots. A valid comparison
+with differences writes its report and exits 1. Inspect the report for changes
+in anchors and reachability. Build stages still require matching runtime identity.
 
 Each run retains raw extraction, derived artifacts, `run.json` stage/hash lineage
 and `semantic-snapshot.json`. Comparisons under `build/experiments/comparisons/`
@@ -171,19 +192,66 @@ with the data directory mounted read-only. No GDAL, Python or ArcGIS install is 
 
 ## Start and destroy the developer stack
 
-Docker Desktop must be running. From the repository root, build the local image and start the
-Phase 1 developer containers:
+The normal launcher starts/reuses the developer stack **and** the router-mapped
+public candidate at **https://sfuai.ca:8017/**. From the repository root:
 
 ```powershell
-.\tools\launch-stack.ps1 -Build
+.\launch-stack.ps1 -LocalImage
+```
+
+The router maps public TCP 8017 to `192.168.1.80:18087`; nginx publishes that local
+port, while the exact-topology candidate stays private on `127.0.0.1:18107`.
+Normal startup includes the TLS overlay and mounts existing
+`C:/repos/web/certs/fullchain.pem` and `privkey.pem` read-only. These files stay
+outside Git; the existing certificate owner handles renewal. Reload/restart the
+proxy after certificate replacement. Plain HTTP redirects to HTTPS on port 8017.
+TLS does not repair router loopback; access from the same LAN can still depend
+on the router's support for reaching its public address.
+Both public containers use `unless-stopped`, so Docker restarts them when its
+engine starts after a reboot. Docker Desktop must start when you sign in; the
+container policy does not start Desktop. An intentional `stop external` remains
+stopped until you run the normal launcher again.
+
+`-NoPublicDemo` / `--no-public-demo` skips public startup for an isolated developer
+session without stopping the public service. Dry runs print both startup commands.
+Repeat runs reuse this checkout's existing developer project and fixed public
+project, and reject unrelated ownership/port conflicts rather than create duplicates.
+
+These checked-in settings explicitly use the cached local build image and existing
+`sh-navigation-exact-20260923` artifacts. The developer stack on 18007 is preserved.
+To withdraw public access:
+
+```powershell
+docker compose -p sfudt-sh-navigation-candidate --env-file infra/wayfinding-public.env -f infra/docker-compose.candidate.yml stop external
+```
+
+See [ADR-0020](docs/adr/0020-router-nat-demo-publication.md),
+[ADR-0021](docs/adr/0021-integrated-public-startup-and-recovery.md) and
+[ADR-0022](docs/adr/0022-public-demo-tls.md).
+
+Docker Desktop must be running. From the repository root, build the local image and start the
+Phase 1 developer containers and public candidate. The root PowerShell entrypoint
+forwards to `tools/launch-stack.ps1`. Skip the `docker build` command if the local
+image already exists:
+
+```powershell
+docker build -f infra/Dockerfile.build -t wayfinding-build:local .
+.\tools\launch-stack.ps1 -LocalImage
 ```
 
 ```sh
-./tools/launch-stack.sh --build
+docker build -f infra/Dockerfile.build -t wayfinding-build:local .
+./tools/launch-stack.sh --local-image
 ```
 
+Omit `-LocalImage` / `--local-image` to use the published digest for the developer
+stack; registry access is required. Public startup uses the explicit image in
+`infra/wayfinding-public.env`. `-Build` / `--build` alone does not build the local image when
+the Compose file already specifies a published digest.
+
 The launcher prints the selected Compose project, normally `sfudt-wayfinding-18000`. Keep that exact
-name: if port 18000 is occupied, the launcher advances in blocks of ten and may print a name such as
+name: an existing project from this checkout is reused; for a new stack, occupied
+ports advance the launcher in blocks of ten and it may print a name such as
 `sfudt-wayfinding-18010`. The launcher starts healthy `artifact`, `source-etl`, and `demo` containers
 and prints a machine-name URL such as `http://<machine-name>:18007/`. This is a trusted LAN demo
 with no authentication and no TLS. Restrict the selected port to the intended private network or
@@ -213,10 +281,21 @@ width, path width, slope, powered doors, surface, closures, opening hours, door 
 status. The demo has no public-map geometry, nearest-place ranking, travel-time estimate, live
 status, or LLM dependency.
 
-The route form first offers destinations connected to the selected origin under the chosen routing
-profile, with a count and a clear graph-based availability explanation. The full room catalog remains
-available, so an intentionally selected unsupported destination still produces its explicit failure
-message. A `same_anchor` result means two eligible rooms share an anchor but have no positive-length
+In Directions, open **Search From rooms** or **Search To rooms** and enter a room ID,
+building name, acronym or building ID. Use Building and Floor to narrow the list.
+Check the floor when two rooms share a label. Select the room and use the button
+below the results to set that endpoint. Selecting a room on the map or in the
+floor list opens its record. Use **Start here** or **Directions here** to set it
+as an endpoint. You can also enter an exact directions request in the assistant.
+Review the rooms and profile, then choose **Preview route**.
+
+While you edit, the map and instructions name the rooms and profile of the
+displayed route. If a replacement fails, the previous route stays visible with
+its original label. **Clear** removes the draft and displayed route and keeps
+the room, floor and camera you were inspecting.
+Once a starting room is selected, destination search shows the connection status
+for the chosen profile. The existing destination menu offers mapped choices.
+A `same_anchor` result means two eligible rooms share an anchor but have no positive-length
 walking path; it is reported separately from a connected route and does not create a segment or imply
 door access. Availability describes the directed measured graph only. It does not certify guidance
 geometry, door traversal, or physical accessibility.
@@ -242,11 +321,11 @@ To start the containers and then run the test, lint, type, and artifact data-QA 
 option:
 
 ```powershell
-.\tools\launch-stack.ps1 -Build -Test
+.\tools\launch-stack.ps1 -LocalImage -Test
 ```
 
 ```sh
-./tools/launch-stack.sh --build --test
+./tools/launch-stack.sh --local-image --test
 ```
 
 Destroy the stack by passing the required, exact project name printed during startup. Include the local-image
@@ -277,18 +356,13 @@ Where historical parser output disagrees with `ogrinfo`, **`ogrinfo` is authorit
 
 ## Status
 
-Phase 0 complete: data profiled, findings documented, system designed, and the delivery harness
-scaffolded (`.github/`, `docs/DOD.md`, `docs/HANDOFF.md`). **Phase 1 ETL in progress:** DT-001
-through DT-007 are complete, and DT-013/DT-014 provide the local artifact-backed explorer and
-bounded routing proof of concept. The `packages/wayfinding/` package now
-contains working ETL code producing `build/wayfinding.gpkg` (26 layers: 14 raw + 12 normalised
-dual-CRS) and graph artifacts `build/graph_with_transitions.pkl` (15,587 nodes, 44,952 arcs: 44,826
-pathway + 84 stairs + 42 elevator), `build/node_map.pkl` (44,978 endpoints), and
-`build/graph_with_transitions_stats.json`. Graph exhibits 816 connected components (default) and 840
-(elevator-only, stairs-excluded) due to fragmentation documented in ADR-0005; routing is limited to
-connected regions. This is not wheelchair certification; door width, path width, slope, powered
-doors, and surface remain unverified. Initial local-source inventory and pathway comparison
-are recorded in [local source verification](docs/reports/LOCAL-SOURCE-REVIEW.md);
-revised rebuild and promotion remain deferred. See
-[delivery phases](docs/02-system-design.md#11-delivery-phases) and
-[docs/HANDOFF.md](docs/HANDOFF.md) for current state and next steps.
+The pilot covers AQ, ECC and Strand Hall. It supports room search, explicit route
+preview and floor-by-floor directions over the supplied indoor network. Stage C has
+passed local Docker and browser verification. Stage D covers the remaining journey
+and mobile interactions. See the [roadmap](docs/ROADMAP.md) and [handoff](docs/HANDOFF.md).
+
+Connectivity depends on the artifact. The original endpoint graph measured 816
+default and 840 elevator-only components. The isolated DT-017 legacy candidate
+measured 4 and 13 respectively after exact topology and multipart reconstruction.
+Candidate promotion and admission of the 141 revised pathways remain open.
+Physical accessibility is unverified. See the [geometry comparison](docs/reports/DT-017.md).

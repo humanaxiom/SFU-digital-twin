@@ -3,6 +3,8 @@
 Status: Accepted  
 Date: 2026-08-31
 
+[ADR-0025](0025-exact-multipart-pathways.md) supersedes stored-order multipart pathway assembly and requires native-coordinate preservation at contraction joins.
+
 ## Context
 
 DT-005 (Graph Node Snapping and Raw Graph Construction) transforms the over-noded pathway geometry

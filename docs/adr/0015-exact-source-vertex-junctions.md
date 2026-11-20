@@ -1,7 +1,8 @@
 # 15. Experimental exact source-vertex junctions
 
 Status: superseded for new-build defaults by ADR-0018, 2026-09-23. The experimental
-evidence and endpoint-mode comparison contract remain historical.
+evidence and endpoint-mode comparison contract remain historical. ADR-0025
+supersedes the multipart pathway exclusion.
 
 ## Evidence
 

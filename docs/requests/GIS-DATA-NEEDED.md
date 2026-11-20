@@ -1,5 +1,27 @@
 # Data needed from GIS — ECC, AQ and Strand Hall
 
+## Follow-up after the Facilities response, 2026-11-19
+
+For the next existing-data sample, request a building and its rooms using Building
+ID, Building Name, Building Acronym and Room ID. Ask how those identifiers join to
+the mapped levels. If supplementary department or common names are included,
+request their room keys. The repository calls the current source the Esri ArcGIS
+Indoors Information Model (AIIM). Ask which layers, identifiers and export format
+can be provided for another building before assuming the same delivery process.
+
+Ask whether a snapshot of the manually designated restricted areas and the
+automatic-door locations can be shared, with feature IDs, geometry, floor,
+revision date and the meaning of each designation. For temporary restrictions,
+ask who updates them and whether effective or expiry dates exist. Security is a
+possible contact for building schedules and locking policy. Access to that
+information still needs confirmation.
+
+The survey and live-status items below describe future evidence needs. Facilities
+has no detailed width or elevator-dimension survey, authoritative automated outage
+feed, or established walking-speed and elevator-wait constants. SNAP and posted
+notices are potential human information sources. The current request prioritizes
+existing records. A later survey would need its own scope and owner.
+
 We have the three local geodatabases. Please provide the following corrections or
 reference tables, using stable feature IDs so we can join them to those snapshots.
 
@@ -12,10 +34,11 @@ reference tables, using stable feature IDs so we can join them to those snapshot
 | 2 | Authoritative building/floor display names and, where available, signed corridor/landmark names linked to route locations. | Directions should match signs people see, rather than internal GIS identifiers. |
 | 2 | For any accessibility claim: verified widths, slopes, surfaces, powered doors, access restrictions and elevator availability, with survey date and verifier. | “Elevator only” currently means stairs excluded, not verified accessible. |
 
-Please also confirm the intended connected chains for AQ3000 Pathways **9321,
-9328, 9332, 9333, 9346, 9347, 9348, 9352, 9353, 9354, 9356**. Their parts connect when
-reordered; our importer currently assembles them incorrectly. We will fix the importer
-and do not need the original files edited in place.
+The [DT-017 exclusion ledger](../reports/DT-017-exclusions.csv) lists the 141
+revised pathway FIDs and their fingerprints. A keyed assignment should identify
+the source revision, intended facility and level (or outdoor classification),
+supporting record and reviewer. The eleven AQ3000 multipart features are handled
+separately in a legacy candidate using exact stored segment coordinates.
 
 Preferred delivery: a versioned FileGDB/GeoPackage update or keyed correction table,
 with source snapshot, field definitions, CRS/vertical datum, revision date and verifier.

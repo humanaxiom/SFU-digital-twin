@@ -3,6 +3,11 @@
 Status: accepted for the explicitly requested `sfuai.ca:8007` deployment.
 Date: 2026-09-23.
 
+The fixed publication ports in this record are superseded by
+[ADR-0020](0020-router-nat-demo-publication.md) for the user-confirmed 2026-10-08
+NAT deployment: public 8017 → local edge 18087, private candidate 18107. The
+remaining proxy controls and read-only scope below remain authoritative.
+
 ## Context
 
 ADR-0010 permits only a bounded trusted-LAN publication and explicitly excludes
