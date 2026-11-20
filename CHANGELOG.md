@@ -4,6 +4,13 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — first Burnaby overview expansion
+
+- A separate local preview shows the Room Finder footprint for Applied Sciences
+  Building (ASB, 038) alongside AQ, ECC and Strand Hall. Users can search for ASB
+  and inspect its outline. Its building view explains the available coverage.
+  [Source and verification record](docs/reports/DT-023-ASB-INTAKE.md)
+
 ## Unreleased — journey navigation
 
 - Browsing another floor or the campus map preserves the selected route

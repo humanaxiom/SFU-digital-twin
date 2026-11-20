@@ -10,6 +10,8 @@ from typing import Any
 
 from osgeo import ogr
 
+from wayfinding.overview_footprint import validate_screen
+
 REQUIRED_FIELDS = {
     "facility_26910": {"facility_id", "code", "name"},
     "level_26910": {"level_id", "facility_id", "short_name", "vertical_order"},
@@ -60,7 +62,14 @@ def _accessible(value: Any) -> bool | None:
 class ArtifactRepository:
     """Expose the narrow, public DT-013 view of a normalized GeoPackage."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self, path: str | Path, *, overview_footprint_path: str | Path | None = None
+    ) -> None:
+        self.overview_footprint = (
+            self._load_overview_footprint(Path(overview_footprint_path))
+            if overview_footprint_path is not None
+            else None
+        )
         self.path = Path(path)
         if not self.path.is_file():
             raise ArtifactUnavailableError("The normalized demo artifact is unavailable.")
@@ -82,11 +91,51 @@ class ArtifactRepository:
             }
             if not required_fields <= actual_fields:
                 dataset = None
-                raise ArtifactUnavailableError(
-                    "The normalized demo artifact schema is incomplete."
-                )
+                raise ArtifactUnavailableError("The normalized demo artifact schema is incomplete.")
         dataset = None
         self.artifact_sha256 = hashlib.sha256(self.path.read_bytes()).hexdigest()
+
+    @classmethod
+    def _load_overview_footprint(cls, path: Path) -> dict[str, Any]:
+        """Validate the trusted ASB screen without admitting any routing records."""
+        try:
+            if path.stat().st_size > 1024 * 1024:
+                raise ValueError("Footprint screen is too large")
+            value = validate_screen(json.loads(path.read_text(encoding="utf-8")))
+            projected = value["footprint_26910"]
+            attributes = value["native_response"]["features"][0]["attributes"]
+            return {
+                "facility_id": "ROOMFINDER_BURNABY_038",
+                "code": "ASB",
+                "name": "Applied Sciences Building",
+                "geometry": projected["geometry"],
+                "bounds": projected["bounds"],
+                "levels": [],
+                "coverage": "overview_only",
+                "geometry_status": "available",
+                "known_entrances": [],
+                "verified_building_destination": False,
+                "outdoor_routing": "unavailable",
+                "provenance": {
+                    "source_url": value["source_url"],
+                    "source_name": attributes["Name"],
+                    "directory_url": "https://www.sfu.ca/fs/campus-maps/directory-of-buildings/applied-sciences-building.html",
+                    "screen_sha256": value["screen_sha256"],
+                    "native_response_sha256": value["native_response_sha256"],
+                },
+            }
+        except (
+            OSError,
+            ValueError,
+            TypeError,
+            KeyError,
+            IndexError,
+            RuntimeError,
+            AttributeError,
+        ) as exc:
+            raise ArtifactUnavailableError(
+                "The reviewed overview footprint is unavailable or invalid."
+            ) from exc
 
     def _dataset(self) -> Any:
         dataset = ogr.Open(str(self.path), 0)
@@ -94,11 +143,18 @@ class ArtifactRepository:
             raise ArtifactUnavailableError("The normalized demo artifact is unavailable.")
         return dataset
 
-    def facilities(self) -> list[dict[str, Any]]:
+    def facilities(self, *, include_overview: bool = True) -> list[dict[str, Any]]:
         dataset = self._dataset()
         layer = dataset.GetLayerByName("facility_26910")
         records = [_fields(feature, ("facility_id", "code", "name")) for feature in layer]
         dataset = None
+        if include_overview and self.overview_footprint is not None:
+            records.append(
+                {
+                    key: self.overview_footprint[key]
+                    for key in ("facility_id", "code", "name", "provenance")
+                }
+            )
         return sorted(records, key=lambda item: (item["name"] or "", item["facility_id"]))
 
     @staticmethod
@@ -138,6 +194,17 @@ class ArtifactRepository:
         xs, ys = zip(*values, strict=True)
         return [min(xs), min(ys), max(xs), max(ys)]
 
+    def campus_provenance(self) -> dict[str, Any]:
+        """Identify the separate sources without changing ordinary pilot provenance."""
+        provenance = self.provenance("facility_26910")
+        if self.overview_footprint is not None:
+            provenance = {
+                "source": "normalized indoor artifact and reviewed RoomFinder footprint",
+                "indoor_artifact": provenance,
+                "overview_footprints": [self.overview_footprint["provenance"]],
+            }
+        return provenance
+
     def campus_overview(self) -> dict[str, Any]:
         dataset = self._dataset()
         layer = dataset.GetLayerByName("facility_26910")
@@ -172,6 +239,9 @@ class ArtifactRepository:
                 }
             )
         dataset = None
+        if self.overview_footprint is not None:
+            facilities.append(self.overview_footprint)
+            all_bounds.append(self.overview_footprint["bounds"])
         campus_bounds = None
         if all_bounds:
             campus_bounds = [
@@ -184,11 +254,13 @@ class ArtifactRepository:
         return {
             "version": "campus-overview-v1",
             "crs": "EPSG:26910",
-            "scope": "three-building-pilot",
+            "scope": "burnaby-overview-preview"
+            if self.overview_footprint
+            else "three-building-pilot",
             "campus_inventory_complete": False,
             "facilities": facilities,
             "bounds": campus_bounds,
-            "provenance": self.provenance("facility_26910"),
+            "provenance": self.campus_provenance(),
             "limitations": [
                 "Pilot inventory is incomplete for the Burnaby campus.",
                 "No verified outdoor or building destinations are available.",

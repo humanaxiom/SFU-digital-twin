@@ -1,0 +1,47 @@
+# Optional local ASB preview over the browser verification stack's accepted artifacts.
+services:
+  demo:
+    ports:
+      - "127.0.0.1:${WAYFINDING_OVERVIEW_PORT:-18183}:8080"
+    networks:
+      browser:
+        aliases: [demo]
+      overview-host: {}
+    volumes:
+      - type: bind
+        source: ${WAYFINDING_OVERVIEW_FOOTPRINT:?Provide the absolute path to the verified ASB screen JSON}
+        target: /review/asb.json
+        read_only: true
+        bind:
+          create_host_path: false
+    command:
+      - python
+      - -m
+      - wayfinding.demo.server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --artifact
+      - /data/wayfinding.gpkg
+      - --graph
+      - /data/graph_contracted.pkl
+      - --stats
+      - /data/graph_contracted_stats.json
+      - --overview-footprint
+      - /review/asb.json
+  browser:
+    environment:
+      WAYFINDING_BROWSER_BASE_URL: http://demo:8080
+    volumes:
+      - ../build/navigation-review:/workspace/build/navigation-review:rw
+      - type: bind
+        source: ${WAYFINDING_OVERVIEW_FOOTPRINT:?Provide the absolute path to the verified ASB screen JSON}
+        target: /asb/footprint.json
+        read_only: true
+        bind:
+          create_host_path: false
+    command: ["node", "/workspace/tests/browser/asb-overview.cjs"]
+
+networks:
+  overview-host: {}

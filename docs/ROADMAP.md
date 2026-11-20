@@ -15,7 +15,11 @@ source and interface decisions behind the pilot.
    scene reuse. Stage E replayed the pilot in Docker against accepted and
    candidate artifacts.
    [Navigation plan](plans/DT-024.md)
-2. **Add more buildings across SFU Burnaby.** Continue DT-023 with authoritative
+2. **Add more buildings across SFU Burnaby.** Applied Sciences Building (ASB,
+   building 038) is the first footprint screened for the isolated overview.
+   The [ASB intake record](reports/DT-023-ASB-INTAKE.md) distinguishes its
+   public footprint from the indoor coverage of AQ, ECC and Strand Hall.
+   Continue DT-023 with authoritative
    building records and explicit coverage for each addition. Admit indoor or
    interbuilding routes when the corresponding pathways, entrances and connections
    are verified. Use isolated candidates, measure coverage and run the browser and

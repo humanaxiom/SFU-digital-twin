@@ -1,5 +1,27 @@
 # Data needed from GIS — ECC, AQ and Strand Hall
 
+## First additional Burnaby building
+
+For the first expansion sample, we propose **Applied Sciences Building (ASB),
+building number 038**. Facilities lists three floor levels. We need the exact
+level identifiers and their relationships to the room records. The public Room
+Finder Building Basemap has polygon geometry and fields for campus, building
+code, acronym and name. [Facilities building profile](https://www.sfu.ca/fs/campus-maps/directory-of-buildings/applied-sciences-building.html) · [Room Finder building layer](https://viewsfu-prd.its.sfu.ca/fsgis/rest/services/RoomFinder/RoomFinder2023_CampusMap/MapServer/0)
+
+1. The directory and Room Finder building code (`bl_id`) both give `038`.
+   Which facility ID corresponds to this building in your indoor data?
+   For the overview, which footprint and revision should we use, and how should
+   SFU be credited when the map is shared?
+2. Can you provide the ASB levels and rooms in your existing export format?
+   Please include the exact building and level keys, recorded floor labels,
+   Room IDs, geometry and coordinate reference. Supplementary names are welcome
+   when they have a room key.
+3. If available, include the mapped ASB pathways, stairs and elevators with
+   their level relationships, and the existing manual restriction designations.
+   These records let us test which room pairs have a mapped connection. A
+   route from ASB to another building also needs the authored entrance and
+   exterior path connections described below.
+
 ## Follow-up after the Facilities response, 2026-11-19
 
 For the next existing-data sample, request a building and its rooms using Building

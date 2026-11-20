@@ -90,6 +90,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(21rem, 25rem)
 #map-context { align-self: center; color: var(--muted); font-size: .85rem; }
 .campus-frame { min-height: 20rem; height: 43vh; }
 .campus-shape { fill: #c7dfd8; stroke: var(--teal-dark); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+.campus-shape.overview-only { fill: #f3dec4; stroke: #855920; stroke-dasharray: 5 2; }
 .campus-shape:hover, .campus-shape:focus, .campus-shape.selected { fill: #edb19e; stroke: var(--coral); stroke-width: 3; }
 .campus-label { fill: var(--ink); font-size: 10px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; paint-order: stroke; stroke: white; stroke-width: 2px; stroke-linejoin: round; }
 .level-shape { fill: #eef1eb; stroke: #596762; stroke-width: .45; vector-effect: non-scaling-stroke; }

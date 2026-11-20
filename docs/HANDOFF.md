@@ -1,6 +1,20 @@
 # Handoff — Living Project State
 
-## Start here — navigation pilot and Burnaby expansion
+## Current Burnaby expansion — ASB footprint
+
+PR #7 merged the navigation pilot at `fa7b24f`. The isolated expansion
+preview adds Applied Sciences Building (ASB, 038) to the overview alongside
+AQ, ECC and Strand Hall. A live SFU Room Finder query and the Facilities
+directory agree on its identity. The available local indoor data covers the
+original three buildings. ASB has no selectable floor, room or route endpoint.
+
+The [intake and verification record](reports/DT-023-ASB-INTAKE.md) identifies
+the source snapshot, reproduction commands and tests. Resume with the ASB
+facility key and level/room export described in the
+[Facilities request](requests/GIS-DATA-NEEDED.md). The default pilot and
+the isolated preview have separate launch configurations.
+
+## Navigation pilot and Burnaby expansion handoff
 
 The Stage D client is committed at `628c3c2`. It preserves the selected
 chronological instruction while a user explores, restores the route camera,

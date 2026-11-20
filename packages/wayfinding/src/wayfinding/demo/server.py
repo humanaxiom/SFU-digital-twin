@@ -405,7 +405,10 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         values: list[dict[str, Any]],
         layer: str,
     ) -> dict[str, Any]:
-        return self._record({name: values, "count": len(values)}, layer)
+        response = self._record({name: values, "count": len(values)}, layer)
+        if name == "facilities" and self.repository.overview_footprint is not None:
+            response["provenance"] = self.repository.campus_provenance()
+        return response
 
     def _get_route_options(self, query_string: str) -> None:
         routing = self.routing_service
@@ -507,10 +510,13 @@ def create_server(
     graph_path: str | Path | None = None,
     stats_path: str | Path | None = None,
     allowed_host: str | None = None,
+    overview_footprint_path: str | Path | None = None,
 ) -> DemoHTTPServer:
     server = DemoHTTPServer((host, port), DemoRequestHandler, allowed_host=allowed_host)
     try:
-        server.repository = ArtifactRepository(artifact_path)
+        server.repository = ArtifactRepository(
+            artifact_path, overview_footprint_path=overview_footprint_path
+        )
         server.routing_service = (
             RoutingService.from_artifacts(artifact_path, graph_path, stats_path)
             if graph_path is not None and stats_path is not None
@@ -529,6 +535,7 @@ def main() -> None:
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--graph", type=Path, required=True)
     parser.add_argument("--stats", type=Path, required=True)
+    parser.add_argument("--overview-footprint", type=Path)
     arguments = parser.parse_args()
     server = create_server(
         arguments.host,
@@ -536,6 +543,7 @@ def main() -> None:
         arguments.artifact,
         arguments.graph,
         arguments.stats,
+        overview_footprint_path=arguments.overview_footprint,
     )
     try:
         server.serve_forever()

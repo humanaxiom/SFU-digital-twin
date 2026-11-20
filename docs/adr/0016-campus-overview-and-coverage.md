@@ -1,6 +1,13 @@
 # 16. Three-building campus overview and measured coverage
 
-DT-024 planning scope note (2026-09-17): [ADR-0017](0017-navigation-state-and-journey.md) supersedes global-order Floor options, aligned-building filtering and building-floor fallback selection for the planned overhaul with exact building-scoped floor state. The current runtime still follows the historical interaction contract below. Campus API, coverage, artifact/source boundaries and other requirements remain applicable; the new UI is not yet implemented.
+[ADR-0026](0026-burnaby-overview-footprint-preview.md) extends this contract
+for the opt-in local ASB preview. The base three-building scope below remains
+the default. [ADR-0017](0017-navigation-state-and-journey.md) governs current
+navigation and floor selection.
+
+DT-024 superseded the original global-order floor picker and building-selection
+fallback with exact building-scoped floor state. The historical design below
+records the original three-building overview.
 
 Status: accepted for the bounded DT-023 Stage 0/1 implementation, 2026-09-11.
 

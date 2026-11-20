@@ -154,7 +154,8 @@ function zoomCampus(factor) {
 function renderCampusBuildings() {
   const query = campusSearch.value.trim().toLocaleLowerCase();
   const matches = (campusData?.facilities || []).filter(item =>
-    [item.name, item.code, item.facility_id].some(value => String(value || "").toLocaleLowerCase().includes(query)));
+    [item.name, item.code, item.facility_id, item.provenance?.source_name]
+      .some(value => String(value || "").toLocaleLowerCase().includes(query)));
   document.querySelector("#campus-buildings").replaceChildren(...matches.map(item => {
     const button = document.createElement("button");
     button.type = "button";
@@ -165,8 +166,8 @@ function renderCampusBuildings() {
     return button;
   }));
   document.querySelector("#campus-status").textContent = matches.length
-    ? `${matches.length} pilot building${matches.length === 1 ? "" : "s"} found. Visibility does not imply a route connection.`
-    : "No matching building in this three-building pilot. The campus inventory is incomplete.";
+    ? `${matches.length} building${matches.length === 1 ? "" : "s"} found. Visibility does not imply a route connection.`
+    : "No matching building in this map. The campus inventory is incomplete.";
 }
 
 function selectCampusBuilding(facilityId) {
@@ -213,7 +214,8 @@ function renderQuickNavigation() {
       button.type = "button";
       button.dataset.buildingId = facility.facility_id;
       button.textContent = facility.code || facility.name;
-      button.setAttribute("aria-label", `${facility.code} · ${facility.name}. Show rooms.`);
+      const hasFloors = allLevels.some(level => level.facility_id === facility.facility_id);
+      button.setAttribute("aria-label", `${facility.code} · ${facility.name}. ${hasFloors ? "Show rooms." : "Overview only."}`);
       button.addEventListener("click", () => openBuilding(facility.facility_id));
       return button;
     }));
@@ -241,6 +243,12 @@ function renderQuickNavigation() {
 
 function renderCampus() {
   if (!campusData) return;
+  if (campusData.scope === "burnaby-overview-preview") {
+    document.querySelector("#campus-heading").textContent = "Burnaby building overview";
+    document.querySelector(".campus-disclosure").textContent =
+      "AQ, ECC and SH have indoor data. ASB shows the Room Finder footprint only.";
+    document.querySelector("#campus-map-title").textContent = "Burnaby preview with four building footprints";
+  }
   if (validCampusBounds(campusData.bounds)) campusOrigin = campusData.bounds.slice(0, 2);
   campusMap.querySelectorAll("g").forEach(node => node.remove());
   const layer = element("g");
@@ -249,8 +257,9 @@ function renderCampus() {
     const polygons = item.geometry.type === "Polygon" ? [item.geometry.coordinates] : item.geometry.coordinates;
     const d = polygons.flatMap(polygon => polygon.map(ring => ring.map((point, index) =>
       `${index ? "L" : "M"}${point[0] - campusOrigin[0]} ${campusOrigin[1] - point[1]}`).join(" ") + " Z")).join(" ");
-    const shape = element("path", {d, class: "campus-shape", tabindex: 0, role: "button",
-      "aria-label": `${item.code} · ${item.name}. Show rooms.`, "fill-rule": "evenodd"});
+    const footprintOnly = item.coverage === "overview_only";
+    const shape = element("path", {d, class: footprintOnly ? "campus-shape overview-only" : "campus-shape", tabindex: 0, role: "button",
+      "aria-label": `${item.code} · ${item.name}. ${footprintOnly ? "Overview only." : "Show rooms."}`, "fill-rule": "evenodd"});
     shape.dataset.campusFacilityId = item.facility_id;
     shape.addEventListener("click", () => openBuilding(item.facility_id));
     shape.addEventListener("keydown", event => {

@@ -1,6 +1,10 @@
 # SFU Indoor Wayfinding — Design Workspace
 
-**November 20 wayfinding checkpoint.** This review branch carries the client,
+The optional Burnaby overview preview adds a fourth footprint, Applied Sciences
+Building (ASB, 038), alongside the three indoor pilot buildings. Launch it with
+a verified local Room Finder snapshot. [Preview instructions and coverage](docs/reports/DT-023-ASB-INTAKE.md)
+
+**November 20 wayfinding checkpoint.** The merged pilot includes the client,
 ETL, tests, launchers, TLS and recovery configuration verified on top of
 `5ca5186`, alongside their decisions and reports. To reproduce the checks,
 provide the documented Docker images and the named local datasets or artifacts.

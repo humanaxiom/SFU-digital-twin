@@ -115,7 +115,7 @@ def respond(
         )
 
     if "facilit" in normalized or "building" in normalized:
-        facilities = repository.facilities()
+        facilities = repository.facilities(include_overview=False)
         return _response(
             "facility_list",
             "Facilities: " + ", ".join(item["name"] for item in facilities),

@@ -54,6 +54,8 @@ assert.match(nodes.get('#campus-details').children.map(n=>n.textContent||'').joi
 assert.equal(nodes.get('#facility-select').value,'SH');
 assert.equal(nodes.get('#level-select').value,'');
 assert.equal(nodes.get('#level-select').disabled,true);
+assert.match(nodes.get('#building-buttons').children.find(button=>button.dataset.buildingId==='SH')
+  .getAttribute('aria-label'), /overview only/i);
 assert.equal(run('activeRoute.fixture'),'retained');
 assert.equal(run('routeDraft.origin'),'roomA');
 assert.equal(run('routeDraft.destination'),'roomB');
