@@ -5,10 +5,26 @@ verification evidence for the increments developed on top of `5ca5186`.
 
 As of 2026-11-20 the SVG demo supports building-scoped floors, room search and explicit route preview. Stage C passed on the accepted artifacts and the isolated Strand candidate. **Next is Stage D** in the [DT-024 plan](plans/DT-024.md), followed by the integrated Stage E acceptance run. The [Preview report](reports/DT-024-PREVIEW.md) records the tested behavior. The [project oral history](ORAL-HISTORY.md) explains how the data and interface decisions developed.
 
-Tracks the delivery phases in
-[docs/02-system-design.md §11](02-system-design.md#11-delivery-phases) against actual status. Kept
-in sync by `doc-writer` after every `judge` APPROVE; the authoritative narrative state lives in
-[docs/HANDOFF.md](HANDOFF.md) — this file is the at-a-glance table.
+## Rollout order
+
+1. **Finish navigation on the three-building pilot.** Complete the remaining
+   journey, mobile and scene work in Stage D. Close DT-024 with Stage E’s
+   integrated Docker browser and API acceptance.
+   [Navigation plan](plans/DT-024.md)
+2. **Add more buildings across SFU Burnaby.** Continue DT-023 with authoritative
+   building records and explicit coverage for each addition. Admit indoor or
+   interbuilding routes when the corresponding pathways, entrances and connections
+   are verified. Use isolated candidates, measure coverage and run the browser and
+   API checks against the exact artifacts under review.
+   [Campus plan](plans/DT-023.md) · [GIS evidence request](requests/GIS-DATA-NEEDED.md)
+3. **Extend to other SFU campuses after the Burnaby expansion.** Scope each
+   campus with its source owner and confirm the building and floor identifiers,
+   coordinate references and coverage before planning admission. Define and review
+   any campus selection or data contract changes when that work is scoped.
+
+The rollout sequence sets delivery priorities. The
+[handoff](HANDOFF.md) records verified state and operational decisions. The table
+below follows the broader [design phases](02-system-design.md#11-delivery-phases).
 
 | Phase | Deliverable | Status |
 | --- | --- | --- |
