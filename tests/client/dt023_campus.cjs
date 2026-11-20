@@ -23,7 +23,7 @@ class Node {
   }
 }
 const document={querySelector(s){if(!nodes.has(s))nodes.set(s,new Node(s.startsWith('#')&&s.includes('select')?'select':'div'));return nodes.get(s);},querySelectorAll(){return [];},createElement(name){return new Node(name);},createElementNS(_ns,name){return new Node(name);}};
-const context=vm.createContext({document,console,fetch:()=>new Promise(()=>{})});
+const context=vm.createContext({...require('./browser-timers.cjs'),document,console,fetch:()=>new Promise(()=>{})});
 const run=s=>vm.runInContext(s,context);
 run(fs.readFileSync('packages/wayfinding/src/wayfinding/demo/static/app.js','utf8'));
 run(`campusData={bounds:[500000,5400000,500300,5400200],facilities:[

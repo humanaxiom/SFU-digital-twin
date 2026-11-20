@@ -8,6 +8,8 @@ import pytest
 
 
 @pytest.mark.parametrize("case", [
+    "scene_headers_deadline_retry", "scene_body_deadline_retry",
+    "scene_late_body_preserves_cache_and_newer_floor",
     "two_room_clicks_submit_without_details", "room_click_mode_cancels_waiting_destination",
     "newer_room_a_cancels_waiting_destination", "explicit_edit_cancels_waiting_room_click",
     "room_click_retains_newer_floor",

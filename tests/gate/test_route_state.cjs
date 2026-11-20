@@ -15,6 +15,7 @@ function routeResponse({origin, destination, profile}) {
 function client() {
   const nodes = new Map();
   const context = vm.createContext({
+    ...require('../client/browser-timers.cjs'),
     console,
     fetch: () => new Promise(() => {}), // Leave bootstrap pending; isolate route interactions.
     document: {

@@ -291,6 +291,12 @@ can reuse them. DT-036 measured about 18 seconds to readiness on this machine;
 the largest floors still retain all their geometry. See the
 [performance verification](docs/reports/DT-036.md).
 
+If floor loading stalls, the previous floor remains labeled and **Retry** becomes
+available after the request deadline. Retry loads the selected floor again.
+An already-open tab keeps its loaded client code across server updates; open
+`/index.html` on the running demo's origin as a fresh document to load the current
+client (for the navigation candidate, `http://127.0.0.1:18107/index.html`).
+
 To show directions, choose a building and floor, click a starting room A, then
 click a connected destination B on the map or in the room list. Directions appear
 automatically. You can change floors between A and B. Further room clicks keep A

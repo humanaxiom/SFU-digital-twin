@@ -1,5 +1,25 @@
 # Handoff — Living Project State
 
+## Bounded floor-request recovery (DT-037, 2026-11-20)
+
+The user reported a retained tab waiting on AQ 6000 while showing AQ 3000, with
+start room AQ3024.1. [DT-037](plans/DT-037.md) reproduced a genuine indefinite-
+wait defect by holding a scene body: its cached pending promise prevented a new
+GET and kept Retry hidden. That mechanism originated with the Stage D in-flight
+scene cache; the user's specific transport cause remains unconfirmed.
+
+The tested client now gives stalled headers/body delivery a 10 s deadline and
+exposes existing Retry, preserving the previous scene/endpoints, newer navigation
+and cache ownership. Held-body/header recovery and all existing route E2Es passed.
+Full Docker package: 695 passed, 16 documented skips, 87.37% coverage; lint,
+types, artifact QA and launchers passed. Final live exact `/` and `/index.html`
+counted replays switched successfully in 630/578 ms, with all 263 rooms and origin kept.
+No backend restart or data/layout change occurred. See [evidence and limits](reports/DT-037.md).
+An already-open document retains its prior client code/state: load
+`http://127.0.0.1:18107/index.html` as a fresh document. Current-client tests do
+not prove the user's retained tab has refreshed; original transport diagnosis
+and synchronous rendering/suspended-tab behavior remain separate questions.
+
 ## Faster complete floor loading (DT-036, 2026-11-20)
 
 The port-18107 navigation demo now uses exact read-only floor filtering and a

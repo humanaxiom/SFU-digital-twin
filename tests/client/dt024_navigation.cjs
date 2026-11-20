@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const browserTimers = require('./browser-timers.cjs');
 assert.ok(fs.existsSync('/.dockerenv'), 'Docker required');
 const nodes = new Map();
 let focusedElement;
@@ -18,9 +19,10 @@ class Node {
   querySelectorAll(selector){const out=[];for(const n of this.children){if(selector===n.tagName||selector.startsWith('.')&&n.attributes.class?.split(' ').includes(selector.slice(1)))out.push(n);out.push(...n.querySelectorAll(selector));}return out;}
 }
 const document={querySelector(s){if(!nodes.has(s))nodes.set(s,new Node(s.includes('select')?'select':'div'));return nodes.get(s);},querySelectorAll(){return [];},createElement:n=>new Node(n),createElementNS:(_ns,n)=>new Node(n)};
-const context=vm.createContext({document,console,CSS:{escape:s=>s},fetch:()=>new Promise(()=>{})});
+const context=vm.createContext({...browserTimers,document,console,CSS:{escape:s=>s},fetch:()=>new Promise(()=>{})});
 const run=s=>vm.runInContext(s,context);
 run(fs.readFileSync('packages/wayfinding/src/wayfinding/demo/static/app.js','utf8'));
+const originalRequest=run('request');
 run(`campusData={facilities:[
  {facility_id:'AQ',code:'AQ',name:'Academic Quadrangle',levels:[{level_id:'AQ0',short_name:'1',vertical_order:0,facility_id:'AQ'},{level_id:'AQ2',short_name:'3',vertical_order:2,facility_id:'AQ'},{level_id:'AQ5',short_name:'5',vertical_order:5,facility_id:'AQ'}]},
  {facility_id:'ECC',code:'ECC',name:'Education Centre',levels:[{level_id:'ECC0',short_name:'G',vertical_order:0,facility_id:'ECC'},{level_id:'ECC2',short_name:'2',vertical_order:2,facility_id:'ECC'}]},
@@ -110,7 +112,76 @@ async function delayedAvailability(fail = false) {
   routeRequests()[0].resolve(routeResult('unit-a','unit-b'));
   await submitted;
 }
+async function deadlineFixture() {
+  await open('AQ0');
+  run("setSceneArtifact('deadline-artifact')");
+  context.request=originalRequest;
+  const timers=new Map(), fetches=[];
+  let nextTimer=0;
+  context.setTimeout=(callback,delay)=>{const id=++nextTimer;timers.set(id,{callback,delay});return id;};
+  context.clearTimeout=id=>timers.delete(id);
+  context.fetch=(url,options)=>new Promise(resolve=>fetches.push({url,options,headers:resolve}));
+  const payload=(id,marker)=>run(`({...scene(${JSON.stringify(id)}),marker:${JSON.stringify(marker)},provenance:[{artifact_sha256:'deadline-artifact'}]})`);
+  function complete(entry,id,marker) {
+    entry.headers({ok:true,text:async()=>JSON.stringify(payload(id,marker))});
+  }
+  async function holdBody(entry) {
+    entry.headers({ok:true,text:()=>new Promise(resolve=>{entry.body=resolve;})});
+    await tick();
+    assert.equal(typeof entry.body,'function','response headers arrived and body remains pending');
+  }
+  async function expire() {
+    assert.equal(timers.size,1,'one whole-scene deadline must bound headers and body');
+    const [id,timer]=[...timers.entries()][0];
+    assert.equal(timer.delay,10000,'floor requests have the specified ten-second deadline');
+    timers.delete(id);timer.callback();await tick();
+  }
+  return {timers,fetches,payload,complete,holdBody,expire};
+}
+
+async function deadlineRetry(bodyPending) {
+  const f=await deadlineFixture();
+  const loading=run("previewFloor('AQ2')");
+  await tick();
+  assert.equal(f.fetches.length,1);
+  if(bodyPending)await f.holdBody(f.fetches[0]);
+  await f.expire();await loading;
+  assert.equal(f.fetches[0].options.signal.aborted,true,'deadline aborts its transport');
+  assert.equal(get('#viewing-floor').dataset.levelId,'AQ0','failed floor retains prior scene');
+  assert.equal(get('#level-select').value,'AQ2','requested floor remains identifiable');
+  assert.equal(get('#floor-map').getAttribute('aria-busy'),'false');
+  assert.equal(get('#retry-scene').hidden,false,'deadline makes visible Retry available');
+  assert.equal(run("loadingScenes.has('AQ2')"),false,'timed-out request cannot pin cache pending');
+  const retry=get('#retry-scene').handlers.click();await tick();
+  assert.equal(f.fetches.length,2,'Retry creates a fresh transport');
+  f.complete(f.fetches[1],'AQ2','retry');await retry;
+  assert.equal(get('#viewing-floor').dataset.levelId,'AQ2');
+  assert.equal(get('#retry-scene').hidden,true);
+  assert.equal(f.timers.size,0,'success clears deadline timer');
+}
+
 const cases={
+ async scene_headers_deadline_retry(){await deadlineRetry(false);},
+ async scene_body_deadline_retry(){await deadlineRetry(true);},
+ async scene_late_body_preserves_cache_and_newer_floor(){
+  const f=await deadlineFixture();
+  const first=run("previewFloor('AQ2')");await tick();
+  await f.holdBody(f.fetches[0]);await f.expire();await first;
+  const retry=get('#retry-scene').handlers.click();await tick();
+  assert.equal(f.fetches.length,2);
+  f.complete(f.fetches[1],'AQ2','retry');await retry;
+  const newer=run("previewFloor('AQ5')");await tick();
+  f.complete(f.fetches[2],'AQ5','newer');await newer;
+  // Simulate a transport that ignores abort and delivers the expired body late.
+  f.fetches[0].body(JSON.stringify(f.payload('AQ2','expired')));await tick();
+  assert.equal(get('#viewing-floor').dataset.levelId,'AQ5','late body cannot steal newer floor');
+  assert.equal(get('#level-select').value,'AQ5');
+  assert.equal(run("loadedScenes.get('AQ2').marker"),'retry','late body cannot poison successful retry cache');
+  assert.equal(run('loadingScenes.size'),0);
+  const revisit=run("previewFloor('AQ2')");await revisit;
+  assert.equal(f.fetches.length,3,'revisit uses successful retry cache');
+  assert.equal(run('currentScene.marker'),'retry');
+ },
  async two_room_clicks_submit_without_details(){
   setCatalog();await open('AQ0');
   run("void activateRouteEndpoint('unit-a')");

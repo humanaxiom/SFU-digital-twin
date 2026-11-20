@@ -4,6 +4,13 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — stalled floor request recovery
+
+- A floor request that stalls during headers or body delivery now reaches the
+  existing Retry path after 10 seconds. Retry starts a fresh fetch, while late
+  responses preserve newer navigation, cache ownership, endpoints and full
+  geometry. [Reproduction and evidence](docs/reports/DT-037.md)
+
 ## Unreleased — faster complete floor loading
 
 - Exact read-only floor filtering avoids materializing other floors. A bounded,

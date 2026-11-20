@@ -727,13 +727,34 @@ function setSceneArtifact(hash) {
 }
 
 async function fetchFloorScene(levelId, expectedArtifact) {
-  const scene = await request(`/demo/v1/levels/${encodeURIComponent(levelId)}/scene`, undefined, true);
-  if (scene.level?.level_id !== levelId) throw new Error("The returned floor does not match the requested floor");
-  if (expectedArtifact && (!Array.isArray(scene.provenance) || !scene.provenance.length
-    || scene.provenance.some(source => source?.artifact_sha256 !== expectedArtifact))) {
-    throw new Error("The floor belongs to a different or unidentified map artifact. Reload the page to load the current map");
+  const controller = new AbortController();
+  let timer;
+  const timeoutMessage = "The floor request timed out. Retry this floor";
+  const deadline = new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(timeoutMessage));
+    }, 10000);
+  });
+  try {
+    // Bound both headers and body delivery. A stuck deduplicated request must
+    // reject so its cache entry clears and the existing Retry can fetch again.
+    const scene = await Promise.race([
+      request(`/demo/v1/levels/${encodeURIComponent(levelId)}/scene`, { signal: controller.signal }, true),
+      deadline,
+    ]);
+    if (scene.level?.level_id !== levelId) throw new Error("The returned floor does not match the requested floor");
+    if (expectedArtifact && (!Array.isArray(scene.provenance) || !scene.provenance.length
+      || scene.provenance.some(source => source?.artifact_sha256 !== expectedArtifact))) {
+      throw new Error("The floor belongs to a different or unidentified map artifact. Reload the page to load the current map");
+    }
+    return scene;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(timeoutMessage);
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  return scene;
 }
 
 function getFloorScene(levelId) {

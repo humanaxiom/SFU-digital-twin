@@ -18,7 +18,7 @@ function client(nativeSelect=false) {
     querySelector(selector){return this.querySelectorAll(selector)[0];}
   }
   const document={querySelector(selector){if(!nodes.has(selector))nodes.set(selector,new Node(nativeSelect&&['#route-origin','#route-destination'].includes(selector)?'select':'div'));return nodes.get(selector);},querySelectorAll:()=>[],createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag)};
-  const context=vm.createContext({document,console,fetch:()=>new Promise(()=>{}),URLSearchParams});
+  const context=vm.createContext({...require('../client/browser-timers.cjs'),document,console,fetch:()=>new Promise(()=>{}),URLSearchParams});
   const run=code=>vm.runInContext(code,context);
   run(fs.readFileSync('packages/wayfinding/src/wayfinding/demo/static/app.js','utf8'));
   run(`routeUnits=['A','B','C','D','E'].map(unit_id=>({unit_id,room_id:'Room '+unit_id,level_id:'L'}));

@@ -42,7 +42,7 @@ function client() {
     },
     querySelectorAll: () => [],
   };
-  const context = vm.createContext({document, console, fetch: () => new Promise(() => {}), CSS: {escape: value => value}});
+  const context = vm.createContext({...require('../client/browser-timers.cjs'), document, console, fetch: () => new Promise(() => {}), CSS: {escape: value => value}});
   vm.runInContext(fs.readFileSync('packages/wayfinding/src/wayfinding/demo/static/app.js', 'utf8'), context);
   const run = code => vm.runInContext(code, context);
   run(`
