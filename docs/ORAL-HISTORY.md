@@ -306,3 +306,11 @@ DT-017 legacy candidate awaits any promotion decision, and the revised and
 campus inputs still need reviewed source evidence. The application remains the
 bounded deterministic SVG demo. The [DT-024 plan](plans/DT-024.md), [handoff](HANDOFF.md)
 and [GIS request](requests/GIS-DATA-NEEDED.md) record the work to resume.
+
+The November 20 review branch brings the wayfinding implementation and its
+earlier launcher, TLS and recovery work together. During the replay, the browser
+test twice tried to preview a route before the destination selection had settled.
+The test now waits for the selected room ID and checks that selection alone sends
+no route request. With that change, the rebuilt candidate passed the same eight
+route fixtures on desktop and mobile. The [handoff](HANDOFF.md) records the
+container identities, result hashes and remaining deployment checks.

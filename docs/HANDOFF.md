@@ -42,10 +42,11 @@ The app used the local image `sha256:d7b70c51d54d661d2932aa7c5a2263d4af7f2168c17
 | `python tools/dt017_geometry_audit.py --candidate dt017-history-20261120-v1` | 0 | Container `a8d47bb8cff1`. Both profiles gained 697 reachable pairs versus DT-033, zero losses. |
 | `pytest packages/wayfinding/tests -m source_dataqa --strict-markers --no-cov` in `source-etl` | 0 | `df9b14840752`, one selected test passed and 677 were deselected. The accepted-artifact guard also matched all 12 DT-033 file hashes. |
 | Accepted-artifact `tests/browser/demo.cjs` | 0 | Demo `c41ff8b39ce6`, Chromium `2e45eb4c9188`, 279 reads and 33 POSTs. `history-20261120-canonical/results.json` SHA-256 `98c199369b0f9ba1bbd4e6ee0c9e4093a86e787f60149e4dab1e9d04c215f86a` |
+| `pytest packages/wayfinding/tests -q -rs` | 0 | Artifact container `ffdfc15477ac`, 662 passed, 16 skipped, 86.96% coverage. Full skip reasons are in `build/history-20261120-package.log`. |
+| Ruff, Pyright, launcher and host-execution checks, then `pytest packages/wayfinding/tests -m dataqa --strict-markers --no-cov` | 0 | Same container. Artifact QA recorded 23 passed, one skipped and 654 deselected. Source QA ran separately in the source container listed above. |
 
 The [Stage C report](reports/DT-024-PREVIEW.md) gives the pinned Chromium image and
-launch procedure. Full package-suite counts in the table above are the Stage C
-delivery results. This checkpoint added fresh application and rebuild replays.
+launch procedure.
 
 The rebuilt demo also served eight fixed routes and eight availability requests
 with HTTP 200 and the expected graph edge IDs, distances and availability. Strand’s
@@ -53,6 +54,24 @@ elevator-only negative fixture returned HTTP 409. The first comprehensive
 rebuilt-browser run exited 1 after the desktop fixtures. It activated Preview
 before the destination draft was ready and recorded no route POST for that
 interaction. Its retained result SHA-256 is `1d07509ca128ad4f5df609a245caa7067db9cc7db5f403493c2067eadee4f0ac`.
+
+A serial rerun reproduced the failure. The browser test now waits for the exact
+destination room ID and checks the route POST count before it activates Preview.
+The rebuilt candidate then passed all eight fixtures on desktop and mobile,
+including the manual SVG pointer and keyboard workflow. The run also exercised
+320 px layout, reduced motion, a real 409 response and delayed requests.
+Demo `bfa20d3f3a2e` and Chromium `2bd171db0aeb` recorded 183 GETs and 26 POSTs.
+The run and teardown exited 0. The result under
+`build/takeover-browser/history-20261120-dt017-checkpoint-final/results.json`
+has SHA-256 `58bde5bde5e21066b5c36171e895053a0380fdd13f28525b874a47fa3dc11fdc`.
+
+The same updated browser test then passed against the accepted artifacts. Demo
+`3d59628f695c` and Chromium `ab86193e5a7d` exercised four fixtures at both
+1440×1000 and 390×844, plus seven checks including 320 px and an HTTP 409.
+The run recorded 279 GETs and 33 POSTs and exited 0. Its result under
+`build/takeover-browser/history-20261120-canonical-checkpoint-final/results.json`
+has SHA-256 `4aac5b00627151373844bb6804e7e7235606859e6ebb60e37e6aaaedccd50427`.
+Both temporary stacks were removed. The running demo and edge proxy stayed healthy.
 
 ## Current navigation work — explicit Preview route (2026-11-20)
 
