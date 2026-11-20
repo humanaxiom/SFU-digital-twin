@@ -14,6 +14,7 @@ import pytest
     "latest_preview_wins", "clear_cancels_preview", "preview_checks_known_outcomes",
     "preview_uses_matching_options_after_draft_edit", "malformed_success_preserves_committed_route",
     "qualified_success_replaces_committed_route",
+    "artifact_scene_cache", "journey_retry_and_cameras",
     "floors", "open", "retry", "scenes", "rooms", "clear_room",
     "assistant_floor", "assistant_latest", "replacement_pending_step", "route",
     "retained_room_loading", "retained_landmark_loading", "clear_scene_error",

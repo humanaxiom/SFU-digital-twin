@@ -28,8 +28,7 @@ const currentInstruction = document.querySelector("#current-instruction");
 const stepPosition = document.querySelector("#step-position");
 const stepPrevious = document.querySelector("#step-previous");
 const stepNext = document.querySelector("#step-next");
-const floorPreview = document.querySelector("#floor-preview");
-const previewMessage = document.querySelector("#preview-message");
+const mapContext = document.querySelector("#map-context");
 const transitionViews = document.querySelector("#transition-views");
 const transitionDeparture = document.querySelector("#transition-departure");
 const transitionArrival = document.querySelector("#transition-arrival");
@@ -55,7 +54,7 @@ const navigationState = {
   context: "campus", facilityId: null, requestedLevelId: null,
   displayedLevelId: null, intentRevision: 0, roomRevision: 0, assistantRevision: 0,
   selectedUnitId: null, sceneStatus: "idle", sceneError: null,
-  rememberedLevels: new Map(), pendingStep: null,
+  rememberedLevels: new Map(), pendingStep: null, failedStep: null,
 };
 const openFloor = document.querySelector("#open-floor");
 const retryScene = document.querySelector("#retry-scene");
@@ -74,9 +73,9 @@ let endpointSelectionRevision = 0;
 let sceneGeneration = 0;
 let currentScene = null;
 let manualPreview = false;
-let previewVisitId = null;
 let mapFit = "floor";
 let mapOrigin = [0, 0];
+const floorCameras = new Map();
 let availabilityGeneration = 0;
 let routeAvailabilityState = "empty";
 let routeAvailability = null;
@@ -102,6 +101,7 @@ function beginNavigation(context) {
   navigationState.intentRevision += 1;
   navigationState.roomRevision += 1;
   navigationState.pendingStep = null;
+  navigationState.failedStep = null;
   navigationState.sceneStatus = "idle";
   navigationState.sceneError = null;
   sceneGeneration += 1;
@@ -112,14 +112,12 @@ function beginNavigation(context) {
 function showFloorContext() {
   campusView.hidden = true;
   floorView.hidden = false;
-  document.querySelector("#map-context").textContent = "Floor";
 }
 
 function showCampus() {
   beginNavigation(campusFacilityId ? "building" : "campus");
   campusView.hidden = false;
   floorView.hidden = true;
-  document.querySelector("#map-context").textContent = campusFacilityId ? "Building" : "Campus";
   manualPreview = Boolean(guidanceStep());
   updateGuidanceControls();
 }
@@ -286,9 +284,25 @@ function option(value, label) {
   return node;
 }
 
-async function request(path, options) {
+function recordSceneTime(name, start) {
+  if (start === undefined) return;
+  performance.clearMeasures(name);
+  performance.measure(name, { start, end: performance.now() });
+}
+
+async function request(path, options, measureScene = false) {
+  const start = measureScene ? globalThis.performance?.now() : undefined;
   const response = await fetch(path, options);
-  const body = await response.json();
+  let body;
+  if (measureScene) {
+    const text = await response.text();
+    recordSceneTime("scene-transfer", start);
+    const parseStart = globalThis.performance?.now();
+    body = JSON.parse(text);
+    recordSceneTime("scene-parse", parseStart);
+  } else {
+    body = await response.json();
+  }
   if (!response.ok) {
     const error = new Error(body.error || body.code || "The artifact request failed.");
     error.payload = body;
@@ -403,7 +417,7 @@ function updateEndpointStates() {
 }
 
 function cancelPendingRouteScene() {
-  if (navigationState.pendingStep) {
+  if (navigationState.pendingStep || navigationState.failedStep) {
     beginNavigation("floor");
     const displayed = allLevels.find(level => level.level_id === currentScene?.level.level_id);
     if (displayed) selectFloorControls(displayed);
@@ -422,7 +436,6 @@ function clearRoute(clearEndpoints = true) {
   document.querySelector("#route-request-status").dataset.state = "empty";
   activeStep = 0;
   manualPreview = false;
-  previewVisitId = null;
   routeAccessibility.hidden = true;
   routeSteps.replaceChildren();
   floorJourney.replaceChildren();
@@ -482,6 +495,7 @@ async function activateRouteEndpoint(unitId, focusMap = false) {
   }
   manualPreview = Boolean(guidanceStep());
   updateGuidanceControls();
+  if (manualPreview) renderRouteOverlay(currentScene?.level.level_id);
   return selectUnit(unitId, focusMap);
 }
 
@@ -581,10 +595,6 @@ function selectLandmark(item, marker) {
 }
 
 function renderScene(scene) {
-  const retainedCamera = mapFit === "manual" && currentScene?.level.level_id === scene.level.level_id
-    ? (floorMap.getAttribute("viewBox") || "").split(" ").map(Number) : null;
-  const previousOrigin = mapOrigin;
-  if (mapFit === "manual" && !retainedCamera) mapFit = activeRoute?.guidance ? "route" : "floor";
   currentScene = scene;
   navigationState.displayedLevelId = scene.level.level_id;
   floorMap.querySelectorAll("g").forEach((node) => node.remove());
@@ -602,11 +612,6 @@ function renderScene(scene) {
   const minY = Math.min(...ys) - padding;
   const maxY = Math.max(...ys) + padding;
   floorMap.setAttribute("viewBox", `${minX - mapOrigin[0]} ${mapOrigin[1] - maxY} ${maxX - minX} ${maxY - minY}`);
-  if (retainedCamera?.length === 4 && retainedCamera.every(Number.isFinite)) {
-    retainedCamera[0] += previousOrigin[0] - mapOrigin[0];
-    retainedCamera[1] += mapOrigin[1] - previousOrigin[1];
-    floorMap.setAttribute("viewBox", retainedCamera.join(" "));
-  }
 
   const layers = ["level", "details", "units", "landmarks"].map(() => element("g"));
   layers[0].append(svgPath(scene.level, "level-shape"));
@@ -678,6 +683,63 @@ function renderRoomList() {
   updateEndpointStates();
 }
 
+// Each loaded artifact owns its exact-level scene objects and pending requests.
+const maxCachedScenes = 8;
+let sceneArtifact = null;
+let loadedScenes = new Map();
+let loadingScenes = new Map();
+
+function setSceneArtifact(hash) {
+  if (hash === sceneArtifact) return;
+  sceneArtifact = hash;
+  loadedScenes = new Map();
+  loadingScenes = new Map();
+  sceneGeneration += 1;
+}
+
+async function fetchFloorScene(levelId, expectedArtifact) {
+  const scene = await request(`/demo/v1/levels/${encodeURIComponent(levelId)}/scene`, undefined, true);
+  if (scene.level?.level_id !== levelId) throw new Error("The returned floor does not match the requested floor");
+  if (expectedArtifact && (!Array.isArray(scene.provenance) || !scene.provenance.length
+    || scene.provenance.some(source => source?.artifact_sha256 !== expectedArtifact))) {
+    throw new Error("The floor belongs to a different or unidentified map artifact. Reload the page to load the current map");
+  }
+  return scene;
+}
+
+function getFloorScene(levelId) {
+  if (!sceneArtifact) return fetchFloorScene(levelId);
+  const cache = loadedScenes;
+  const pending = loadingScenes;
+  if (cache.has(levelId)) {
+    const scene = cache.get(levelId);
+    cache.delete(levelId);
+    cache.set(levelId, scene);
+    return Promise.resolve(scene);
+  }
+  if (!pending.has(levelId)) {
+    const load = fetchFloorScene(levelId, sceneArtifact).then(scene => {
+      cache.set(levelId, scene);
+      if (cache.size > maxCachedScenes) cache.delete(cache.keys().next().value);
+      return scene;
+    }).finally(() => pending.delete(levelId));
+    pending.set(levelId, load);
+  }
+  return pending.get(levelId);
+}
+
+function prefetchAdjacentVisits(visitId) {
+  const visits = activeRoute?.guidance?.visits || [];
+  const index = visits.findIndex(visit => visit.visit_id === visitId);
+  if (!sceneArtifact || index < 0) return;
+  for (const neighbor of [visits[index - 1], visits[index + 1]]) {
+    if (neighbor?.level_id && neighbor.level_id !== visits[index].level_id) {
+      // A failed speculative load leaves the foreground Retry path available.
+      getFloorScene(neighbor.level_id).catch(() => {});
+    }
+  }
+}
+
 async function loadScene() {
   const level = activeLevel();
   if (!level) return false;
@@ -691,24 +753,25 @@ async function loadScene() {
   setStatus(`Loading ${floorLabel(level.level_id)}…${retained}`, true);
   updateGuidanceControls();
   try {
-    const scene = await request(`/demo/v1/levels/${encodeURIComponent(level.level_id)}/scene`);
+    const scene = await getFloorScene(level.level_id);
     if (generation !== sceneGeneration) return false;
-    if (scene.level?.level_id !== level.level_id) throw new Error("The returned floor does not match the requested floor");
     navigationState.sceneStatus = "ready";
     navigationState.displayedLevelId = level.level_id;
     floorMap.setAttribute("aria-busy", "false");
+    const renderStart = globalThis.performance?.now();
     renderScene(scene);
+    recordSceneTime("scene-render", renderStart);
     return true;
   } catch (error) {
     if (generation !== sceneGeneration) return false;
     navigationState.sceneStatus = "error";
     navigationState.sceneError = error.message;
+    navigationState.failedStep = navigationState.pendingStep;
     navigationState.pendingStep = null;
     floorMap.setAttribute("aria-busy", "false");
     retryScene.hidden = false;
     retryScene.textContent = `Retry ${floorLabel(level.level_id)}`;
     manualPreview = Boolean(guidanceStep());
-    previewVisitId = null;
     updateGuidanceControls();
     renderRouteOverlay(currentScene?.level.level_id);
     const showing = currentScene ? ` Still showing ${floorLabel(currentScene.level.level_id)}.` : " No floor is displayed.";
@@ -911,20 +974,26 @@ function guidanceStep() {
 }
 
 function stepIsVisible(step = guidanceStep()) {
-  return Boolean(step && currentScene?.level.level_id === step.level_id
-    && (!previewVisitId || previewVisitId === step.visit_id));
+  return Boolean(!manualPreview && step && currentScene?.level.level_id === step.level_id);
 }
 
 function updateGuidanceControls() {
   const guidance = activeRoute?.guidance;
   const step = guidanceStep();
+  const exploring = Boolean(step && (manualPreview || floorView.hidden));
   const hasRouteMessage = ["pending", "error"].includes(routeUiState)
     || Boolean(activeRoute?.guidance && !step);
-  document.querySelector(".current-step").hidden = !step && !hasRouteMessage;
+  document.querySelector(".current-step").hidden = exploring || (!step && !hasRouteMessage);
   const pending = Boolean(navigationState.pendingStep) || navigationState.sceneStatus === "loading";
-  stepPrevious.disabled = pending || !step || activeStep === 0;
-  stepNext.disabled = pending || !step || activeStep === guidance.steps.length - 1;
-  returnToRoute.hidden = !step || (!manualPreview && !floorView.hidden);
+  stepPrevious.hidden = stepNext.hidden = exploring;
+  stepPrevious.disabled = exploring || pending || !step || activeStep === 0;
+  stepNext.disabled = exploring || pending || !step || activeStep === guidance.steps.length - 1;
+  returnToRoute.hidden = !exploring;
+  const scope = floorView.hidden ? (campusFacilityId ? "Building" : "Campus") : "Floor";
+  const inspected = floorView.hidden
+    ? facilitiesById.get(campusFacilityId)?.code || scope.toLowerCase()
+    : floorLabel(navigationState.displayedLevelId);
+  mapContext.textContent = exploring ? `Exploring ${inspected}` : scope;
   stepPosition.textContent = step ? `Step ${activeStep + 1} of ${guidance.steps.length} · ${floorLabel(step.level_id)}` : "Choose a route";
   currentInstruction.textContent = step?.instruction || (activeRoute?.guidance && !activeRoute.guidance.steps.length
     ? unavailableGuidanceMessage : ["error", "pending"].includes(routeUiState)
@@ -937,10 +1006,8 @@ function updateGuidanceControls() {
       currentInstruction.textContent = `Route floor not loaded. Preview only: ${step.instruction}`;
     }
   }
-  floorPreview.hidden = !step || !manualPreview;
-  transitionViews.hidden = !step?.transition_id;
+  transitionViews.hidden = exploring || !step?.transition_id;
   if (!step) return;
-  previewMessage.textContent = `You are previewing ${floorLabel(currentScene?.level.level_id)}. Selected step: ${floorLabel(step.level_id)}.`;
   routeSteps.querySelectorAll("button").forEach((node) => {
     const selected = node.dataset.stepId === step.step_id;
     node.classList.toggle("active", selected);
@@ -949,8 +1016,8 @@ function updateGuidanceControls() {
   });
   floorJourney.querySelectorAll("button").forEach((node) => {
     const visit = guidance.visits.find((item) => item.visit_id === node.dataset.visitId);
-    const selected = visit?.visit_id === (previewVisitId || step.visit_id)
-      && visit?.level_id === currentScene?.level.level_id;
+    const selected = !exploring && visit?.visit_id === step.visit_id
+      && visit?.level_id === navigationState.displayedLevelId;
     if (selected) node.setAttribute("aria-current", "location");
     else node.removeAttribute("aria-current");
   });
@@ -970,10 +1037,11 @@ async function selectGuidanceStep(stepId, cameraMode = "step") {
   beginNavigation("route");
   const intent = navigationState.intentRevision;
   const step = route.guidance.steps[index];
-  navigationState.pendingStep = { route, index, intent };
+  navigationState.pendingStep = { route, index, intent, cameraMode };
   // A marker alone gives no useful walking context. Initial directions also
   // retain the full floor route while selecting the first instruction.
-  mapFit = cameraMode === "step" && step.geometry_ids.length ? "step" : "route";
+  mapFit = cameraMode === "return" && floorCameras.has(floorCameraKey(step.level_id, "route"))
+    ? "manual" : cameraMode === "step" && step.geometry_ids.length ? "step" : "route";
   updateGuidanceControls();
   if (!step.level_id) {
     const displayed = allLevels.find(level => level.level_id === currentScene?.level.level_id);
@@ -985,19 +1053,21 @@ async function selectGuidanceStep(stepId, cameraMode = "step") {
   navigationState.pendingStep = null;
   activeStep = index;
   manualPreview = false;
-  previewVisitId = null;
+  const restoreFocus = document.activeElement === returnToRoute;
   updateGuidanceControls();
   renderRouteOverlay(currentScene?.level.level_id);
   fitMap(mapFit);
+  if (restoreFocus) currentInstruction.focus();
+  prefetchAdjacentVisits(step.visit_id);
 }
 
-async function previewFloor(levelId, visitId = null) {
+async function previewFloor(levelId) {
   if (!allLevels.some(level => level.level_id === levelId)) return;
   beginNavigation("floor");
   manualPreview = Boolean(guidanceStep());
-  previewVisitId = visitId;
-  mapFit = "route";
+  mapFit = floorCameras.has(floorCameraKey(levelId, "floor")) ? "manual" : "route";
   updateGuidanceControls();
+  if (manualPreview) renderRouteOverlay(currentScene?.level.level_id);
   await selectLevel(levelId);
 }
 
@@ -1035,7 +1105,7 @@ function renderRouteOverlay(levelId) {
   const guidance = activeRoute?.guidance;
   if (!guidance) return;
   const step = guidanceStep();
-  const visible = step?.level_id === levelId && (!previewVisitId || previewVisitId === step.visit_id);
+  const visible = stepIsVisible(step) && step.level_id === levelId;
   const pieces = guidance.geometries
     .filter((item) => item.level_id === levelId);
   let walkingMarker = null;
@@ -1102,11 +1172,21 @@ function resizeMarkers() {
   });
 }
 
+function floorCameraKey(levelId, context = navigationState.context) {
+  return `${context === "route" ? "route" : "floor"}:${levelId}`;
+}
+
 function fitMap(mode) {
+  const camera = mode === "manual" && floorCameras.get(floorCameraKey(currentScene?.level.level_id));
+  if (mode === "manual" && !camera) mode = activeRoute?.guidance ? "route" : "floor";
   mapFit = mode;
   floorMap.dataset.cameraMode = mode;
   if (!currentScene) return;
-  if (mode === "manual") {
+  if (camera) {
+    const [left, top, width, height] = camera.box;
+    floorMap.setAttribute("viewBox", [
+      left + (camera.origin[0] - mapOrigin[0]), top + (mapOrigin[1] - camera.origin[1]), width, height,
+    ].join(" "));
     resizeMarkers();
     return;
   }
@@ -1150,10 +1230,14 @@ function zoomMap(factor) {
   const span = Math.max(box[2], box[3]);
   const scale = Math.max(2, Math.min(10000, span * factor)) / span;
   const width = box[2] * scale, height = box[3] * scale;
-  floorMap.setAttribute("viewBox", `${box[0] + (box[2] - width) / 2} ${box[1] + (box[3] - height) / 2} ${width} ${height}`);
-  mapFit = "manual";
-  floorMap.dataset.cameraMode = "manual";
-  resizeMarkers();
+  const camera = { box: [box[0] + (box[2] - width) / 2, box[1] + (box[3] - height) / 2, width, height], origin: mapOrigin };
+  floorCameras.set(floorCameraKey(currentScene.level.level_id), camera);
+  fitMap("manual");
+}
+
+function resetMapFit(mode) {
+  if (currentScene) floorCameras.delete(floorCameraKey(currentScene.level.level_id));
+  fitMap(mode);
 }
 
 function renderRoute(body, { follow = true } = {}) {
@@ -1163,7 +1247,6 @@ function renderRoute(body, { follow = true } = {}) {
   routeSteps.replaceChildren();
   floorJourney.replaceChildren();
   manualPreview = false;
-  previewVisitId = null;
   routeDiagnostics.textContent = JSON.stringify(body, null, 2);
   if (body.status !== 200) {
     const errors = {
@@ -1223,7 +1306,9 @@ function renderRoute(body, { follow = true } = {}) {
     text.textContent = step.instruction;
     button.setAttribute("aria-label", `Step ${index + 1}. ${step.instruction}`);
     button.append(number, text);
-    button.addEventListener("click", () => selectGuidanceStep(step.step_id));
+    button.addEventListener("click", () => {
+      if (activeRoute === body) return selectGuidanceStep(step.step_id);
+    });
     item.append(button);
     return item;
   });
@@ -1243,7 +1328,7 @@ function renderRoute(body, { follow = true } = {}) {
     const firstStep = guidance.steps.find(step => step.visit_id === visit.visit_id);
     button.disabled = !visit.level_id || !firstStep;
     button.addEventListener("click", () => {
-      if (firstStep) return selectGuidanceStep(firstStep.step_id, "route");
+      if (activeRoute === body && firstStep) return selectGuidanceStep(firstStep.step_id, "route");
     });
     floorJourney.append(button);
   });
@@ -1619,20 +1704,16 @@ assistantForm.addEventListener("submit", async (event) => {
 
 stepPrevious.addEventListener("click", () => {
   const step = activeRoute?.guidance?.steps[activeStep - 1];
-  if (step) return selectGuidanceStep(step.step_id);
+  if (!manualPreview && step) return selectGuidanceStep(step.step_id);
 });
 stepNext.addEventListener("click", () => {
   const step = activeRoute?.guidance?.steps[activeStep + 1];
-  if (step) return selectGuidanceStep(step.step_id);
+  if (!manualPreview && step) return selectGuidanceStep(step.step_id);
 });
 transitionDeparture.addEventListener("click", () => selectTransitionPhase("departure"));
 transitionArrival.addEventListener("click", () => selectTransitionPhase("arrival"));
-document.querySelector("#show-selected-step").addEventListener("click", () => {
-  const step = guidanceStep();
-  if (step) return selectGuidanceStep(step.step_id);
-});
-document.querySelector("#fit-route").addEventListener("click", () => fitMap("route"));
-document.querySelector("#fit-floor").addEventListener("click", () => fitMap("floor"));
+document.querySelector("#fit-route").addEventListener("click", () => resetMapFit("route"));
+document.querySelector("#fit-floor").addEventListener("click", () => resetMapFit("floor"));
 document.querySelector("#zoom-in").addEventListener("click", () => zoomMap(1 / 1.5));
 document.querySelector("#zoom-out").addEventListener("click", () => zoomMap(1.5));
 
@@ -1651,10 +1732,16 @@ levelSelect.addEventListener("change", () => {
   if (allLevels.some(level => level.level_id === levelId && level.facility_id === navigationState.facilityId)) return previewFloor(levelId);
 });
 openFloor.addEventListener("click", () => previewFloor(navigationState.requestedLevelId));
-retryScene.addEventListener("click", () => previewFloor(navigationState.requestedLevelId));
+retryScene.addEventListener("click", () => {
+  const failed = navigationState.failedStep;
+  if (failed && failed.route === activeRoute && failed.intent === navigationState.intentRevision) {
+    return selectGuidanceStep(activeRoute.guidance.steps[failed.index].step_id, failed.cameraMode);
+  }
+  return previewFloor(navigationState.requestedLevelId);
+});
 returnToRoute.addEventListener("click", () => {
   const step = guidanceStep();
-  if (step) return selectGuidanceStep(step.step_id, "route");
+  if (step) return selectGuidanceStep(step.step_id, "return");
 });
 
 document.querySelector("#show-campus").addEventListener("click", () => {
@@ -1681,6 +1768,7 @@ async function initialize() {
       request("/demo/v1/levels"),
       request("/demo/v1/campus"),
     ]);
+    setSceneArtifact(health.artifact_sha256);
     artifactHash.textContent = health.artifact_sha256;
     graphHash.textContent = health.provenance?.graph_sha256 || "Unavailable";
     facilitiesById = new Map(

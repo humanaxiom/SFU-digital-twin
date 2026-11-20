@@ -111,6 +111,59 @@ async function delayedAvailability(fail = false) {
   await submitted;
 }
 const cases={
+ async artifact_scene_cache(){
+  const scopedScene=(id,hash)=>({...run(`scene('${id}')`),provenance:[{artifact_sha256:hash}]});
+  run("setSceneArtifact('first')");
+  const first=run("getFloorScene('AQ0')");
+  const duplicate=run("getFloorScene('AQ0')");
+  assert.equal(requests('/demo/v1/levels/AQ0/scene').length,1);
+  requests('/demo/v1/levels/AQ0/scene')[0].resolve(scopedScene('AQ0','first'));
+  assert.equal(await first,await duplicate);
+  assert.equal(await run("getFloorScene('AQ0')"),await first);
+  assert.equal(requests('/demo/v1/levels/AQ0/scene').length,1);
+  const obsolete=run("getFloorScene('AQ2')");
+  run("setSceneArtifact('second')");
+  const current=run("getFloorScene('AQ2')");
+  const loads=requests('/demo/v1/levels/AQ2/scene');
+  assert.equal(loads.length,2);
+  loads[1].resolve(scopedScene('AQ2','second'));
+  const currentScene=await current;
+  loads[0].resolve(scopedScene('AQ2','first'));
+  await obsolete;
+  assert.equal(await run("getFloorScene('AQ2')"),currentScene);
+  const mismatch=run("getFloorScene('AQ0')");
+  requests('/demo/v1/levels/AQ0/scene').at(-1).resolve(run("scene('AQ2')"));
+  await assert.rejects(mismatch,/does not match/);
+  const wrongArtifact=run("getFloorScene('AQ0')");
+  requests('/demo/v1/levels/AQ0/scene').at(-1).resolve(scopedScene('AQ0','first'));
+  await assert.rejects(wrongArtifact,/artifact/i);
+  const retry=run("getFloorScene('AQ0')");
+  requests('/demo/v1/levels/AQ0/scene').at(-1).resolve(scopedScene('AQ0','second'));
+  assert.equal((await retry).level.level_id,'AQ0');
+  run(`activeRoute={guidance:{visits:[
+    {visit_id:'v1', level_id:'AQ0'}, {visit_id:'v2', level_id:'AQ2'},
+    {visit_id:'v3', level_id:'AQ5'}]}}; prefetchAdjacentVisits('v2')`);
+  assert.equal(requests('/demo/v1/levels/AQ5/scene').length,1);
+  const displayedBeforePrefetch=get('#viewing-floor').textContent;
+  const statusBeforePrefetch=get('#map-status').textContent;
+  requests('/demo/v1/levels/AQ5/scene').at(-1).resolve(scopedScene('AQ5','second'));
+  await tick();
+  assert.equal(get('#viewing-floor').textContent,displayedBeforePrefetch);
+  assert.equal(get('#map-status').textContent,statusBeforePrefetch);
+  assert.equal((await run("getFloorScene('AQ5')")).level.level_id,'AQ5');
+  assert.equal(requests('/demo/v1/levels/AQ5/scene').length,1);
+  // More distinct floors than the cache budget should evict the oldest one.
+  for(let index=0;index<8;index++){
+    const id=`extra-${index}`;
+    const load=run(`getFloorScene('${id}')`);
+    requests(`/demo/v1/levels/${id}/scene`).at(-1).resolve({level:{level_id:id},provenance:[{artifact_sha256:'second'}]});
+    await load;
+  }
+  const evicted=run("getFloorScene('AQ5')");
+  assert.equal(requests('/demo/v1/levels/AQ5/scene').length,2);
+  requests('/demo/v1/levels/AQ5/scene').at(-1).resolve(scopedScene('AQ5','second'));
+  await evicted;
+ },
  async edits_require_preview(){
   setCatalog();
   change('#route-origin','unit-a');
@@ -604,6 +657,38 @@ const cases={
   assert.equal(run('navigationState.pendingStep'),null,'replaced route cannot retain a pending instruction');
   assert.equal(get('#floor-map').getAttribute('aria-busy'),'false');
   assert.equal(get('#current-instruction').textContent,'New route on AQ 1');
+ },
+ async journey_retry_and_cameras(){
+  await open('AQ0');
+  const route=routeResult('unit-a','unit-c','default',[step('AQ0','Start here'),step('AQ2','Finish here')]);
+  run(`renderRoute(${JSON.stringify(route)})`);
+  await tick();
+  const box=()=>get('#floor-map').getAttribute('viewBox');
+  run('zoomMap(0.5)');
+  const routeBox=box();
+  await open('AQ2');
+  run('zoomMap(0.25)');
+  const exploredBox=box();
+  const returning=get('#return-to-route').handlers.click();
+  await resolveScene('AQ0');
+  await returning;
+  assert.equal(box(),routeBox);
+  await open('AQ2');
+  assert.equal(box(),exploredBox);
+  const again=get('#return-to-route').handlers.click();
+  await resolveScene('AQ0');
+  await again;
+  const next=get('#step-next').handlers.click();
+  requests('/demo/v1/levels/AQ2/scene').at(-1).reject(new Error('test scene outage'));
+  await next;
+  assert.equal(get('#retry-scene').hidden,false);
+  assert.equal(get('#viewing-floor').dataset.levelId,'AQ0');
+  const retry=get('#retry-scene').handlers.click();
+  await resolveScene('AQ2');
+  await retry;
+  assert.equal(get('#viewing-floor').dataset.levelId,'AQ2');
+  assert.equal(get('#current-instruction').textContent,'Finish here');
+  assert.equal(get('#return-to-route').hidden,true);
  },
  async retained_room_loading(){
   await open('AQ0');const loading=run("previewFloor('AQ2')");
