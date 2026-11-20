@@ -9,6 +9,7 @@ import re
 import threading
 import time
 from collections import OrderedDict, deque
+from concurrent.futures import Future
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,6 +27,8 @@ RATE_WINDOW_SECONDS = 60.0
 READ_REQUESTS_PER_WINDOW = 120
 POST_REQUESTS_PER_WINDOW = 30
 MAX_RATE_CLIENTS = 256
+MAX_SCENE_CACHE_ENTRIES = 16
+MAX_SCENE_CACHE_BYTES = 32 * 1024 * 1024
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
 HOSTNAME = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$")
 STATIC_FILES = {
@@ -50,6 +53,10 @@ class DemoHTTPServer(ThreadingHTTPServer):
         self.request_semaphore = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         self.rate_lock = threading.Lock()
         self.rate_clients: OrderedDict[str, dict[str, deque[float]]] = OrderedDict()
+        self.scene_cache_lock = threading.Lock()
+        self.scene_cache: OrderedDict[tuple[str, str], bytes] = OrderedDict()
+        self.scene_cache_bytes = 0
+        self.scene_pending: dict[tuple[str, str], Future[bytes]] = {}
 
     def process_request(self, request: Any, client_address: Any) -> None:
         # Admit before ThreadingMixIn creates a worker; never queue unlimited threads.
@@ -91,6 +98,75 @@ class DemoHTTPServer(ThreadingHTTPServer):
             while len(self.rate_clients) > MAX_RATE_CLIENTS:
                 self.rate_clients.popitem(last=False)
             return True
+
+    def scene_response(self, level_id: str) -> bytes:
+        """Reuse complete immutable responses without sharing OGR handles."""
+        repository = self.repository
+        key = (repository.artifact_sha256, level_id)
+        owner = False
+        with self.scene_cache_lock:
+            cached = self.scene_cache.get(key)
+            if cached is not None:
+                self.scene_cache.move_to_end(key)
+                return cached
+            pending = self.scene_pending.get(key)
+            if pending is None:
+                pending = Future()
+                self.scene_pending[key] = pending
+                owner = True
+        if not owner:
+            return pending.result()
+        try:
+            scene = repository.scene(level_id)
+            scene["limitations_id"] = LIMITATIONS_ID
+            scene["provenance"] = [
+                repository.provenance(layer)
+                for layer in (
+                    "level_26910", "unit_26910", "detail_26910", "landmark_26910"
+                )
+            ]
+            body = json.dumps(scene, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        except BaseException as exc:
+            # Wake all matching waiters and allow the next request to retry.
+            with self.scene_cache_lock:
+                self.scene_pending.pop(key, None)
+                pending.set_exception(exc)
+            raise
+        with self.scene_cache_lock:
+            if MAX_SCENE_CACHE_ENTRIES > 0 and len(body) <= MAX_SCENE_CACHE_BYTES:
+                while self.scene_cache and (
+                    len(self.scene_cache) >= MAX_SCENE_CACHE_ENTRIES
+                    or self.scene_cache_bytes + len(body) > MAX_SCENE_CACHE_BYTES
+                ):
+                    _, evicted = self.scene_cache.popitem(last=False)
+                    self.scene_cache_bytes -= len(evicted)
+                self.scene_cache[key] = body
+                self.scene_cache_bytes += len(body)
+            self.scene_pending.pop(key, None)
+            pending.set_result(body)
+        return body
+
+    def warm_scene_cache(self) -> int:
+        """Best-effort CLI startup work; failed floors stay retryable."""
+        try:
+            levels = self.repository.levels()[:max(0, MAX_SCENE_CACHE_ENTRIES)]
+        except Exception:
+            print(
+                "Floor response prewarm unavailable; foreground requests remain enabled.",
+                flush=True,
+            )
+            return 0
+        prepared = 0
+        for level in levels:
+            try:
+                self.scene_response(level["level_id"])
+                prepared += 1
+            except Exception:
+                print(
+                    "Floor response prewarm unavailable; foreground requests remain enabled.",
+                    flush=True,
+                )
+        return prepared
 
 
 class DemoRequestHandler(BaseHTTPRequestHandler):
@@ -262,18 +338,8 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                 if not IDENTIFIER.fullmatch(level_id):
                     self._error(400, "Invalid level identifier.")
                     return
-                scene = self.repository.scene(level_id)
-                scene["limitations_id"] = LIMITATIONS_ID
-                scene["provenance"] = [
-                    self.repository.provenance(layer)
-                    for layer in (
-                        "level_26910",
-                        "unit_26910",
-                        "detail_26910",
-                        "landmark_26910",
-                    )
-                ]
-                self._json(200, scene)
+                body = cast(DemoHTTPServer, self.server).scene_response(level_id)
+                self._send_bytes(200, "application/json; charset=utf-8", body)
                 return
             unit_match = re.fullmatch(r"/demo/v1/units/([^/]+)", path)
             if unit_match and not target.query:
@@ -546,6 +612,12 @@ def main() -> None:
         overview_footprint_path=arguments.overview_footprint,
     )
     try:
+        started = time.monotonic()
+        prepared = server.warm_scene_cache()
+        print(
+            f"Prepared {prepared} floor responses in {time.monotonic() - started:.3f}s.",
+            flush=True,
+        )
         server.serve_forever()
     except KeyboardInterrupt:
         pass

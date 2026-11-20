@@ -4,6 +4,13 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — faster complete floor loading
+
+- Exact read-only floor filtering avoids materializing other floors. A bounded,
+  artifact-scoped cache reuses complete floor response bytes and prepares the
+  recorded floors at startup. Default two-click routing and existing inspection,
+  Preview, cancellation and geometry are preserved. [Measurements and verification](docs/reports/DT-036.md)
+
 ## Unreleased — preservation orders and incident explanation
 
 - Recorded the user's standing orders: E2E after each substantial change, no

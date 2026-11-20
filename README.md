@@ -285,6 +285,12 @@ width, path width, slope, powered doors, surface, closures, opening hours, door 
 status. The demo has no public-map geometry, nearest-place ranking, travel-time estimate, live
 status, or LLM dependency.
 
+Allow startup to reach healthy before opening a fresh demo session. The service
+prepares bounded, complete floor responses once at startup so later floor loads
+can reuse them. DT-036 measured about 18 seconds to readiness on this machine;
+the largest floors still retain all their geometry. See the
+[performance verification](docs/reports/DT-036.md).
+
 To show directions, choose a building and floor, click a starting room A, then
 click a connected destination B on the map or in the room list. Directions appear
 automatically. You can change floors between A and B. Further room clicks keep A

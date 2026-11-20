@@ -343,8 +343,19 @@ class ArtifactRepository:
         level_id: str,
         names: tuple[str, ...],
     ) -> list[dict[str, Any]]:
+        layer = dataset.GetLayerByName(layer_name)
+        # Filter in the read-only driver before it materializes unrelated floors
+        # as Python features. Keep the exact-value guard below as well.
+        level_literal = "'" + level_id.replace("'", "''") + "'"
+        try:
+            status = layer.SetAttributeFilter(f'"level_id" = {level_literal}')
+        except RuntimeError as exc:
+            raise ArtifactUnavailableError("The demo floor filter could not be applied.") from exc
+        if status != 0:
+            raise ArtifactUnavailableError("The demo floor filter could not be applied.")
+        layer.ResetReading()
         records = []
-        for feature in dataset.GetLayerByName(layer_name):
+        for feature in layer:
             if feature.GetField("level_id") != level_id:
                 continue
             item = _fields(feature, names)

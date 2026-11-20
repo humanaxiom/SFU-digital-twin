@@ -1,5 +1,25 @@
 # Handoff — Living Project State
 
+## Faster complete floor loading (DT-036, 2026-11-20)
+
+The port-18107 navigation demo now uses exact read-only floor filtering and a
+bounded artifact-scoped cache of complete response bytes. Measured live fresh-
+page floor display fell from 1.2–2.0 s to 66–267 ms (86.4–94.4% lower). All
+11 complete HTTP scene bodies and all 16 rendered cold/warm signatures match
+baseline exactly; no geometry or working workflow was removed.
+
+[DT-036](plans/DT-036.md) followed separate RED→GREEN and E2E checkpoints for
+filtering and caching in `build/experiments/dt036-source` before live integration.
+Full Docker suite: 692 passed, 16 documented skips, 87.37% coverage. Lint,
+types, artifact QA and launchers passed. The live two-click/API and floor timing
+checks passed after a controlled restart of the original navigation container.
+Only that demo restarted; source data, artifacts, proxy and ASB service remain.
+CLI startup prepares complete floors before serving; allow health readiness
+(isolated startup measured 17.825 s). See [verified timing and identities](reports/DT-036.md).
+Independent `gpt-6-astra` final review approved the local delivery with no
+blocking findings. Do not use historical DT-034/035 test counts as DT-036
+performance evidence.
+
 ## Standing preservation orders and incident explanation (2026-11-20)
 
 The user requires E2E after every substantial change, no removals without
