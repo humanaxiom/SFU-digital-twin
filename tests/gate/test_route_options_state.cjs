@@ -85,6 +85,7 @@ const rejectRoute=request=>request.reject({payload:{status:409,code:'disconnecte
   });
   await check('the explicit Start here action refreshes availability without choosing To',async()=>{
     const c=client();c.run("editRouteDraft({origin:'',destination:''});selectUnit=async id=>{navigationState.selectedUnitId=id;};");
+    c.nodes.get('#room-click-mode').handlers.change({target:{value:'inspect'}});
     await c.run("activateRouteEndpoint('B')");
     assert.equal(c.context.gets.length,0,'inspection alone must not choose From');
     c.nodes.get('#room-start-here').handlers.click();
@@ -118,6 +119,7 @@ const rejectRoute=request=>request.reject({payload:{status:409,code:'disconnecte
   });
   await check('known disconnected room remains inspectable but cannot become the map destination',async()=>{
     const c=client(true);c.run("editRouteDraft({destination:''})");
+    c.nodes.get('#room-click-mode').handlers.change({target:{value:'inspect'}});
     const options=c.run('refreshRouteOptions()');c.context.gets[0].resolve(body());await options;
     c.run("selectUnit=async id=>{navigationState.selectedUnitId=id; updateRoomActions(); return true;};");
     assert.equal(await c.run("activateRouteEndpoint('D')"),true);
@@ -170,6 +172,7 @@ const rejectRoute=request=>request.reject({payload:{status:409,code:'disconnecte
   });
   await check('explicit draft edit and Preview do not wait for room metadata',async()=>{
     const c=client(true);
+    c.nodes.get('#room-click-mode').handlers.change({target:{value:'inspect'}});
     const inspection=c.run("activateRouteEndpoint('B')");
     assert.match(c.context.gets[0].path,/\/units\/B$/);
     await c.nodes.get('#room-directions-here').handlers.click();

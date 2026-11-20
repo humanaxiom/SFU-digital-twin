@@ -10,6 +10,12 @@ implements endpoint drafts and committed route identity. The
 mobile controls, camera restoration and artifact-scoped scene reuse.
 Date: 2026-09-17.
 
+Current room activation amendment: [ADR-0027](0027-two-room-click-routing.md)
+restores default click A then B routing. Choose Inspect only to browse room
+records without editing endpoints. The Stage C inspection-only and sole-Preview
+statements below are historical for room-click routing; form/search actions
+still use the draft and Preview contract.
+
 ## Scope and supersession
 
 The user authorized the navigation plan and architecture update following the
@@ -201,9 +207,9 @@ returns at that visit's first instruction. Campus exploration must expose a clea
 return action when a committed route exists. Exploration does not claim movement,
 completion or live location.
 
-A map room click inspects that room, with explicit Start here and Directions here
-actions that edit the draft. Inspection alone must not clear or replace route
-endpoints, select the next endpoint implicitly, or recalculate a route.
+Under ADR-0027, default map/list room clicks choose A then B and request directions.
+Inspect only mode preserves endpoints and the committed route. Explicit Start
+here and Directions here actions continue to edit the draft for Preview.
 
 ## Camera, performance and accessible presentation
 

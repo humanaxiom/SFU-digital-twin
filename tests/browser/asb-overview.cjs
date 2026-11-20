@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { activateButton, verifyGuidance } = require("./guidance.cjs");
+const { activateButton, verifyGuidance, chooseRoomInspection } = require("./guidance.cjs");
 const { createBrowserGate, strand } = require("./room-search.cjs");
 
 const { baseUrl, outputDir, proc, cdp, result, typeQuery, pickNativeOption, screenshot } =
@@ -53,6 +53,7 @@ async function startPilotRoute(rooms, width) {
   await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId === ${quote(strand.floor1000)}
     && document.querySelector('#floor-map').getAttribute('aria-busy') === 'false'`);
   for (const [room, action] of [[rooms[0], "#room-start-here"], [rooms[1], "#room-directions-here"]]) {
+    await chooseRoomInspection(cdp);
     await activateButton(cdp, `#room-list [data-unit-id=${quote(room.unit_id)}]`);
     await activateButton(cdp, action, "Enter");
   }

@@ -1,6 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path");
 const {spawn}=require("node:child_process");
+const {chooseRoomInspection}=require("./guidance.cjs");
 assert.ok(fs.existsSync("/.dockerenv"),"Docker required");
 const label=process.env.WAYFINDING_BROWSER_RUN_LABEL||"sh-crossfloor-guidance";
 const output=path.join("/workspace/build/navigation-review",label),baseUrl=process.env.WAYFINDING_BROWSER_BASE_URL||"http://127.0.0.1:8080";fs.mkdirSync(output,{recursive:true});
@@ -19,6 +20,7 @@ const result={startedAt:new Date().toISOString(),baseUrl,fixture:{origin:"SFU_BU
 async function main(){
  const t=await call("Target.createTarget",{url:"about:blank"});sessionId=(await call("Target.attachToTarget",{targetId:t.targetId,flatten:true})).sessionId;await call("Page.enable");await call("Emulation.setDeviceMetricsOverride",{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await call("Page.addScriptToEvaluateOnNewDocument",{source:"window.__errors=[];addEventListener('error',e=>__errors.push(String(e.message)));addEventListener('unhandledrejection',e=>__errors.push(String(e.reason)))"});await call("Page.navigate",{url:baseUrl});await wait("document.querySelectorAll('#building-buttons button').length===3&&document.querySelector('#route-origin').options.length>1");
  await click('#building-buttons [data-building-id="SFU_BURNABY_STRAND"]');await click('#floor-buttons [data-level-id="SFU_BURNABY_STRAND_1000"]');await ready("SFU_BURNABY_STRAND_1000");
+ await chooseRoomInspection({evaluate,call});
  await click('#room-list [data-unit-id="SFU_BURNABY_STRAND_1000_1036"]');await click('#room-start-here');await wait("document.querySelector('#route-origin').value==='SFU_BURNABY_STRAND_1000_1036'&&document.querySelector('#route-options-status').dataset.state==='ready'");
  result.destinationCatalog=await evaluate("({count:[...document.querySelectorAll('#route-destination option[data-availability=connected]')].length,targetPresent:!!document.querySelector('#route-destination option[value=\"SFU_BURNABY_STRAND_3000_3050.1\"]'),help:document.querySelector('#route-options-status').textContent})");assert.equal(result.destinationCatalog.targetPresent,true);result.checks.push("SH1036 exposes SH3050.1 as a mapped cross-floor destination");
  await click('#floor-buttons [data-level-id="SFU_BURNABY_STRAND_3000"]');await ready("SFU_BURNABY_STRAND_3000");await click('#room-list [data-unit-id="SFU_BURNABY_STRAND_3000_3050.1"]');await click('#room-directions-here');await click('#route-submit');

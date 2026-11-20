@@ -7,6 +7,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { chooseRoomInspection } = require("./guidance.cjs");
 
 assert.ok(fs.existsSync("/.dockerenv"), "Run this browser gate through Docker.");
 
@@ -183,6 +184,7 @@ async function previewDestination(unitId, activate = pointerClick) {
 async function exerciseSupersededAvailability(fixture) {
   await clearRoute();
   await openBuilding(fixture.facilityId);
+  await chooseRoomInspection(cdp);
   await cdp.evaluate("window.__holdRouteOptions=true");
   const before = await cdp.evaluate("window.__routeCalls.length");
   await chooseStart(fixture);
@@ -215,6 +217,7 @@ async function exerciseClickIntent(fixture, width, keyboard) {
   await cdp.call("Emulation.setDeviceMetricsOverride", { width, height: width === 1440 ? 1000 : 844, deviceScaleFactor: 1, mobile: width < 500 });
   await clearRoute();
   await openBuilding(fixture.facilityId);
+  await chooseRoomInspection(cdp);
   await cdp.evaluate("window.__holdRouteResponses=true");
   await chooseStart(fixture);
   await cdp.wait("document.querySelector('#route-options-status').dataset.state==='ready'");
@@ -249,6 +252,7 @@ async function exerciseClickIntent(fixture, width, keyboard) {
 async function exerciseBuilding(fixture) {
   await clearRoute();
   await openBuilding(fixture.facilityId);
+  await chooseRoomInspection(cdp);
   await chooseStart(fixture);
 
   // This is deliberately immediate: no route-options readiness wait is allowed
@@ -447,6 +451,7 @@ async function main() {
   ];
   const room = fixtures[0];
   await openBuilding(room.facilityId);
+  await chooseRoomInspection(cdp);
   await clickRoom(room.originLevelId, room.originId);
   await cdp.wait("document.querySelector('#unit-details').innerText.includes('2035.2') && document.querySelector('#unit-details').innerText.includes('Physical accessibility')");
   const detailText = await cdp.evaluate("document.querySelector('#unit-details').innerText");

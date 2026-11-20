@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { activateButton, assertSelected, verifyGuidance } = require("./guidance.cjs");
+const { activateButton, assertSelected, verifyGuidance, chooseRoomInspection } = require("./guidance.cjs");
 
 const quote = JSON.stringify;
 const routePosts = "__requests.filter(request => request.url === '/demo/v1/route' && request.method === 'POST')";
@@ -15,6 +15,7 @@ async function previewElevatorJourney(cdp, fixture, chooseFloor) {
   for (const [endpoint, action] of [[fixture.origin, "#room-start-here"], [fixture.destination, "#room-directions-here"]]) {
     await chooseFloor(cdp, endpoint.level_id);
     await cdp.wait(ready(endpoint.level_id));
+    await chooseRoomInspection(cdp);
     await activateButton(cdp, `#room-list [data-unit-id="${endpoint.unit_id}"]`);
     await activateButton(cdp, action, "Enter");
   }
@@ -120,6 +121,7 @@ async function exerciseJourney(cdp, fixture, result, { chooseFloor, screenshot }
     const departureCamera = await viewBox();
     await activateButton(cdp, floorButton(explored));
     await cdp.wait(ready(explored));
+    await chooseRoomInspection(cdp);
     await activateButton(cdp, "#room-list button");
     assert.equal(await cdp.evaluate(`${routePosts}.length`), 1);
     assert.match(await cdp.evaluate("document.querySelector('#map-route-identity').textContent"), /AQ2035\.2.*AQ5046/i);

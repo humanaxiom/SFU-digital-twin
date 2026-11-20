@@ -70,6 +70,7 @@ let activeStep = 0;
 let routeSelection = "empty";
 let requestGeneration = 0;
 let endpointSelectionRevision = 0;
+let roomClickMode = "route";
 let sceneGeneration = 0;
 let currentScene = null;
 let manualPreview = false;
@@ -450,7 +451,7 @@ function clearRoute(clearEndpoints = true) {
   floorJourney.replaceChildren();
   routeDiagnostics.textContent = "No route requested.";
   setRouteState("empty");
-  routeStatus.textContent = "Choose two rooms, then select Preview route.";
+  routeStatus.textContent = "Click a starting room and a destination, or choose From and To then select Preview route.";
   updateGuidanceControls();
   if (navigationState.sceneStatus !== "loading") restoreRenderedFloor();
   renderRouteOverlay(currentScene?.level.level_id);
@@ -492,8 +493,9 @@ function rejectUnavailableDestination(unitId) {
   return true;
 }
 
-// Room inspection never chooses an endpoint implicitly.
+// Both room modes inspect immediately; details never gate endpoint selection.
 async function activateRouteEndpoint(unitId, focusMap = false) {
+  endpointSelectionRevision += 1;
   // Inspecting retained geometry must not cancel the floor the user is loading.
   if (navigationState.sceneStatus === "loading" && !navigationState.pendingStep) {
     navigationState.intentRevision += 1;
@@ -505,10 +507,20 @@ async function activateRouteEndpoint(unitId, focusMap = false) {
   manualPreview = Boolean(guidanceStep());
   updateGuidanceControls();
   if (manualPreview) renderRouteOverlay(currentScene?.level.level_id);
-  return selectUnit(unitId, focusMap);
+  const navigationIntent = navigationState.intentRevision;
+  const inspection = selectUnit(unitId, focusMap);
+  if (roomClickMode !== "route" || !routeUnits.some(unit => unit.unit_id === unitId)) return inspection;
+  document.querySelector("#directions-panel").open = true;
+  if (!routeDraft.origin) {
+    editRouteDraft({ origin: unitId, destination: "" });
+    if (!activeRoute) routeStatus.textContent = `Starting room A: ${roomLabel(unitId)}. Click another room to show directions.`;
+    return inspection;
+  }
+  if (unitId === routeDraft.origin) return inspection;
+  return activateRouteDestination(unitId, { submit: true, navigationIntent });
 }
 
-async function activateRouteDestination(unitId) {
+async function activateRouteDestination(unitId, { submit = false, navigationIntent = navigationState.intentRevision } = {}) {
   const revision = ++endpointSelectionRevision;
   const origin = routeDraft.origin;
   const profile = routeDraft.profile;
@@ -520,6 +532,7 @@ async function activateRouteDestination(unitId) {
   }
   if (unitId === origin || rejectUnavailableDestination(unitId)) return;
   editRouteDraft({ destination: unitId });
+  if (submit) return requestRoute(origin, unitId, profile, ++requestGeneration, navigationIntent);
 }
 
 function routeSnapshotLabel(snapshot) {
@@ -578,6 +591,13 @@ function updateRoomActions() {
   destination.disabled = !selected || unitId === routeDraft.origin || Boolean(outcome && outcome !== "connected");
   document.querySelector("#room-route-status").textContent = !selected ? "Inspect a room to edit the route draft."
     : `${roomLabel(unitId)} · ${destinationSearchLabels[outcome] || (routeAvailabilityState === "pending" ? "Connection check in progress" : "Connection status unknown")}.`;
+  document.querySelector("#room-click-help").textContent = roomClickMode === "inspect"
+    ? "Room clicks show record details and keep your route."
+    : outcome && outcome !== "connected" && unitId !== routeDraft.origin
+      ? `${roomLabel(unitId)}: ${destinationSearchLabels[outcome]}. Choose a connected destination or Clear route to choose a new start.`
+      : routeDraft.origin
+        ? `A: ${roomLabel(routeDraft.origin)}. Click another room to show directions. Clear route chooses a new start.`
+        : "Click a starting room, then a destination to show directions.";
 }
 function selectLandmark(item, marker) {
   navigationState.selectedUnitId = null;
@@ -1653,12 +1673,17 @@ for (const search of Object.values(endpointSearches)) {
 }
 routeClear.addEventListener("click", () => {
   clearRoute();
-  routeStatus.textContent = "Route cleared. Choose From and To, then select Preview route.";
+  routeStatus.textContent = "Route cleared. Click a starting room and a destination, or choose From and To then select Preview route.";
 });
 routeSwap.addEventListener("click", () => {
   editRouteDraft({ origin: routeDraft.destination, destination: routeDraft.origin });
 });
 routeProfile.addEventListener("change", () => editRouteDraft({ profile: routeProfile.value }));
+document.querySelector("#room-click-mode").addEventListener("change", (event) => {
+  roomClickMode = event.target.value === "inspect" ? "inspect" : "route";
+  endpointSelectionRevision += 1;
+  renderRouteIdentity();
+});
 document.querySelector("#room-start-here").addEventListener("click", () => {
   if (navigationState.selectedUnitId) {
     document.querySelector("#directions-panel").open = true;

@@ -150,6 +150,8 @@ button[type="submit"] { padding: .55rem 1rem; border: 0; border-radius: 4px; col
 .route-options-status { margin: 0; padding: .65rem .75rem; border-left: 3px solid var(--teal); background: #edf4f1; font-size: .85rem; line-height: 1.45; }
 .route-options-status[data-state="error"] { border-color: var(--coral); background: #f8e9e4; }
 .route-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+#room-click-mode { min-height: 44px; width: 7.5rem; padding: .4rem .3rem; font-size: .8rem; }
+#room-click-help { margin: .4rem 0; font-size: .85rem; line-height: 1.4; }
 .route-actions button { min-height: 2.5rem; padding: .5rem .8rem; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink); cursor: pointer; }
 .route-status { margin: .8rem 0; padding: .7rem; border-left: 4px solid var(--teal); background: #e6f1ed; line-height: 1.45; }
 .route-status[data-state="error"] { border-color: var(--coral); background: #f8e9e4; }

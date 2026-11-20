@@ -6,7 +6,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { verifyGuidance, activateButton, assertSelected, exerciseGuidance, sceneOrigin } = require('./guidance.cjs');
+const { verifyGuidance, activateButton, assertSelected, exerciseGuidance, sceneOrigin, chooseRoomInspection } = require('./guidance.cjs');
 const {exerciseCampus} = require('./campus.cjs');
 const {exerciseJourney} = require('./journey.cjs');
 assert.ok(fs.existsSync("/.dockerenv"), "Run this gate through Docker Compose.");
@@ -245,6 +245,7 @@ async function submitPair(cdp,origin,destination,profile='default') {
   } else {
     await chooseFloor(cdp,destination.level_id);
     await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(destination.level_id)}`);
+    await chooseRoomInspection(cdp);
     await activateButton(cdp,`#room-list [data-unit-id="${destination.unit_id}"]`);
     await activateButton(cdp,'#room-directions-here');
     await activateButton(cdp,'#route-submit');
@@ -348,6 +349,7 @@ async function actionableOrigin(cdp,label,viewport) {
   await cdp.evaluate("document.querySelector('#route-profile').value='default';document.querySelector('#route-profile').dispatchEvent(new Event('change',{bubbles:true}));");
   await chooseFloor(cdp,origin.level_id);
   await cdp.wait(sceneReady(origin));
+  await chooseRoomInspection(cdp);
   await activate(cdp,origin.unit_id);
   await activateButton(cdp,'#room-start-here');
   await waitOptions(cdp,origin.unit_id,'default');
@@ -492,6 +494,7 @@ async function exerciseRouteChoices(cdp,viewport) {
   await activateButton(cdp,'#route-clear');
   await chooseFloor(cdp,originUnit.level_id);
   await cdp.wait(`document.querySelector('#viewing-floor').dataset.levelId===${quote(originUnit.level_id)}`);
+  await chooseRoomInspection(cdp);
   await activateButton(cdp,`#room-list [data-unit-id="${origin}"]`);
   await activateButton(cdp,'#room-start-here');
   await waitOptions(cdp,origin,'default');
@@ -647,6 +650,7 @@ async function run() {
       const pair=fixtures.strand_corridor;
       await cdp.evaluate("document.querySelector('#route-clear').click()");
       await chooseFloor(cdp,pair.origin.level_id);
+      await chooseRoomInspection(cdp);
       const before=await cdp.evaluate(`${routes}.length`);
       await activate(cdp,pair.origin.unit_id);
       await activateButton(cdp,'#room-start-here');
@@ -691,6 +695,7 @@ async function run() {
     `);
     assert.equal(await cdp.evaluate(`${routes}.length`), beforeCorrection);
     assert.ok(await cdp.evaluate("document.querySelectorAll('#route-overlay path').length > 0"));
+    await chooseRoomInspection(cdp);
     await activate(cdp, pair.destination.unit_id, "Enter");
     await activateButton(cdp,'#room-directions-here');
     await cdp.wait(`document.querySelector('#route-destination').checkVisibility()

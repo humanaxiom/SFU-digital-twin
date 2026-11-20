@@ -2,6 +2,7 @@
 // Actual pointer/keyboard tasks for compact navigation. Execute only in Docker.
 const assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path");
 const {spawn} = require("node:child_process");
+const {chooseRoomInspection} = require("./guidance.cjs");
 assert.ok(fs.existsSync("/.dockerenv"), "Docker required");
 const output = path.join("/workspace/build/navigation-review", process.env.WAYFINDING_BROWSER_RUN_LABEL || "compact");
 fs.mkdirSync(output, {recursive:true});
@@ -68,6 +69,7 @@ async function main(){
   await input("NO_SUCH_ROOM");const next=await evaluate(`[...document.querySelectorAll('#floor-buttons button')].find(n=>n.dataset.levelId!==${q(id)}).dataset.levelId`);
   await click(`#floor-buttons [data-level-id="${next}"]`);await ready(next);assert.equal(await evaluate("document.querySelector('#room-filter').value"),"");assert.ok(await evaluate("document.querySelectorAll('#room-list button').length>0"));
   result.checks.push("actual typing filters exact/partial/no-match/clear without editing endpoints; floor change resets filter");
+  await chooseRoomInspection({evaluate,call});
   const room=await evaluate("document.querySelector('#room-list button').textContent");await click("#room-list button");await wait("document.querySelector('.facts').open");
   assert.ok((await evaluate("document.querySelector('#unit-details').textContent")).includes(room));result.checks.push("visible room button selects its record without opening a disclosure first");
   // Build and follow a real cross-floor route using only visible room/floor controls.

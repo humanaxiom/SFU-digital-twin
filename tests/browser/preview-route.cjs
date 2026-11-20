@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createBrowserGate, strand, origin, destination, defaultRoute } = require("./room-search.cjs");
+const { chooseRoomInspection } = require("./guidance.cjs");
 
 const {
   baseUrl, outputDir, proc, cdp, result, pointerClick, key, field, typeQuery,
@@ -46,6 +47,7 @@ async function switchFloor(level) {
 }
 
 async function inspectRoom(unitId, roomId, keyboard = false) {
+  await chooseRoomInspection(cdp);
   const selector = `.unit-shape[data-unit-id=${quote(unitId)}]`;
   if (keyboard) {
     await activate(selector, true);

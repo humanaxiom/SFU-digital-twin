@@ -285,12 +285,19 @@ width, path width, slope, powered doors, surface, closures, opening hours, door 
 status. The demo has no public-map geometry, nearest-place ranking, travel-time estimate, live
 status, or LLM dependency.
 
+To show directions, choose a building and floor, click a starting room A, then
+click a connected destination B on the map or in the room list. Directions appear
+automatically. You can change floors between A and B. Further room clicks keep A
+and replace B; **Clear route** lets you choose a new start. The **Room clicks**
+selector defaults to **Route A to B**; choose **Inspect only** to browse records
+without changing endpoints or directions.
+
 In Directions, open **Search From rooms** or **Search To rooms** and enter a room ID,
 building name, acronym or building ID. Use Building and Floor to narrow the list.
 Check the floor when two rooms share a label. Select the room and use the button
-below the results to set that endpoint. Selecting a room on the map or in the
-floor list opens its record. Use **Start here** or **Directions here** to set it
-as an endpoint. You can also enter an exact directions request in the assistant.
+below the results to set that endpoint. In Inspect only mode, selecting a room
+opens its record. Use **Start here** or **Directions here** to set it as an
+endpoint. You can also enter an exact directions request in the assistant.
 Review the rooms and profile, then choose **Preview route**.
 
 While you edit, the map and instructions name the rooms and profile of the

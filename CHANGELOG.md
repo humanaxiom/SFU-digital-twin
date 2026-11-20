@@ -4,6 +4,13 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — restore two-room click directions
+
+- Map and room-list clicks again choose A then B and automatically show mapped
+  directions. Clear resets A; later clicks replace B. A visible Inspect only
+  mode preserves room browsing without editing a route. Form/search actions
+  retain Preview. [Repair and verification](docs/reports/DT-034.md)
+
 ## Unreleased — first Burnaby overview expansion
 
 - A separate local preview shows the Room Finder footprint for Applied Sciences
@@ -25,7 +32,7 @@ traces the decisions and the evidence behind them.
 - Directions now waits for **Preview route** after endpoint, profile, Swap or
   assistant edits. The map and instructions keep the displayed route’s endpoints
   and profile visible while a replacement is pending or fails.
-- Selecting a room opens its record. **Start here** and **Directions here**
+- In Inspect only mode, selecting a room opens its record. **Start here** and **Directions here**
   explicitly set the endpoints. Clear cancels pending previews while preserving
   floor inspection.
 

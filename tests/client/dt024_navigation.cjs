@@ -111,6 +111,54 @@ async function delayedAvailability(fail = false) {
   await submitted;
 }
 const cases={
+ async two_room_clicks_submit_without_details(){
+  setCatalog();await open('AQ0');
+  run("void activateRouteEndpoint('unit-a')");
+  assert.equal(get('#route-origin').value,'unit-a');
+  assert.equal(routeRequests().length,0);
+  const second=run("activateRouteEndpoint('unit-b')");
+  await resolveOptions();await tick();
+  assert.equal(routeRequests().length,1,'two room clicks submit without awaiting room details');
+  assert.deepEqual(JSON.parse(routeRequests()[0].options.body),{origin:{unit_id:'unit-a'},destination:{unit_id:'unit-b'},profile:'default'});
+  routeRequests()[0].resolve(routeResult('unit-a','unit-b'));
+  await second;
+  assert.equal(get('#route-request-status').dataset.state,'success');
+ },
+ async room_click_mode_cancels_waiting_destination(){
+  await openDraft();
+  const second=run("activateRouteEndpoint('unit-b')");
+  change('#room-click-mode','inspect');
+  await resolveOptions();await second;
+  assert.equal(routeRequests().length,0,'inspection mode cancels waiting automatic selection');
+  assert.equal(get('#route-destination').value,'');
+ },
+ async newer_room_a_cancels_waiting_destination(){
+  await openDraft();
+  const second=run("activateRouteEndpoint('unit-b')");
+  run("void activateRouteEndpoint('unit-a')");
+  await resolveOptions();await second;
+  assert.equal(routeRequests().length,0,'a newer A inspection cancels the waiting B');
+  assert.equal(get('#route-destination').value,'');
+ },
+ async explicit_edit_cancels_waiting_room_click(){
+  await openDraft();
+  const second=run("activateRouteEndpoint('unit-b')");
+  editDraft({destination:'unit-c'});
+  await resolveOptions();await second;
+  assert.equal(routeRequests().length,0,'new explicit draft edit cancels waiting automatic B');
+  assert.equal(get('#route-destination').value,'unit-c');
+ },
+ async room_click_retains_newer_floor(){
+  await openDraft();
+  const second=run("activateRouteEndpoint('unit-b')");
+  await open('AQ2');
+  await resolveOptions();await tick();
+  assert.equal(routeRequests().length,1);
+  routeRequests()[0].resolve(routeResult('unit-a','unit-b','default',[step('AQ0','Start here')]));
+  await second;
+  assert.equal(get('#viewing-floor').dataset.levelId,'AQ2','availability completion cannot steal newer exploration');
+  assert.equal(get('#return-to-route').hidden,false);
+ },
  async artifact_scene_cache(){
   const scopedScene=(id,hash)=>({...run(`scene('${id}')`),provenance:[{artifact_sha256:hash}]});
   run("setSceneArtifact('first')");
@@ -222,6 +270,7 @@ const cases={
   assert.match(get('#assistant-response').textContent,/choose|search|match|find/i);
  },
  async map_room_actions_preserve_inspection(){
+  change('#room-click-mode','inspect');
   setCatalog();
   run(`globalThis.baseScene=scene;
     scene=id=>{

@@ -125,6 +125,20 @@ async function activateButton(cdp,selector,key=null){
   }
 }
 
+// Explicit user choice for fixtures that inspect rooms before editing a draft.
+async function chooseRoomInspection(cdp) {
+  await cdp.evaluate(`(() => {
+    const control = document.querySelector('#room-click-mode');
+    if (!control?.checkVisibility() || control.disabled) throw new Error('Room click mode is not visible');
+    control.scrollIntoView({block: 'center', inline: 'nearest'});
+    control.focus();
+  })()`);
+  const key = {key: 'End', code: 'End', windowsVirtualKeyCode: 35};
+  await cdp.call('Input.dispatchKeyEvent', {type: 'rawKeyDown', ...key});
+  await cdp.call('Input.dispatchKeyEvent', {type: 'keyUp', ...key});
+  assert.equal(await cdp.evaluate("document.querySelector('#room-click-mode').value"), 'inspect');
+}
+
 async function assertSelected(cdp,body,step){
   try {
     await cdp.wait(`document.querySelector('button[data-step-id="${step.step_id}"]')?.getAttribute('aria-current')==='step'`);
@@ -216,4 +230,4 @@ async function exerciseGuidance(cdp,body,record){
   await assertSelected(cdp,body,g.steps[0]);
 }
 
-module.exports={verifyGuidance,activateButton,assertSelected,exerciseGuidance,sceneOrigin};
+module.exports={verifyGuidance,activateButton,assertSelected,exerciseGuidance,sceneOrigin,chooseRoomInspection};

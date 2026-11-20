@@ -35,6 +35,11 @@
         <button id="show-campus" type="button">Campus overview</button>
         <span id="map-context" aria-live="polite">Campus</span>
         <button id="return-to-route" type="button" hidden>Return to route</button>
+        <label for="room-click-mode" class="visually-hidden">Room clicks</label>
+        <select id="room-click-mode" aria-describedby="room-click-help" title="Room clicks">
+          <option value="route" selected>Route A to B</option>
+          <option value="inspect">Inspect only</option>
+        </select>
       </nav>
       <p id="map-route-identity" class="route-identity" aria-live="polite">No committed route.</p>
       <section id="campus-view" aria-labelledby="campus-heading">
@@ -106,6 +111,7 @@
         <label class="visually-hidden" for="room-filter">Filter rooms on this floor</label>
         <input id="room-filter" type="search" placeholder="Find a room on this floor" autocomplete="off">
         <div id="room-list" class="room-list" aria-label="Keyboard-selectable rooms"></div>
+        <p id="room-click-help" role="status">Click a starting room, then a destination to show directions.</p>
       </section>
       </div>
     </section>

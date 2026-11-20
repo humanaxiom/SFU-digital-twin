@@ -8,6 +8,9 @@ import pytest
 
 
 @pytest.mark.parametrize("case", [
+    "two_room_clicks_submit_without_details", "room_click_mode_cancels_waiting_destination",
+    "newer_room_a_cancels_waiting_destination", "explicit_edit_cancels_waiting_room_click",
+    "room_click_retains_newer_floor",
     "edits_require_preview", "assistant_drafts_exact_ids",
     "assistant_requires_unambiguous_ids", "map_room_actions_preserve_inspection",
     "preview_commits_snapshot_after_draft_edits", "failed_replacement_preserves_committed_route",

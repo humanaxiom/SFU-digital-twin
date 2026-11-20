@@ -1,5 +1,22 @@
 # Handoff — Living Project State
 
+## Restored two-room click directions (2026-11-20)
+
+The user reported that clicking room A then B on port 18107 produced no
+directions. Stage C had changed room clicks to inspection; the previous gates
+covered explicit endpoint/Preview actions and missed this expected workflow.
+[DT-034](plans/DT-034.md) restores default two-click routing under
+[ADR-0027](adr/0027-two-room-click-routing.md), with explicit Inspect only mode.
+The fix is mounted into the existing candidate at `http://127.0.0.1:18107/`;
+saved artifacts and services are retained. The final Docker suite passed 678
+tests with 16 documented skips and 87.24% coverage. Fresh default-click and
+inspection/Preview browser/API checks passed against candidate and accepted
+artifacts, including the published port and 390/320 px layouts. Lint, types,
+artifact QA and launcher checks passed. Independent `gpt-6-astra` review approved
+the local repair with no blocking findings; see [the repair record](reports/DT-034.md).
+Rehearsed candidate route: SH1036 on
+SH 1000 → SH3050.1 on SH 3000, 50 graph edges and 90.6976 m.
+
 ## Current Burnaby expansion — ASB footprint
 
 PR #7 merged the navigation pilot at `fa7b24f`. The isolated expansion
