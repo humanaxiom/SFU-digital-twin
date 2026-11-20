@@ -3,13 +3,17 @@
 This review checkpoint brings together the implementation, plans and local
 verification evidence for the increments developed on top of `5ca5186`.
 
-As of 2026-11-20 the SVG demo supports building-scoped floors, room search and explicit route preview. Stage C passed on the accepted artifacts and the isolated Strand candidate. **Next is Stage D** in the [DT-024 plan](plans/DT-024.md), followed by the integrated Stage E acceptance run. The [Preview report](reports/DT-024-PREVIEW.md) records the tested behavior. The [project oral history](ORAL-HISTORY.md) explains how the data and interface decisions developed.
+The three-building pilot supports room search, explicit route preview,
+chronological instructions, exploration and return. The
+[journey report](reports/DT-024-JOURNEY.md) records Stage D and integrated
+Stage E verification. The [project oral history](ORAL-HISTORY.md) traces the
+source and interface decisions behind the pilot.
 
 ## Rollout order
 
-1. **Finish navigation on the three-building pilot.** Complete the remaining
-   journey, mobile and scene work in Stage D. Close DT-024 with Stage E’s
-   integrated Docker browser and API acceptance.
+1. **Three-building navigation pilot.** Stage D delivered journey, mobile and
+   scene reuse. Stage E replayed the pilot in Docker against accepted and
+   candidate artifacts.
    [Navigation plan](plans/DT-024.md)
 2. **Add more buildings across SFU Burnaby.** Continue DT-023 with authoritative
    building records and explicit coverage for each addition. Admit indoor or
@@ -31,7 +35,7 @@ below follows the broader [design phases](02-system-design.md#11-delivery-phases
 | 0 | Data profiling, system design, harness scaffolding | ✅ Complete |
 | 1 | ETL → GeoPackage + contracted graph + build report | DT-016/033 isolated builds verified. DT-017 legacy candidate accepted for local review. Revised-source admission and artifact promotion remain open. |
 | 2 | Routing core: profiles, A*, accessible invariant tests | Bounded DT-014 demo implemented; broader phase deferred |
-| 3 | Turn-by-turn instruction generator | DT-018 guidance and DT-024 draft/Preview verified locally. Remaining journey and mobile interactions are tracked in Stage D. |
+| 3 | Turn-by-turn instruction generator | DT-018 guidance and DT-024 cover explicit Preview, chronological visits and mobile exploration/return on the pilot. See the journey report for gate status. |
 | 4 | FastAPI service + search index + tiles | Not started |
 | 5 | MapLibre web client with floor picker and accessible toggle | Not started |
 | 6 | Assistant orchestrator, tool schemas, guardrails, eval suite | Not started |

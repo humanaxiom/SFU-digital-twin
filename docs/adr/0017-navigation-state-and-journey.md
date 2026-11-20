@@ -5,8 +5,9 @@ recorded in [the phase report](../reports/DT-024-PHASE-AB.md). The journey-entry
 first-instruction synchronization slice is delivered. The [scoped room search
 increment](../reports/DT-024-ROOM-SEARCH.md) implements N05 using native search,
 filters and result lists. The [explicit Preview increment](../reports/DT-024-PREVIEW.md)
-implements endpoint drafts and committed route identity. Remaining journey,
-cache and mobile work is tracked separately.
+implements endpoint drafts and committed route identity. The
+[journey report](../reports/DT-024-JOURNEY.md) records exploration, Return,
+mobile controls, camera restoration and artifact-scoped scene reuse.
 Date: 2026-09-17.
 
 ## Scope and supersession
@@ -31,7 +32,7 @@ For DT-024, this decision supersedes only these client interaction choices:
 The earlier documents describe runtime behavior except where a delivered DT-024
 stage supersedes it. Stage B supersedes the global-order picker and stale-response
 behavior. Stage C supersedes automatic route submission with explicit Preview.
-The remaining journey changes stay in the plan. Other requirements remain applicable. In particular,
+Stage D implements the journey interactions below. Other requirements remain applicable. In particular,
 ADR-0012 guidance geometry, chronological visits, validation and limitations;
 ADR-0013 directed availability; ADR-0014 camera semantics; and ADR-0016 artifact-only
 campus coverage remain authoritative. No HTTP API, guidance schema, source,

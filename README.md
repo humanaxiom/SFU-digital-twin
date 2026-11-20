@@ -6,8 +6,9 @@ ETL, tests, launchers, TLS and recovery configuration verified on top of
 provide the documented Docker images and the named local datasets or artifacts.
 
 The locally verified client supports building-scoped floors, searchable route
-endpoints and explicit Preview. The next increment addresses the remaining
-journey and mobile interactions. [DT-024 plan](docs/plans/DT-024.md) · [Stage C evidence](docs/reports/DT-024-PREVIEW.md)
+endpoints and explicit Preview. Users can explore another floor and return to
+their selected instruction and zoom. The rollout proceeds from the pilot to more
+Burnaby buildings and then other SFU campuses. [Journey evidence](docs/reports/DT-024-JOURNEY.md) · [Roadmap](docs/ROADMAP.md)
 
 The [compact navigation follow-up](docs/reports/DT-024-COMPACT.md) adds visible
 building/floor buttons, direct room-map entry and a filterable room list, reducing
@@ -356,9 +357,10 @@ Where historical parser output disagrees with `ogrinfo`, **`ogrinfo` is authorit
 ## Status
 
 The pilot covers AQ, ECC and Strand Hall. It supports room search, explicit route
-preview and floor-by-floor directions over the supplied indoor network. Stage C has
-passed local Docker and browser verification. Stage D covers the remaining journey
-and mobile interactions. See the [roadmap](docs/ROADMAP.md) and [handoff](docs/HANDOFF.md).
+preview and floor-by-floor directions over the supplied indoor network. Each
+journey visit retains its place even when a route returns to the same floor.
+See the [roadmap](docs/ROADMAP.md) and [handoff](docs/HANDOFF.md) for the
+verification record and Burnaby expansion sequence.
 
 Connectivity depends on the artifact. The original endpoint graph measured 816
 default and 840 elevator-only components. The isolated DT-017 legacy candidate

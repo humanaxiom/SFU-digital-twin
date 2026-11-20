@@ -5,8 +5,9 @@ Current takeover work is tracked in `docs/plans/CODEX-TAKEOVER.md`.
 Use `docs/plans/DT-016.md` and `docs/plans/DT-033.md` for isolated builds.
 `docs/plans/DT-017.md` tracks the verified legacy candidate and the outstanding
 revised-source assignments. `docs/plans/DT-024.md` tracks navigation under
-ADR-0017; Stage C is verified and Stage D is next. DT-018/ADR-0012 describe the
-underlying route guidance. Read the handoff for current gate and demo status.
+ADR-0017. DT-018/ADR-0012 describe the underlying route guidance. See
+`docs/plans/DT-023.md` for the subsequent Burnaby building expansion and
+the handoff for current gate and demo status.
 
 ## Architecture and boundaries
 

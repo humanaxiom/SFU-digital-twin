@@ -84,11 +84,33 @@ function verifyGuidance(body) {
   }
 }
 
+async function pointerClick(cdp,point){
+  for(const type of ['mousePressed','mouseReleased'])await cdp.call('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1});
+}
+
 async function activateButton(cdp,selector,key=null){
+  const closedDisclosures=await cdp.evaluate(`(() => {
+    const target=document.querySelector(${quote(selector)});
+    if(!target)throw new Error('Missing control '+${quote(selector)});
+    const disclosures=[...document.querySelectorAll('details')];
+    return disclosures.flatMap((details,index)=>!details.open&&details.contains(target)
+      && !details.querySelector(':scope > summary')?.contains(target)?[index]:[]);
+  })()`);
+  for(const index of closedDisclosures){
+    const summary=`document.querySelectorAll('details')[${index}].querySelector(':scope > summary')`;
+    const point=await cdp.evaluate(`(() => {
+      const control=${summary};
+      if(!control?.checkVisibility())throw new Error('Disclosure summary is not visible');
+      control.scrollIntoView({block:'center',inline:'nearest'});
+      const rect=control.getBoundingClientRect();
+      return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+    })()`);
+    await pointerClick(cdp,point);
+    assert.equal(await cdp.evaluate(`${summary}.parentElement.open`),true,'visible disclosure did not open');
+  }
   const point=await cdp.evaluate(`(() => {
     const button=document.querySelector(${quote(selector)});
-    if(!button)throw new Error('Missing control '+${quote(selector)});
-    for(let p=button.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
+    if(!button?.checkVisibility())throw new Error('Control is not visible '+${quote(selector)});
     button.scrollIntoView({block:'center',inline:'nearest'});
     if(${quote(key)}!==null){button.focus();return null;}
     const r=button.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};
@@ -99,7 +121,7 @@ async function activateButton(cdp,selector,key=null){
     await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',text:key==='Enter'?'\r':' ',unmodifiedText:key==='Enter'?'\r':' ',...props});
     await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',...props});
   } else {
-    for(const type of ['mousePressed','mouseReleased'])await cdp.call('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1});
+    await pointerClick(cdp,point);
   }
 }
 

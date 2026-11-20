@@ -1,6 +1,25 @@
 # Handoff — Living Project State
 
-## Start here — 2026-11-20 checkpoint
+## Start here — navigation pilot and Burnaby expansion
+
+The Stage D client is committed at `628c3c2`. It preserves the selected
+chronological instruction while a user explores, restores the route camera,
+keeps guidance controls beside the mobile map and reuses floor scenes by
+artifact and exact level. The [journey report](reports/DT-024-JOURNEY.md)
+records the Stage D and integrated Stage E gates.
+
+The full package gate passed 664 tests with 16 expected skips and 86.96%
+coverage. Real Chromium replayed four accepted-artifact routes and eight
+rebuilt-candidate routes at desktop and mobile widths. The Stage D journey
+probe separately verified a skipped elevator floor and a repeated floor visit.
+
+Stage E is accepted for the local pilot. Resume the [Burnaby campus plan](plans/DT-023.md).
+Screen one additional building using the authoritative building and room IDs,
+floor joins and available geometry. Record the coverage an isolated candidate
+supports and exercise the existing pilot fixtures alongside the new building.
+Other SFU campuses follow the Burnaby expansion.
+
+## Prior checkpoint — 2026-11-20, before Stage D
 
 This record describes the locally verified wayfinding work on top of `5ca5186`.
 The review branch includes the corresponding runtime, tests, ETL, launchers,
@@ -73,7 +92,7 @@ The run recorded 279 GETs and 33 POSTs and exited 0. Its result under
 has SHA-256 `4aac5b00627151373844bb6804e7e7235606859e6ebb60e37e6aaaedccd50427`.
 Both temporary stacks were removed. The running demo and edge proxy stayed healthy.
 
-## Current navigation work — explicit Preview route (2026-11-20)
+## Prior navigation delivery — explicit Preview route (2026-11-20)
 
 Stage C now separates the draft from the route displayed on the map. Room
 inspection, search, assistant directions and profile changes feed an explicit

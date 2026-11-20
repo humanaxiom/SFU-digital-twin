@@ -175,22 +175,22 @@ async function main() {
   });
 
   await check("scene failure retains a labeled scene and offers Retry", async () => {
-    await pointerClick("#show-campus");
+    // Earlier checks visit all eleven floors. Reload to start with an empty scene cache.
+    await cdp.call("Page.reload", { ignoreCache: true });
+    await cdp.wait("document.querySelector('#facility-select')?.options.length>1 && window.__requests?.every(r=>!r.url.endsWith('/scene'))");
     const facility = data.campus.facilities[0];
     await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
-    const base = facility.levels[0];
-    await pointerClick(`#floor-buttons [data-level-id=\"${base.level_id}\"]`);
-    await sceneReady(base.level_id);
-    await pointerClick("#show-campus");
-    await pointerClick(`#building-buttons [data-building-id=\"${facility.facility_id}\"]`);
-    const target = facility.levels.find(level => level.level_id !== base.level_id);
-    assert.ok(target, "fixture needs two floors for Retry coverage");
-    await cdp.evaluate(`window.__sceneFailOnce=${quote(target.level_id)};window.__sceneOriginalFetch=window.fetch;window.fetch=async(...args)=>{if(String(args[0])===${quote(`/demo/v1/levels/${target.level_id}/scene`)}&&window.__sceneFailOnce){window.__sceneFailOnce=null;return new Response('forced failure',{status:503});}return window.__sceneOriginalFetch(...args);}`);
+    const baseLevelId = await cdp.evaluate("document.querySelector('#level-select').value");
+    await sceneReady(baseLevelId);
+    const target = facility.levels.find(level => level.level_id !== baseLevelId);
+    assert.ok(target, "fixture needs a different cold floor for Retry coverage");
+    await cdp.evaluate(`window.__sceneFailOnce=${quote(target.level_id)};window.__sceneOriginalFetch=window.fetch;window.fetch=async(...args)=>{if(String(args[0])===${quote(`/demo/v1/levels/${target.level_id}/scene`)}&&window.__sceneFailOnce){window.__sceneFailOnce=null;return Response.json({error:'forced failure'},{status:503});}return window.__sceneOriginalFetch(...args);}`);
     await pointerClick(`#floor-buttons [data-level-id=\"${target.level_id}\"]`);
     await cdp.wait("document.querySelector('#retry-scene')?.hidden===false");
     assert.match(await cdp.evaluate("document.querySelector('#map-status').textContent"), /Could not load/);
     assert.match(await cdp.evaluate("document.querySelector('#map-status').textContent"), /Still showing/);
-    assert.equal(await cdp.evaluate("document.querySelector('#viewing-floor').dataset.levelId"), base.level_id);
+    assert.equal(await cdp.evaluate("window.__sceneFailOnce"), null, "The cold target consumed the injected failure");
+    assert.equal(await cdp.evaluate("document.querySelector('#viewing-floor').dataset.levelId"), baseLevelId);
     assert.equal(await cdp.evaluate("document.querySelector('#level-select').value"), target.level_id);
     assert.ok(await cdp.evaluate("document.querySelector('#retry-scene')"), "#retry-scene is required");
     await pointerClick("#retry-scene"); await sceneReady(target.level_id);

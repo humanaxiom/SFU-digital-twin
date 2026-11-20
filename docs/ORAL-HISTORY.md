@@ -299,7 +299,7 @@ as local verification on HEAD `5ca5186` with inherited working-tree changes.
 [Stage C search](reports/DT-024-ROOM-SEARCH.md) · [Stage C
 Preview](reports/DT-024-PREVIEW.md)
 
-Stage D still owns the remaining synchronized journey, exploration/return,
+At the Stage C checkpoint, Stage D still owned the remaining synchronized journey, exploration/return,
 persistent mobile instruction and scene-cache work. Stage E is integrated
 acceptance for the full navigation ticket. Separately, the reconstructed
 DT-017 legacy candidate awaits any promotion decision, and the revised and
@@ -314,3 +314,19 @@ The test now waits for the selected room ID and checks that selection alone send
 no route request. With that change, the rebuilt candidate passed the same eight
 route fixtures on desktop and mobile. The [handoff](HANDOFF.md) records the
 container identities, result hashes and remaining deployment checks.
+
+## From the three-building pilot to campus expansion
+
+The next navigation pass used two real Academic Quadrangle elevator routes to
+resolve different questions. One skipped a recorded floor. The other visited
+the same floor twice, so selecting a floor by its label alone could put a user at
+the wrong instruction. The client follows the chronological visit. Browsing a
+room or the campus map preserves that instruction and offers Return to route.
+On mobile, an early browser run put the transition and Next controls below the
+viewport. The resulting change keeps them alongside the map.
+
+The agreed geographic sequence starts with additional buildings across Burnaby
+after pilot navigation acceptance. Other SFU campuses follow that expansion.
+The next GIS request is a joinable building sample. Its verified footprint,
+rooms, floors and pathways determine the coverage the demo can offer.
+[Journey report](reports/DT-024-JOURNEY.md) · [Campus expansion plan](plans/DT-023.md)

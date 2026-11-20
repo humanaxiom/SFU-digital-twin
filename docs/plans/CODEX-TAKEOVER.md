@@ -2,7 +2,8 @@
 
 The September assessment below is retained as the takeover baseline. For the
 November checkpoint, start with the [handoff](../HANDOFF.md), the [oral history](../ORAL-HISTORY.md)
-and the [Stage D resumption plan](DT-024.md). The [November repository review](../../REPOSITORY-REVIEW.md)
+and the [navigation delivery plan](DT-024.md). The [Burnaby expansion plan](DT-023.md)
+describes the next geographic increment. The [November repository review](../../REPOSITORY-REVIEW.md)
 predates the DT-031–033 fixes and the isolated DT-017 reconstruction.
 
 Date: 2026-09-10

@@ -8,6 +8,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { verifyGuidance, activateButton, assertSelected, exerciseGuidance, sceneOrigin } = require('./guidance.cjs');
 const {exerciseCampus} = require('./campus.cjs');
+const {exerciseJourney} = require('./journey.cjs');
 assert.ok(fs.existsSync("/.dockerenv"), "Run this gate through Docker Compose.");
 const runLabel = process.env.WAYFINDING_BROWSER_RUN_LABEL || "";
 assert.ok(!runLabel || /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(runLabel), "Invalid evidence run label");
@@ -93,8 +94,7 @@ async function screenshot(cdp, name, fullPage = false) {
     await cdp.evaluate(`(async () => {
       if (${quote(selector)}) {
         const node=document.querySelector(${quote(selector)});
-        for(let p=node.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;
-        node.scrollIntoView({block:'start'});
+        if (node?.checkVisibility()) node.scrollIntoView({block:'start'});
       }
       else window.scrollTo(0, 0);
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -291,12 +291,32 @@ async function requestedRoutes(cdp,label,viewport) {
   record.limitation='No distinct-anchor connected pair among the first 11 tested destinations; failures recorded, no connection inferred.';
 }
 
+async function holdColdScene(cdp, levelId) {
+  // These race fixtures require a pending response after earlier warm visits.
+  // Let existing prefetch settle, then evict only the floor under test.
+  await cdp.wait(`!loadingScenes.has(${quote(levelId)})`);
+  await cdp.evaluate(`loadedScenes.delete(${quote(levelId)});
+    window.__release=null;window.__released=false;
+    window.__holdPath=${quote(`/demo/v1/levels/${levelId}/scene`)};`);
+}
+
+async function reservePostBudget(cdp, count) {
+  // A warm scene cache can compress both fixture replays into one server rate window.
+  const waitMs = await cdp.evaluate(`(() => {
+    const posts = window.__requests.filter(request => request.method === 'POST');
+    const threshold = posts.at(-${30 - count + 1});
+    return threshold ? Math.max(0, Math.ceil(threshold.startedAt + 60_100 - performance.now())) : 0;
+  })()`);
+  if (waitMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+  return waitMs;
+}
+
 async function latestStepWins(cdp) {
   const body=await submit(cdp,fixtures.aq_elevator);
   const first=body.guidance.steps[0],last=body.guidance.steps.at(-1);
   await activateButton(cdp,`button[data-step-id="${last.step_id}"]`);
   await assertSelected(cdp,body,last);
-  await cdp.evaluate(`window.__release=null;window.__released=false;window.__holdPath=${quote(`/demo/v1/levels/${first.level_id}/scene`)}`);
+  await holdColdScene(cdp, first.level_id);
   await activateButton(cdp,`button[data-step-id="${first.step_id}"]`);
   await cdp.wait("typeof window.__release==='function'");
   await activateButton(cdp,`button[data-step-id="${last.step_id}"]`);
@@ -307,7 +327,7 @@ async function latestStepWins(cdp) {
   await assertSelected(cdp,body,last);
   results.checks.push('delayed step scene cannot replace the newest selected instruction or floor');
 
-  await cdp.evaluate(`window.__release=null;window.__released=false;window.__holdPath=${quote(`/demo/v1/levels/${first.level_id}/scene`)}`);
+  await holdColdScene(cdp, first.level_id);
   await activateButton(cdp,`button[data-step-id="${first.step_id}"]`);
   await cdp.wait("typeof window.__release==='function'");
   await activateButton(cdp,'#route-clear');
@@ -554,16 +574,23 @@ async function run() {
       const original=window.fetch;
       window.fetch=async(url,options)=>{
         const hold=window.__holdPath===String(url); if(hold)window.__holdPath=null;
-        const entry={url:String(url),method:options?.method||'GET',body:options?.body?JSON.parse(options.body):null};
+        const entry={url:String(url),method:options?.method||'GET',body:options?.body?JSON.parse(options.body):null,startedAt:performance.now()};
         __requests.push(entry);
         const response=await original(url,options);
-        entry.response=await response.clone().json(); entry.httpStatus=response.status; entry.done=true;
+        entry.httpStatus=response.status;
+        entry.response=response.headers.get('Content-Length') === '0' ? null : await response.clone().json();
+        entry.done=true;
         if(hold){await new Promise(resolve=>{window.__release=resolve;});window.__released=true;}
         return response;
       };
     })();` });
     await cdp.call("Page.navigate", { url: `${targetUrl.origin}/` });
     await cdp.wait("document.querySelector('#campus-view') && !document.querySelector('#campus-view').hidden && document.querySelectorAll('#route-origin option').length>1");
+    if (process.env.WAYFINDING_BROWSER_JOURNEY_ONLY === "1") {
+      await exerciseJourney(cdp, fixtures.aq_elevator, results, { chooseFloor, screenshot });
+      results.status = "passed";
+      return;
+    }
     if (candidateFixturePath) {
       const health = await cdp.evaluate(`(async () => {
         const response = await fetch('/demo/v1/health');
@@ -654,6 +681,7 @@ async function run() {
       }
       console.log(`${label}: all ${Object.keys(fixtures).length} fixtures, parity, floor steps, pointer/keyboard and layout passed`);
     }
+    results.postWindowWaitMs = await reservePostBudget(cdp, 7);
     const pair = fixtures.strand_corridor;
     await submit(cdp,pair);
     const beforeCorrection = await cdp.evaluate(`${routes}.length`);
@@ -701,7 +729,7 @@ async function run() {
     results.checks.push("unsupported elevator-only API returns HTTP 409 and accessibility disclosures; explicit Clear removes prior route geometry");
 
     const old=fixtures.aq_stairs.origin,current=fixtures.aq_elevator.origin;
-    await cdp.evaluate(`window.__holdPath=${quote(`/demo/v1/levels/${old.level_id}/scene`)}`);
+    await holdColdScene(cdp, old.level_id);
     await chooseFloor(cdp,old.level_id);
     await cdp.wait("typeof window.__release === 'function'");
     await chooseFloor(cdp,current.level_id);

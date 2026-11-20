@@ -4,6 +4,15 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — journey navigation
+
+- Browsing another floor or the campus map preserves the selected route
+  instruction. **Return to route** restores the floor, step and deliberate zoom.
+- Mobile users can reach the current instruction and floor-change actions beside
+  the map. A failed floor load offers Retry for the selected instruction.
+- Revisiting a recently loaded floor reuses its scene. The client validates its
+  artifact identity before caching and preloads adjacent route visits.
+
 ## Unreleased — Preview route
 
 - Directions now waits for **Preview route** after endpoint, profile, Swap or
