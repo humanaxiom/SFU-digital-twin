@@ -4,6 +4,13 @@ The unreleased entries describe the local implementation documented by the
 [November checkpoint](docs/HANDOFF.md). Its [oral history](docs/ORAL-HISTORY.md)
 traces the decisions and the evidence behind them.
 
+## Unreleased — documentation and GitHub checkpoint
+
+- Reconciled the takeover plan, roadmap and handoff with DT-034–038, preserved
+  historical evidence and recorded the outstanding ASB/revised-source inputs.
+  The user authorized a documentation commit and branch push. Fresh Docker E2E
+  and its scope are recorded in the [checkpoint report](docs/reports/DOCS-CHECKPOINT-20261120.md).
+
 ## Unreleased — retained-tab app update safeguards
 
 - Tabs can check for changed navigation code without resetting a route. A bounded

@@ -1,5 +1,28 @@
 # Handoff — Living Project State
 
+## Documentation and GitHub checkpoint (2026-11-20)
+
+The current application baseline is committed at `16dcde5` on
+`feature/burnaby-building-intake`. DT-034–038 preserve default two-room click
+routing, explicit Preview and inspection, journey exploration/return and complete
+floor geometry, and add faster floor loading, bounded Retry recovery and the
+retained-tab JavaScript update notice. The detailed delivery records below remain
+historical evidence for their respective changes.
+
+The user authorized this documentation update, commit and branch push. Follow
+[the checkpoint plan](plans/DOCS-CHECKPOINT-20261120.md) and
+[fresh verification record](reports/DOCS-CHECKPOINT-20261120.md). This checkpoint
+changes documentation only; it does not deploy, publish an image, rebuild data or
+promote artifacts. No workflows, controls, project files or tests are removed.
+
+Next product work remains [DT-023 Burnaby expansion](plans/DT-023.md): obtain the
+ASB facility key and keyed level/room export before admitting indoor coverage.
+ASB remains a footprint-only preview. [DT-017](plans/DT-017.md) separately awaits
+reviewed facility/level assignments for 141 revised pathways. Published-image
+execution, required CI checks and physical second-device LAN acceptance remain
+open. DT-038 detects JavaScript changes only, and pre-checker tabs need one fresh
+`/index.html` load; the original stalled-tab transport cause remains unconfirmed.
+
 ## Retained-tab update safeguards (DT-038, 2026-11-20)
 
 The user confirmed the fresh `/index.html` works and supplied an AQ6000/263-room
@@ -78,7 +101,7 @@ for the exact handler replacement, misleading acceptance tests, recovery issues
 and evidence limits. [DT-035](plans/DT-035.md) tracks this documentation delivery.
 Independent factual/policy review found no blockers. Fresh isolated default-click
 and API preservation E2E and a final post-policy port-18107 rehearsal exited 0.
-This delivery changed instructions/documentation only; the app remains at the
+That delivery changed instructions/documentation only; at that checkpoint the app remained at the
 verified DT-034 behavior and served hashes.
 
 ## Restored two-room click directions (2026-11-20)

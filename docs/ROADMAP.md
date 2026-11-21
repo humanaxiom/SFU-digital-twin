@@ -3,11 +3,21 @@
 This review checkpoint brings together the implementation, plans and local
 verification evidence for the increments developed on top of `5ca5186`.
 
-The three-building pilot supports room search, explicit route preview,
+The three-building pilot supports default two-room click directions, room search,
+explicit route preview,
 chronological instructions, exploration and return. The
 [journey report](reports/DT-024-JOURNEY.md) records Stage D and integrated
 Stage E verification. The [project oral history](ORAL-HISTORY.md) traces the
 source and interface decisions behind the pilot.
+
+The current application checkpoint is `16dcde5`: [DT-034](reports/DT-034.md)
+restored default click routing, [DT-036](reports/DT-036.md) accelerated complete
+floor loading, [DT-037](reports/DT-037.md) bounded stalled floor requests with
+Retry, and [DT-038](reports/DT-038.md) added retained-tab JavaScript update checks.
+These additions preserve Preview, inspection and exploration/return. Update checks
+cover JavaScript only and require one fresh load for older tabs. The
+[documentation checkpoint](reports/DOCS-CHECKPOINT-20261120.md) records fresh E2E
+separately from those deliveries; a GitHub push does not establish deployment.
 
 ## Rollout order
 

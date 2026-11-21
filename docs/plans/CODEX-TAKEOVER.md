@@ -1,5 +1,26 @@
 # Codex takeover assessment and plan
 
+## Current checkpoint — 2026-11-20
+
+Application baseline: `16dcde5`, DT-038 retained-tab update safeguards. DT-034
+restored default two-room click directions alongside Preview and inspection;
+DT-036/037 improved complete floor loading and bounded stalled-request recovery.
+See [HANDOFF](../HANDOFF.md) for current behavior and scope, and
+[the documentation checkpoint plan](DOCS-CHECKPOINT-20261120.md) for this user-
+authorized documentation commit and branch push. Fresh checkpoint E2E is recorded
+[separately](../reports/DOCS-CHECKPOINT-20261120.md) from earlier package gates.
+
+Next geographic work is [DT-023](DT-023.md): obtain ASB's authoritative facility,
+level and room records before indoor admission. Its current preview is footprint-
+only. [DT-017](DT-017.md) retains the verified isolated legacy reconstruction;
+141 revised pathways still need reviewed facility/level assignments. Keep those
+candidates separate from accepted artifacts. Published-image execution, required
+CI enforcement and physical LAN acceptance remain open.
+
+The September assessment and transition sequence below are historical. Their
+imperatives describe the original takeover, not new assignments overriding this
+checkpoint or the user's preservation orders.
+
 The September assessment below is retained as the takeover baseline. For the
 November checkpoint, start with the [handoff](../HANDOFF.md), the [oral history](../ORAL-HISTORY.md)
 and the [navigation delivery plan](DT-024.md). The [Burnaby expansion plan](DT-023.md)
@@ -39,7 +60,7 @@ and verification are recorded in `docs/reports/CODEX-TAKEOVER.md` and HANDOFF.
 
 ## Transition sequence
 
-### Current build — DT-016
+### Historical build assignment — DT-016
 
 Proceed with [DT-016](DT-016.md): executable source comparison and two isolated
 legacy rebuilds with source lineage and semantic/room-reachability comparison.
